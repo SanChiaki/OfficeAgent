@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
+// @ts-expect-error - package typings use export= while the plugin docs use default import
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   server: {
-    host: "127.0.0.1",
+    host: "localhost",
     https: true,
     port: 3000,
     strictPort: true
