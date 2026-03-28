@@ -1,5 +1,9 @@
-import { expect, test } from "vitest";
+import { beforeEach, expect, test } from "vitest";
 import { createSessionStore } from "../../src/state/sessionStore";
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 test("creates, switches, and deletes local sessions", () => {
   const store = createSessionStore();
@@ -15,4 +19,15 @@ test("creates, switches, and deletes local sessions", () => {
   expect(store.getState().activeSessionId).toBe(second.id);
   expect(store.getState().sessions).toHaveLength(1);
   expect(store.getState().sessions[0].messages).toHaveLength(1);
+});
+
+test("keeps the last session available when deleting it", () => {
+  const store = createSessionStore();
+  const only = store.createSession();
+
+  store.deleteSession(only.id);
+
+  expect(store.getState().activeSessionId).toBe(only.id);
+  expect(store.getState().sessions).toHaveLength(1);
+  expect(store.getState().sessions[0].id).toBe(only.id);
 });

@@ -28,6 +28,13 @@ export function createSessionStore() {
       return session;
     },
     deleteSession(id: string) {
+      if (sessions.length <= 1 && sessions[0]?.id === id) {
+        activeSessionId = sessions[0].id;
+        setJson(INDEX_KEY, sessions);
+        setJson(ACTIVE_KEY, activeSessionId);
+        return;
+      }
+
       sessions = sessions.filter((session) => session.id !== id);
       if (activeSessionId === id) {
         activeSessionId = sessions[0]?.id ?? null;
