@@ -20,8 +20,19 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
 
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
+
   function refreshSessions() {
     setSessionState(sessionStore.getState());
+  }
+
+  function syncMessages(nextMessages: ChatMessage[]) {
+    setMessages(nextMessages);
+
+    if (activeSessionId) {
+      sessionStore.replaceMessages(activeSessionId, nextMessages);
+      refreshSessions();
+    }
   }
 
   useEffect(() => {
@@ -32,12 +43,12 @@ export default function App() {
   }, [sessionStore]);
 
   useEffect(() => {
-    const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
     setMessages(activeSession?.messages.length ? activeSession.messages : initialMessages);
-  }, [activeSessionId, sessions]);
+  }, [activeSessionId, activeSession]);
 
   function handleCreateSession() {
     sessionStore.createSession();
+    setDraft("");
     refreshSessions();
   }
 
@@ -49,6 +60,23 @@ export default function App() {
   function handleDeleteSession(id: string) {
     sessionStore.deleteSession(id);
     refreshSessions();
+  }
+
+  function handleSubmit() {
+    const content = draft.trim();
+    if (!content) {
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content,
+    };
+
+    const nextMessages = activeSession?.messages.length ? [...messages, userMessage] : [userMessage];
+    syncMessages(nextMessages);
+    setDraft("");
   }
 
   return (
@@ -66,7 +94,7 @@ export default function App() {
         </header>
         <MessageThread messages={messages} />
         <SelectionBadge selection={null} />
-        <Composer value={draft} onChange={setDraft} onSubmit={() => {}} />
+        <Composer value={draft} onChange={setDraft} onSubmit={handleSubmit} />
       </section>
     </main>
   );
