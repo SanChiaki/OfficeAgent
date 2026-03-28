@@ -6,7 +6,9 @@ beforeEach(() => {
 });
 
 test("persists api key and model choice", () => {
-  const store = createSettingsStore();
-  store.save({ apiKey: "sk-demo", model: "gpt-4.1-mini" });
-  expect(store.load()).toEqual({ apiKey: "sk-demo", model: "gpt-4.1-mini" });
+  const firstStore = createSettingsStore();
+  firstStore.save({ apiKey: "sk-demo", model: "gpt-4.1-mini" });
+
+  const reloadedStore = createSettingsStore();
+  expect(reloadedStore.load()).toEqual({ apiKey: "sk-demo", model: "gpt-4.1-mini" });
 });
