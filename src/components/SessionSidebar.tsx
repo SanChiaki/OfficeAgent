@@ -1,5 +1,7 @@
+import type { ChatSession } from "../types";
+
 interface SessionSidebarProps {
-  sessions: Array<{ id: string; title: string }>;
+  sessions: Array<Pick<ChatSession, "id" | "title">>;
   activeSessionId?: string;
   onCreateSession(): void;
   onSelectSession(id: string): void;

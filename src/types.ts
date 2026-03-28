@@ -6,6 +6,12 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+}
+
 export interface SelectionContext {
   sheetName: string;
   address: string;
