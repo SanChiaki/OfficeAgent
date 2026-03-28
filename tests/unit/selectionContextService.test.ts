@@ -1,9 +1,26 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { subscribeToSelectionChanges } from "../../src/excel/selectionContextService";
+import { normalizeSelection, subscribeToSelectionChanges } from "../../src/excel/selectionContextService";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+test("normalizes raw excel selection metadata", () => {
+  expect(
+    normalizeSelection({
+      sheetName: "Sheet1",
+      address: "A1:D4",
+      rowCount: 4,
+      columnCount: 4,
+    }),
+  ).toEqual({
+    sheetName: "Sheet1",
+    address: "A1:D4",
+    rowCount: 4,
+    columnCount: 4,
+    hasHeaders: false,
+  });
 });
 
 test("registers a selection handler, emits normalized metadata, and cleans up", async () => {
