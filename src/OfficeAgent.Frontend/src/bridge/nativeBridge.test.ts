@@ -76,6 +76,29 @@ describe('NativeBridge', () => {
     });
   });
 
+  it('returns default settings and session state in browser preview mode', async () => {
+    const bridge = new NativeBridge(undefined);
+
+    await expect(bridge.getSettings()).resolves.toEqual({
+      apiKey: '',
+      baseUrl: 'https://api.example.com',
+      model: 'gpt-5-mini',
+    });
+
+    await expect(bridge.getSessions()).resolves.toEqual({
+      activeSessionId: 'browser-preview-session',
+      sessions: [
+        {
+          id: 'browser-preview-session',
+          title: 'Browser preview',
+          createdAtUtc: '2026-03-29T00:00:00.0000000Z',
+          updatedAtUtc: '2026-03-29T00:00:00.0000000Z',
+          messages: [],
+        },
+      ],
+    });
+  });
+
   it('sends getSettings requests through the structured bridge contract', async () => {
     const webView = createMockWebView();
     const bridge = new NativeBridge(webView);

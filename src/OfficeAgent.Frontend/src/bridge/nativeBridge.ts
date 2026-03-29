@@ -3,6 +3,7 @@ import type {
   BridgeErrorPayload,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
+  SessionState,
   PingPayload,
   WebViewHostLike,
   WebViewMessageEventLike,
@@ -21,6 +22,25 @@ const BRIDGE_TYPES = {
 const BROWSER_PREVIEW_PING: PingPayload = {
   host: 'browser-preview',
   version: 'dev',
+};
+
+const BROWSER_PREVIEW_SETTINGS: AppSettings = {
+  apiKey: '',
+  baseUrl: 'https://api.example.com',
+  model: 'gpt-5-mini',
+};
+
+const BROWSER_PREVIEW_SESSIONS: SessionState = {
+  activeSessionId: 'browser-preview-session',
+  sessions: [
+    {
+      id: 'browser-preview-session',
+      title: 'Browser preview',
+      createdAtUtc: '2026-03-29T00:00:00.0000000Z',
+      updatedAtUtc: '2026-03-29T00:00:00.0000000Z',
+      messages: [],
+    },
+  ],
 };
 
 class NativeBridgeError extends Error {
@@ -85,11 +105,11 @@ export class NativeBridge {
   }
 
   getSessions() {
-    return this.invoke(BRIDGE_TYPES.getSessions, null);
+    return this.invoke<void, SessionState>(BRIDGE_TYPES.getSessions);
   }
 
-  saveSettings(payload: unknown) {
-    return this.invoke(BRIDGE_TYPES.saveSettings, payload);
+  saveSettings(payload: AppSettings) {
+    return this.invoke<AppSettings, AppSettings>(BRIDGE_TYPES.saveSettings, payload);
   }
 
   executeExcelCommand(payload: unknown) {
@@ -104,6 +124,26 @@ export class NativeBridge {
     if (!this.webView) {
       if (type === BRIDGE_TYPES.ping) {
         return Promise.resolve(BROWSER_PREVIEW_PING as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.getSettings) {
+        return Promise.resolve(BROWSER_PREVIEW_SETTINGS as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.getSessions) {
+        return Promise.resolve(BROWSER_PREVIEW_SESSIONS as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.saveSettings) {
+        return Promise.resolve({
+          apiKey: typeof (payload as AppSettings | undefined)?.apiKey === 'string' ? (payload as AppSettings).apiKey : '',
+          baseUrl: typeof (payload as AppSettings | undefined)?.baseUrl === 'string'
+            ? (payload as AppSettings).baseUrl
+            : BROWSER_PREVIEW_SETTINGS.baseUrl,
+          model: typeof (payload as AppSettings | undefined)?.model === 'string'
+            ? (payload as AppSettings).model
+            : BROWSER_PREVIEW_SETTINGS.model,
+        } as TResult);
       }
 
       return Promise.reject(

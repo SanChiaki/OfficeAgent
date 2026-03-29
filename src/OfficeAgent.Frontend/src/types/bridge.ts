@@ -15,6 +15,26 @@ export interface AppSettings {
   model: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  createdAtUtc: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  messages: ChatMessage[];
+}
+
+export interface SessionState {
+  activeSessionId: string;
+  sessions: ChatSession[];
+}
+
 export interface BridgeResponseEnvelope<TPayload = unknown> {
   type: string;
   requestId: string;
