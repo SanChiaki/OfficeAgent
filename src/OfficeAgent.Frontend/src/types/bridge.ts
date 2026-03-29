@@ -35,6 +35,19 @@ export interface SessionState {
   sessions: ChatSession[];
 }
 
+export interface SelectionContext {
+  hasSelection: boolean;
+  workbookName: string;
+  sheetName: string;
+  address: string;
+  rowCount: number;
+  columnCount: number;
+  isContiguous: boolean;
+  headerPreview: string[];
+  sampleRows: string[][];
+  warningMessage?: string | null;
+}
+
 export interface BridgeResponseEnvelope<TPayload = unknown> {
   type: string;
   requestId: string;
@@ -46,6 +59,11 @@ export interface BridgeResponseEnvelope<TPayload = unknown> {
 export interface PingPayload {
   host: string;
   version: string;
+}
+
+export interface BridgeEventEnvelope<TPayload = unknown> {
+  type: string;
+  payload?: TPayload;
 }
 
 export interface WebViewMessageEventLike {

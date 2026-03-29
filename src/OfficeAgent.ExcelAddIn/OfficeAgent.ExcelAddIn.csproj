@@ -166,6 +166,7 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
+    <Compile Include="Excel\ExcelSelectionContextService.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />
     <Compile Include="TaskPane\TaskPaneHostControl.cs">
       <SubType>UserControl</SubType>

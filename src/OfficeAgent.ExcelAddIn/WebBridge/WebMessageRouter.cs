@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.WebBridge
@@ -17,6 +18,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             NullValueHandling = NullValueHandling.Ignore,
         };
 
+        private readonly IExcelContextService excelContextService;
         private readonly HashSet<string> allowedTypes = new HashSet<string>(StringComparer.Ordinal)
         {
             BridgeMessageTypes.Ping,
@@ -30,10 +32,14 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly FileSessionStore sessionStore;
         private readonly FileSettingsStore settingsStore;
 
-        public WebMessageRouter(FileSessionStore sessionStore, FileSettingsStore settingsStore)
+        public WebMessageRouter(
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
+            IExcelContextService excelContextService)
         {
             this.sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
             this.settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+            this.excelContextService = excelContextService ?? throw new ArgumentNullException(nameof(excelContextService));
         }
 
         public string Route(string rawRequestJson)
@@ -121,9 +127,19 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     }
 
                     return Success(request.Type, request.RequestId, sessionStore.Load());
+                case BridgeMessageTypes.GetSelectionContext:
+                    if (HasUnexpectedPayload(request.Payload))
+                    {
+                        return Error(
+                            request.Type,
+                            request.RequestId,
+                            code: "malformed_payload",
+                            message: "bridge.getSelectionContext does not accept a payload.");
+                    }
+
+                    return Success(request.Type, request.RequestId, excelContextService.GetCurrentSelectionContext());
                 case BridgeMessageTypes.SaveSettings:
                     return SaveSettings(request);
-                case BridgeMessageTypes.GetSelectionContext:
                 case BridgeMessageTypes.ExecuteExcelCommand:
                 case BridgeMessageTypes.RunSkill:
                     return Error(

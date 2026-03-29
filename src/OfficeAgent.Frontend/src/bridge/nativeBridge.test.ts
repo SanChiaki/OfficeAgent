@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NativeBridge } from './nativeBridge';
 
 type WebMessageEventHandler = (event: { data: unknown }) => void;
@@ -85,6 +85,22 @@ describe('NativeBridge', () => {
       model: 'gpt-5-mini',
     });
 
+    await expect(bridge.getSelectionContext()).resolves.toEqual({
+      hasSelection: true,
+      workbookName: 'Browser Preview.xlsx',
+      sheetName: 'Sheet1',
+      address: 'A1:C4',
+      rowCount: 4,
+      columnCount: 3,
+      isContiguous: true,
+      headerPreview: ['Name', 'Region', 'Amount'],
+      sampleRows: [
+        ['Project A', 'CN', '42'],
+        ['Project B', 'US', '36'],
+      ],
+      warningMessage: null,
+    });
+
     await expect(bridge.getSessions()).resolves.toEqual({
       activeSessionId: 'browser-preview-session',
       sessions: [
@@ -124,5 +140,63 @@ describe('NativeBridge', () => {
       baseUrl: 'https://api.example.com',
       model: 'gpt-5-mini',
     });
+  });
+
+  it('notifies selection context subscribers when native events arrive', async () => {
+    const webView = createMockWebView();
+    const bridge = new NativeBridge(webView);
+    const listener = vi.fn();
+
+    const unsubscribe = bridge.onSelectionContextChanged(listener);
+
+    webView.dispatch({
+      type: 'bridge.selectionContextChanged',
+      payload: {
+        hasSelection: true,
+        workbookName: 'Quarterly Report.xlsx',
+        sheetName: 'Sheet2',
+        address: 'B2:D5',
+        rowCount: 4,
+        columnCount: 3,
+        isContiguous: false,
+        headerPreview: [],
+        sampleRows: [],
+        warningMessage: 'Multiple selection areas are not supported yet.',
+      },
+    });
+
+    expect(listener).toHaveBeenCalledWith({
+      hasSelection: true,
+      workbookName: 'Quarterly Report.xlsx',
+      sheetName: 'Sheet2',
+      address: 'B2:D5',
+      rowCount: 4,
+      columnCount: 3,
+      isContiguous: false,
+      headerPreview: [],
+      sampleRows: [],
+      warningMessage: 'Multiple selection areas are not supported yet.',
+    });
+
+    unsubscribe();
+    listener.mockClear();
+
+    webView.dispatch({
+      type: 'bridge.selectionContextChanged',
+      payload: {
+        hasSelection: true,
+        workbookName: 'Quarterly Report.xlsx',
+        sheetName: 'Sheet3',
+        address: 'C3:E6',
+        rowCount: 4,
+        columnCount: 3,
+        isContiguous: true,
+        headerPreview: ['Name'],
+        sampleRows: [],
+        warningMessage: null,
+      },
+    });
+
+    expect(listener).not.toHaveBeenCalled();
   });
 });

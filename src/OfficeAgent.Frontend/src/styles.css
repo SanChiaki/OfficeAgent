@@ -144,6 +144,27 @@ body {
   margin-bottom: 4px;
 }
 
+.selection-badge__headline {
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.selection-badge__workbook {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.selection-badge__warning {
+  margin-top: 6px;
+  color: #991b1b;
+}
+
+.selection-badge__status {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
 .thread {
   display: grid;
   gap: 12px;

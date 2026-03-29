@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { nativeBridge } from './bridge/nativeBridge';
-import type { AppSettings, ChatSession } from './types/bridge';
+import type { AppSettings, ChatSession, SelectionContext } from './types/bridge';
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
@@ -12,6 +12,7 @@ export function App() {
   const [bridgeStatus, setBridgeStatus] = useState('Connecting to native host...');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
+  const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [draftSettings, setDraftSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -94,8 +95,34 @@ export function App() {
         setSettingsSaveError('');
       });
 
+    nativeBridge
+      .getSelectionContext()
+      .then((result) => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectionContext(result);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectionContext(null);
+      });
+
+    const unsubscribeSelectionContext = nativeBridge.onSelectionContextChanged((result) => {
+      if (!isActive) {
+        return;
+      }
+
+      setSelectionContext(result);
+    });
+
     return () => {
       isActive = false;
+      unsubscribeSelectionContext();
     };
   }, []);
 
@@ -230,8 +257,33 @@ export function App() {
         </header>
 
         <section className="selection-badge" aria-label="Selection badge placeholder" role="status">
-          <div className="selection-badge__label">Bridge status</div>
-          <div>{bridgeStatus}</div>
+          <div className="selection-badge__label">Selection</div>
+          {selectionContext?.hasSelection ? (
+            <>
+              <div className="selection-badge__workbook">{selectionContext.workbookName}</div>
+              <div className="selection-badge__headline">
+                {selectionContext.sheetName} · {selectionContext.address}
+              </div>
+              <div>{selectionContext.isContiguous ? 'Contiguous selection' : 'Non-contiguous selection'}</div>
+              <div>
+                {selectionContext.rowCount} rows x {selectionContext.columnCount} columns
+              </div>
+              {selectionContext.headerPreview.length > 0 ? (
+                <div>Headers: {selectionContext.headerPreview.join(', ')}</div>
+              ) : null}
+              {selectionContext.sampleRows.map((sampleRow, index) => (
+                <div key={`${selectionContext.address}-sample-${index}`}>
+                  {sampleRow.join(' · ')}
+                </div>
+              ))}
+              {selectionContext.warningMessage ? (
+                <div className="selection-badge__warning">{selectionContext.warningMessage}</div>
+              ) : null}
+            </>
+          ) : (
+            <div>No selection available</div>
+          )}
+          <div className="selection-badge__status">{bridgeStatus}</div>
         </section>
 
         <section className="thread" aria-label="Message thread">

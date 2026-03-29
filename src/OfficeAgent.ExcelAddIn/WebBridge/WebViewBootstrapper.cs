@@ -3,6 +3,9 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Newtonsoft.Json;
+using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.WebBridge
@@ -12,11 +15,16 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private const string VirtualHost = "appassets.officeagent.local";
         private readonly WebView2 webView;
         private readonly WebMessageRouter messageRouter;
+        private bool isInitialized;
 
-        public WebViewBootstrapper(WebView2 webView, FileSessionStore sessionStore, FileSettingsStore settingsStore)
+        public WebViewBootstrapper(
+            WebView2 webView,
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
+            IExcelContextService excelContextService)
         {
             this.webView = webView;
-            messageRouter = new WebMessageRouter(sessionStore, settingsStore);
+            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService);
         }
 
         public async Task InitializeAsync()
@@ -27,6 +35,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             await webView.EnsureCoreWebView2Async(environment);
             webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+            isInitialized = true;
 
             var frontendFolder = ResolveFrontendFolder();
             if (frontendFolder == null)
@@ -73,6 +82,21 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         {
             var responseJson = messageRouter.Route(e.WebMessageAsJson);
             webView.CoreWebView2.PostWebMessageAsJson(responseJson);
+        }
+
+        public void PublishSelectionContext(SelectionContext selectionContext)
+        {
+            if (!isInitialized || webView.CoreWebView2 == null || selectionContext == null)
+            {
+                return;
+            }
+
+            var messageJson = JsonConvert.SerializeObject(new WebMessageEvent
+            {
+                Type = BridgeMessageTypes.SelectionContextChanged,
+                Payload = selectionContext,
+            });
+            webView.CoreWebView2.PostWebMessageAsJson(messageJson);
         }
 
         private static string BuildFallbackHtml()

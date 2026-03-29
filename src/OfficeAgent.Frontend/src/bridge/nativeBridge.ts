@@ -1,8 +1,10 @@
 import type {
   AppSettings,
   BridgeErrorPayload,
+  BridgeEventEnvelope,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
+  SelectionContext,
   SessionState,
   PingPayload,
   WebViewHostLike,
@@ -13,6 +15,7 @@ const BRIDGE_TYPES = {
   ping: 'bridge.ping',
   getSettings: 'bridge.getSettings',
   getSelectionContext: 'bridge.getSelectionContext',
+  selectionContextChanged: 'bridge.selectionContextChanged',
   getSessions: 'bridge.getSessions',
   saveSettings: 'bridge.saveSettings',
   executeExcelCommand: 'bridge.executeExcelCommand',
@@ -28,6 +31,22 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   model: 'gpt-5-mini',
+};
+
+const BROWSER_PREVIEW_SELECTION_CONTEXT: SelectionContext = {
+  hasSelection: true,
+  workbookName: 'Browser Preview.xlsx',
+  sheetName: 'Sheet1',
+  address: 'A1:C4',
+  rowCount: 4,
+  columnCount: 3,
+  isContiguous: true,
+  headerPreview: ['Name', 'Region', 'Amount'],
+  sampleRows: [
+    ['Project A', 'CN', '42'],
+    ['Project B', 'US', '36'],
+  ],
+  warningMessage: null,
 };
 
 const BROWSER_PREVIEW_SESSIONS: SessionState = {
@@ -58,11 +77,23 @@ type PendingRequest = {
   reject: (reason?: unknown) => void;
 };
 
+type SelectionContextListener = (payload: SelectionContext) => void;
+
 export class NativeBridge {
   private readonly webView?: WebViewHostLike;
   private readonly pendingRequests = new Map<string, PendingRequest>();
+  private readonly selectionContextListeners = new Set<SelectionContextListener>();
   private readonly handleMessage = (event: WebViewMessageEventLike) => {
     const response = event.data;
+    if (isBridgeEventEnvelope(response) && response.type === BRIDGE_TYPES.selectionContextChanged) {
+      const payload = response.payload as SelectionContext | undefined;
+      if (payload) {
+        this.selectionContextListeners.forEach((listener) => listener(payload));
+      }
+
+      return;
+    }
+
     if (!isBridgeResponseEnvelope(response)) {
       return;
     }
@@ -101,7 +132,7 @@ export class NativeBridge {
   }
 
   getSelectionContext() {
-    return this.invoke(BRIDGE_TYPES.getSelectionContext, null);
+    return this.invoke<void, SelectionContext>(BRIDGE_TYPES.getSelectionContext);
   }
 
   getSessions() {
@@ -120,6 +151,13 @@ export class NativeBridge {
     return this.invoke(BRIDGE_TYPES.runSkill, payload);
   }
 
+  onSelectionContextChanged(listener: SelectionContextListener) {
+    this.selectionContextListeners.add(listener);
+    return () => {
+      this.selectionContextListeners.delete(listener);
+    };
+  }
+
   private invoke<TPayload, TResult>(type: string, payload?: TPayload): Promise<TResult> {
     if (!this.webView) {
       if (type === BRIDGE_TYPES.ping) {
@@ -128,6 +166,10 @@ export class NativeBridge {
 
       if (type === BRIDGE_TYPES.getSettings) {
         return Promise.resolve(BROWSER_PREVIEW_SETTINGS as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.getSelectionContext) {
+        return Promise.resolve(BROWSER_PREVIEW_SELECTION_CONTEXT as TResult);
       }
 
       if (type === BRIDGE_TYPES.getSessions) {
@@ -195,6 +237,15 @@ function isBridgeResponseEnvelope(value: unknown): value is BridgeResponseEnvelo
     typeof candidate.requestId === 'string' &&
     typeof candidate.ok === 'boolean'
   );
+}
+
+function isBridgeEventEnvelope(value: unknown): value is BridgeEventEnvelope {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.type === 'string' && !('requestId' in candidate) && !('ok' in candidate);
 }
 
 function normalizeError(error: BridgeErrorPayload | undefined): BridgeErrorPayload {

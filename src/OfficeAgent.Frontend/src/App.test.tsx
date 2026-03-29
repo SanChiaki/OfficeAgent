@@ -3,17 +3,21 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { nativeBridge } from './bridge/nativeBridge';
+import type { SelectionContext } from './types/bridge';
 
 vi.mock('./bridge/nativeBridge', () => ({
   nativeBridge: {
     ping: vi.fn(),
+    getSelectionContext: vi.fn(),
     getSessions: vi.fn(),
+    onSelectionContextChanged: vi.fn(),
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
   },
 }));
 
 const mockedBridge = vi.mocked(nativeBridge);
+let selectionContextListener: ((context: SelectionContext) => void) | null = null;
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -31,6 +35,21 @@ beforeEach(() => {
   mockedBridge.ping.mockResolvedValue({
     host: 'browser-preview',
     version: 'dev',
+  });
+  mockedBridge.getSelectionContext.mockResolvedValue({
+    hasSelection: true,
+    workbookName: 'Quarterly Report.xlsx',
+    sheetName: 'Sheet1',
+    address: 'A1:C4',
+    rowCount: 4,
+    columnCount: 3,
+    isContiguous: true,
+    headerPreview: ['Name', 'Region', 'Amount'],
+    sampleRows: [
+      ['Project A', 'CN', '42'],
+      ['Project B', 'US', '36'],
+    ],
+    warningMessage: null,
   });
   mockedBridge.getSessions.mockResolvedValue({
     activeSessionId: 'browser-preview-session',
@@ -56,12 +75,19 @@ beforeEach(() => {
     baseUrl: 'https://api.example.com',
     model: 'gpt-5-mini',
   });
+  mockedBridge.onSelectionContextChanged.mockImplementation((listener) => {
+    selectionContextListener = listener;
+    return () => {
+      selectionContextListener = null;
+    };
+  });
   mockedBridge.saveSettings.mockImplementation(async (settings) => settings);
 });
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  selectionContextListener = null;
 });
 
 describe('App shell', () => {
@@ -91,6 +117,24 @@ describe('App shell', () => {
     ).toBeInTheDocument();
     expect(
       await screen.findByText(/connected to browser-preview \(dev\)/i),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/sheet1 · a1:c4/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/quarterly report\.xlsx/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/4 rows x 3 columns/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/contiguous selection/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/headers: name, region, amount/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/project a · cn · 42/i),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: /browser preview/i }),
@@ -291,5 +335,57 @@ describe('App shell', () => {
     expect(
       await screen.findByRole('button', { name: /settings/i }),
     ).toHaveFocus();
+  });
+
+  it('updates the selection badge when native selection events arrive', async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByText(/sheet1 · a1:c4/i),
+    ).toBeInTheDocument();
+
+    selectionContextListener?.({
+      hasSelection: true,
+      workbookName: 'Quarterly Report.xlsx',
+      sheetName: 'Sheet2',
+      address: 'B2:D5',
+      rowCount: 4,
+      columnCount: 3,
+      isContiguous: false,
+      headerPreview: [],
+      sampleRows: [],
+      warningMessage: 'Multiple selection areas are not supported yet.',
+    });
+
+    expect(
+      await screen.findByText(/sheet2 · b2:d5/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/non-contiguous selection/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/multiple selection areas are not supported yet/i),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the empty selection state when the native host has no selection context', async () => {
+    mockedBridge.getSelectionContext.mockResolvedValueOnce({
+      hasSelection: false,
+      workbookName: '',
+      sheetName: '',
+      address: '',
+      rowCount: 0,
+      columnCount: 0,
+      isContiguous: true,
+      headerPreview: [],
+      sampleRows: [],
+      warningMessage: 'No selection available.',
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/no selection available/i),
+    ).toBeInTheDocument();
   });
 });

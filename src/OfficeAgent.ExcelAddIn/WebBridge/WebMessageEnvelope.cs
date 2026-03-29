@@ -8,6 +8,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         public const string Ping = "bridge.ping";
         public const string GetSettings = "bridge.getSettings";
         public const string GetSelectionContext = "bridge.getSelectionContext";
+        public const string SelectionContextChanged = "bridge.selectionContextChanged";
         public const string GetSessions = "bridge.getSessions";
         public const string SaveSettings = "bridge.saveSettings";
         public const string ExecuteExcelCommand = "bridge.executeExcelCommand";
@@ -60,5 +61,14 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         [JsonProperty("version")]
         public string Version { get; set; }
+    }
+
+    internal sealed class WebMessageEvent
+    {
+        [JsonProperty("type")]
+        public string Type { get; set; }
+
+        [JsonProperty("payload")]
+        public object Payload { get; set; }
     }
 }

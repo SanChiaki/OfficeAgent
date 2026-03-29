@@ -2,6 +2,8 @@ using System;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
 using OfficeAgent.ExcelAddIn.WebBridge;
 using OfficeAgent.Infrastructure.Storage;
 
@@ -11,9 +13,14 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
     {
         private readonly WebView2 webView;
         private readonly WebViewBootstrapper bootstrapper;
-        private bool isInitialized;
+        private SelectionContext pendingSelectionContext;
+        private bool isLoadStarted;
+        private bool isBridgeReady;
 
-        public TaskPaneHostControl(FileSessionStore sessionStore, FileSettingsStore settingsStore)
+        public TaskPaneHostControl(
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
+            IExcelContextService excelContextService)
         {
             Dock = DockStyle.Fill;
 
@@ -23,22 +30,28 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             };
             Controls.Add(webView);
 
-            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore);
+            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService);
             Load += TaskPaneHostControl_Load;
         }
 
         private async void TaskPaneHostControl_Load(object sender, EventArgs e)
         {
-            if (isInitialized || DesignMode)
+            if (isLoadStarted || DesignMode)
             {
                 return;
             }
 
-            isInitialized = true;
+            isLoadStarted = true;
 
             try
             {
                 await bootstrapper.InitializeAsync();
+                isBridgeReady = true;
+                if (pendingSelectionContext != null)
+                {
+                    bootstrapper.PublishSelectionContext(pendingSelectionContext);
+                    pendingSelectionContext = null;
+                }
             }
             catch (WebView2RuntimeNotFoundException)
             {
@@ -50,6 +63,17 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                     TextAlign = System.Drawing.ContentAlignment.MiddleCenter
                 });
             }
+        }
+
+        public void PublishSelectionContext(SelectionContext selectionContext)
+        {
+            if (!isBridgeReady)
+            {
+                pendingSelectionContext = selectionContext;
+                return;
+            }
+
+            bootstrapper.PublishSelectionContext(selectionContext);
         }
     }
 }
