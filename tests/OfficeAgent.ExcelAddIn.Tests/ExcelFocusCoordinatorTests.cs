@@ -15,6 +15,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var coordinator = CreateCoordinator(
                 activateActiveWindow: () => events.Add("window"),
                 getApplicationWindowHandle: () => new IntPtr(42),
+                setActiveWindow: handle =>
+                {
+                    events.Add("active:" + handle);
+                    return handle;
+                },
+                setFocusWindow: handle =>
+                {
+                    events.Add("focus:" + handle);
+                    return handle;
+                },
                 setForegroundWindow: handle =>
                 {
                     events.Add("foreground:" + handle);
@@ -24,7 +34,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             InvokeRestoreWorksheetFocus(coordinator, () => events.Add("selection"));
 
             Assert.Equal(
-                new[] { "window", "selection", "foreground:42" },
+                new[] { "window", "selection", "active:42", "focus:42", "foreground:42" },
                 events);
         }
 
@@ -35,6 +45,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var coordinator = CreateCoordinator(
                 activateActiveWindow: () => events.Add("window"),
                 getApplicationWindowHandle: () => IntPtr.Zero,
+                setActiveWindow: handle =>
+                {
+                    events.Add("active:" + handle);
+                    return handle;
+                },
+                setFocusWindow: handle =>
+                {
+                    events.Add("focus:" + handle);
+                    return handle;
+                },
                 setForegroundWindow: handle =>
                 {
                     events.Add("foreground:" + handle);
@@ -51,6 +71,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
         private static object CreateCoordinator(
             Action activateActiveWindow,
             Func<IntPtr> getApplicationWindowHandle,
+            Func<IntPtr, IntPtr> setActiveWindow,
+            Func<IntPtr, IntPtr> setFocusWindow,
             Func<IntPtr, bool> setForegroundWindow)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
@@ -62,7 +84,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 coordinatorType,
                 BindingFlags.Instance | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { activateActiveWindow, getApplicationWindowHandle, setForegroundWindow },
+                args: new object[] { activateActiveWindow, getApplicationWindowHandle, setActiveWindow, setFocusWindow, setForegroundWindow },
                 culture: null);
         }
 
