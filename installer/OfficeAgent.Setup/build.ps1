@@ -33,7 +33,8 @@ function Invoke-NativeCommand {
 function Build-MsiForArchitecture {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Architecture
+        [string]$Architecture,
+        [string]$ProductVersion = "1.0.0"
     )
 
     $normalizedArchitecture = $Architecture.Trim().ToLowerInvariant()
@@ -52,7 +53,7 @@ function Build-MsiForArchitecture {
     }
 
     Write-Host "Building MSI for $normalizedArchitecture..."
-    Invoke-NativeCommand "dotnet" "wix" "build" $wixSource "-arch" $normalizedArchitecture "-d" "PublishRoot=$payloadRoot" "-o" $msiPath
+    Invoke-NativeCommand "dotnet" "wix" "build" $wixSource "-arch" $normalizedArchitecture "-d" "PublishRoot=$payloadRoot" "-d" "ProductVersion=$ProductVersion" "-o" $msiPath
     return $msiPath
 }
 
@@ -104,9 +105,13 @@ finally {
     Pop-Location
 }
 
+$commitCount = [int](git rev-list --count HEAD).Trim()
+$productVersion = "1.0.$commitCount"
+Write-Host "Building MSI version $productVersion..."
+
 $builtMsiPaths = @()
 foreach ($architecture in $Architectures) {
-    $builtMsiPaths += Build-MsiForArchitecture -Architecture $architecture
+    $builtMsiPaths += Build-MsiForArchitecture -Architecture $architecture -ProductVersion $productVersion
 }
 
 Write-Host "MSI created at:"

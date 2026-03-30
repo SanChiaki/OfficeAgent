@@ -3,7 +3,7 @@
   <Package
     Name="OfficeAgent for Excel"
     Manufacturer="OfficeAgent"
-    Version="1.0.0.0"
+    Version="$(var.ProductVersion)"
     UpgradeCode="4C90D0E4-7407-4F6C-8A52-1DCA5E3F8A7B"
     Scope="perUser">
     <SummaryInformation Description="OfficeAgent VSTO add-in for Excel" />
