@@ -287,21 +287,28 @@ body {
 
 .composer {
   display: grid;
-  gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  gap: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
 }
 
 .composer textarea {
   width: 100%;
-  min-height: 92px;
+  min-height: 72px;
   resize: none;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 16px;
+  border: 0;
+  border-radius: 0;
   padding: 14px 16px;
   font: inherit;
-  background: #fff;
+  background: transparent;
   color: inherit;
+}
+
+.composer__divider {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  margin: 0 12px;
 }
 
 .composer__actions {
@@ -309,6 +316,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 8px 12px 12px;
 }
 
 .selection-pill {
@@ -449,7 +457,7 @@ body {
     flex-direction: column;
   }
 
-  .selection-pill {
+  .composer__actions .selection-pill {
     max-width: 100%;
   }
 }

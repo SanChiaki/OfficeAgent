@@ -620,6 +620,7 @@ export function App() {
               onChange={(event) => setComposerValue(event.target.value)}
               onKeyDown={handleComposerKeyDown}
             />
+            <div className="composer__divider" />
             <div className="composer__actions">
               <section className="selection-pill" aria-label="Selection capsule" role="status">
                 {formatSelectionCapsule(selectionContext)}
