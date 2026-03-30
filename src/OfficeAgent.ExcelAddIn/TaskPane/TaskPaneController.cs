@@ -69,7 +69,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator);
             taskPane = addIn.CustomTaskPanes.Add(hostControl, "OfficeAgent");
             taskPane.DockPosition = MsoCTPDockPosition.msoCTPDockPositionRight;
-            taskPane.Width = 420;
+            taskPane.Width = 800;
             taskPane.Visible = false;
             OfficeAgentLog.Info("taskpane", "created", "Custom task pane created.");
         }
