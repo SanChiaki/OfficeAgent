@@ -552,6 +552,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
                 return Result;
             }
+
+            public System.Threading.Tasks.Task<AgentCommandResult> ExecuteAsync(AgentCommandEnvelope envelope)
+            {
+                return System.Threading.Tasks.Task.FromResult(Execute(envelope));
+            }
         }
     }
 }

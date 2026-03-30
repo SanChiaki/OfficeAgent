@@ -2,6 +2,7 @@ using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core.Models;
@@ -31,6 +32,11 @@ namespace OfficeAgent.Infrastructure.Http
 
         public string Complete(PlannerRequest request)
         {
+            return CompleteAsync(request).GetAwaiter().GetResult();
+        }
+
+        public async Task<string> CompleteAsync(PlannerRequest request)
+        {
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
@@ -51,15 +57,15 @@ namespace OfficeAgent.Infrastructure.Http
 
             try
             {
-                return CompleteWithOpenAiCompatibleChatCompletions(baseUri, settings, request);
+                return await CompleteWithOpenAiCompatibleChatCompletionsAsync(baseUri, settings, request).ConfigureAwait(false);
             }
             catch (LegacyPlannerFallbackException)
             {
-                return CompleteWithLegacyPlanner(baseUri, settings, request);
+                return await CompleteWithLegacyPlannerAsync(baseUri, settings, request).ConfigureAwait(false);
             }
         }
 
-        private string CompleteWithOpenAiCompatibleChatCompletions(Uri baseUri, AppSettings settings, PlannerRequest request)
+        private async Task<string> CompleteWithOpenAiCompatibleChatCompletionsAsync(Uri baseUri, AppSettings settings, PlannerRequest request)
         {
             var endpoint = BuildChatCompletionsEndpoint(baseUri);
             var payload = JsonConvert.SerializeObject(new
@@ -76,11 +82,11 @@ namespace OfficeAgent.Infrastructure.Http
                 },
             });
 
-            var responseBody = SendRequest(endpoint, settings.ApiKey, payload, allowLegacyFallback: true);
+            var responseBody = await SendRequestAsync(endpoint, settings.ApiKey, payload, allowLegacyFallback: true).ConfigureAwait(false);
             return ExtractChatCompletionsText(responseBody);
         }
 
-        private string CompleteWithLegacyPlanner(Uri baseUri, AppSettings settings, PlannerRequest request)
+        private async Task<string> CompleteWithLegacyPlannerAsync(Uri baseUri, AppSettings settings, PlannerRequest request)
         {
             var endpoint = new Uri($"{baseUri.AbsoluteUri.TrimEnd('/')}/planner");
             var payload = JsonConvert.SerializeObject(new
@@ -88,19 +94,19 @@ namespace OfficeAgent.Infrastructure.Http
                 model = settings.Model,
                 request,
             });
-            return SendRequest(endpoint, settings.ApiKey, payload, allowLegacyFallback: false);
+            return await SendRequestAsync(endpoint, settings.ApiKey, payload, allowLegacyFallback: false).ConfigureAwait(false);
         }
 
-        private string SendRequest(Uri endpoint, string apiKey, string payload, bool allowLegacyFallback)
+        private async Task<string> SendRequestAsync(Uri endpoint, string apiKey, string payload, bool allowLegacyFallback)
         {
             using (var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint))
             {
                 httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-                using (var response = httpClient.SendAsync(httpRequest).GetAwaiter().GetResult())
+                using (var response = await httpClient.SendAsync(httpRequest).ConfigureAwait(false))
                 {
-                    var responseBody = response.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+                    var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult(string.Empty)).ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode)
                     {
                         if (allowLegacyFallback &&

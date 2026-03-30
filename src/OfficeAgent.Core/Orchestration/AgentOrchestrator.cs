@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
@@ -64,6 +65,35 @@ namespace OfficeAgent.Core.Orchestration
             };
         }
 
+        public async Task<AgentCommandResult> ExecuteAsync(AgentCommandEnvelope envelope)
+        {
+            if (envelope == null)
+            {
+                throw new ArgumentNullException(nameof(envelope));
+            }
+
+            if (string.Equals(envelope.DispatchMode, AgentDispatchModes.Agent, StringComparison.Ordinal))
+            {
+                return await ExecuteAgentFlowAsync(envelope).ConfigureAwait(true);
+            }
+
+            var skillName = ResolveSkillName(envelope);
+            if (!string.IsNullOrWhiteSpace(skillName))
+            {
+                envelope.SkillName = skillName;
+                OfficeAgentLog.Info("agent", "route.skill", $"Routing to skill {skillName}.");
+                return skillRegistry.Resolve(skillName).Execute(envelope);
+            }
+
+            OfficeAgentLog.Info("agent", "route.chat", "Falling back to chat route.");
+            return new AgentCommandResult
+            {
+                Route = AgentRouteTypes.Chat,
+                Status = "completed",
+                Message = "General chat routing is not implemented yet. Use /upload_data ... or a direct Excel command.",
+            };
+        }
+
         private AgentCommandResult ExecuteAgentFlow(AgentCommandEnvelope envelope)
         {
             if (envelope.Confirmed && envelope.Plan != null)
@@ -106,6 +136,89 @@ namespace OfficeAgent.Core.Orchestration
 
                 if (string.Equals(plannerResponse.Mode, PlannerResponseModes.ReadStep, StringComparison.Ordinal))
                 {
+                    var readResult = excelCommandExecutor.Execute(new ExcelCommand
+                    {
+                        CommandType = ExcelCommandTypes.ReadSelectionTable,
+                        Confirmed = false,
+                    });
+
+                    request.Observations = request.Observations
+                        .Concat(new[]
+                        {
+                            new PlannerObservation
+                            {
+                                Kind = "excel.table",
+                                Message = readResult.Message,
+                                Table = readResult.Table,
+                            },
+                        })
+                        .ToArray();
+                    continue;
+                }
+
+                if (string.Equals(plannerResponse.Mode, PlannerResponseModes.Plan, StringComparison.Ordinal))
+                {
+                    return new AgentCommandResult
+                    {
+                        Route = AgentRouteTypes.Plan,
+                        Status = "preview",
+                        RequiresConfirmation = true,
+                        Message = plannerResponse.AssistantMessage,
+                        Planner = plannerResponse,
+                    };
+                }
+            }
+
+            return CreatePlannerFailure("I could not produce a safe plan. Rephrase the request or use an explicit command.");
+        }
+
+        private async Task<AgentCommandResult> ExecuteAgentFlowAsync(AgentCommandEnvelope envelope)
+        {
+            if (envelope.Confirmed && envelope.Plan != null)
+            {
+                return ExecuteFrozenPlan(envelope.Plan);
+            }
+
+            if (plannerClient == null || excelContextService == null || excelCommandExecutor == null)
+            {
+                return CreatePlannerFailure("Agent planning is not configured for this OfficeAgent host.");
+            }
+
+            // GetCurrentSelectionContext is a COM call — runs on the calling (UI) thread before first await
+            var request = new PlannerRequest
+            {
+                SessionId = envelope.SessionId ?? string.Empty,
+                UserInput = envelope.UserInput?.Trim() ?? string.Empty,
+                SelectionContext = excelContextService.GetCurrentSelectionContext(),
+            };
+
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                // ConfigureAwait(true) keeps the continuation on the UI thread (SynchronizationContext),
+                // so COM calls after the await are safe.
+                var rawResponse = await plannerClient.CompleteAsync(request).ConfigureAwait(true);
+                var plannerResponse = DeserializePlannerResponse(rawResponse);
+                var validationError = ValidatePlannerResponse(plannerResponse);
+                if (!string.IsNullOrWhiteSpace(validationError))
+                {
+                    OfficeAgentLog.Warn("agent", "planner.invalid", validationError);
+                    return CreatePlannerFailure(validationError);
+                }
+
+                if (string.Equals(plannerResponse.Mode, PlannerResponseModes.Message, StringComparison.Ordinal))
+                {
+                    return new AgentCommandResult
+                    {
+                        Route = AgentRouteTypes.Chat,
+                        Status = "completed",
+                        Message = plannerResponse.AssistantMessage,
+                        Planner = plannerResponse,
+                    };
+                }
+
+                if (string.Equals(plannerResponse.Mode, PlannerResponseModes.ReadStep, StringComparison.Ordinal))
+                {
+                    // Back on the UI thread here — COM call is safe
                     var readResult = excelCommandExecutor.Execute(new ExcelCommand
                     {
                         CommandType = ExcelCommandTypes.ReadSelectionTable,

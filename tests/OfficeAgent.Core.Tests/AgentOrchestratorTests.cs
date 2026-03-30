@@ -360,6 +360,11 @@ namespace OfficeAgent.Core.Tests
                     ? responses.Dequeue()
                     : PlannerJson.Message("General chat routing is not implemented yet.");
             }
+
+            public System.Threading.Tasks.Task<string> CompleteAsync(PlannerRequest request)
+            {
+                return System.Threading.Tasks.Task.FromResult(Complete(request));
+            }
         }
 
         private sealed class FakePlanExecutor : IPlanExecutor

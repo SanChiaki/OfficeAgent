@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -54,6 +55,53 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         public string Route(string rawRequestJson)
         {
             var response = RouteInternal(rawRequestJson);
+            return JsonConvert.SerializeObject(response, SerializerSettings);
+        }
+
+        public async Task<string> RouteAsync(string rawRequestJson)
+        {
+            WebMessageRequest request;
+            try
+            {
+                request = JsonConvert.DeserializeObject<WebMessageRequest>(rawRequestJson);
+            }
+            catch (JsonException)
+            {
+                return Route(rawRequestJson);
+            }
+
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.Type) ||
+                string.IsNullOrWhiteSpace(request.RequestId))
+            {
+                return Route(rawRequestJson);
+            }
+
+            if (!string.Equals(request.Type, BridgeMessageTypes.RunAgent, StringComparison.Ordinal) &&
+                !string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal))
+            {
+                return Route(rawRequestJson);
+            }
+
+            OfficeAgentLog.Info("bridge", "request.received", $"Received {request.Type}.", request.RequestId);
+
+            WebMessageResponse response;
+            try
+            {
+                response = string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal)
+                    ? await RunSkillAsync(request).ConfigureAwait(true)
+                    : await RunAgentAsync(request).ConfigureAwait(true);
+            }
+            catch (Exception error)
+            {
+                OfficeAgentLog.Error("bridge", "request.failed", $"Unhandled bridge failure while processing {request.Type}.", error, request.RequestId);
+                response = Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "internal_error",
+                    message: "OfficeAgent hit an unexpected error. Check the local log and try again.");
+            }
+
             return JsonConvert.SerializeObject(response, SerializerSettings);
         }
 
@@ -221,6 +269,50 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             }
         }
 
+        private async Task<WebMessageResponse> RunSkillAsync(WebMessageRequest request)
+        {
+            if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.runSkill requires a skill payload.");
+            }
+
+            try
+            {
+                var envelope = request.Payload.ToObject<AgentCommandEnvelope>() ?? new AgentCommandEnvelope();
+                envelope.DispatchMode = AgentDispatchModes.Skill;
+                var result = await agentOrchestrator.ExecuteAsync(envelope).ConfigureAwait(true);
+                return Success(request.Type, request.RequestId, result);
+            }
+            catch (JsonException)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.runSkill requires a valid skill payload.");
+            }
+            catch (ArgumentException error)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "invalid_command",
+                    message: error.Message);
+            }
+            catch (InvalidOperationException error)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "skill_failed",
+                    message: error.Message);
+            }
+        }
+
         private WebMessageResponse RunAgent(WebMessageRequest request)
         {
             if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
@@ -237,6 +329,50 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                 var envelope = request.Payload.ToObject<AgentCommandEnvelope>() ?? new AgentCommandEnvelope();
                 envelope.DispatchMode = AgentDispatchModes.Agent;
                 return Success(request.Type, request.RequestId, agentOrchestrator.Execute(envelope));
+            }
+            catch (JsonException)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.runAgent requires a valid agent payload.");
+            }
+            catch (ArgumentException error)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "invalid_command",
+                    message: error.Message);
+            }
+            catch (InvalidOperationException error)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "agent_failed",
+                    message: error.Message);
+            }
+        }
+
+        private async Task<WebMessageResponse> RunAgentAsync(WebMessageRequest request)
+        {
+            if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.runAgent requires an agent payload.");
+            }
+
+            try
+            {
+                var envelope = request.Payload.ToObject<AgentCommandEnvelope>() ?? new AgentCommandEnvelope();
+                envelope.DispatchMode = AgentDispatchModes.Agent;
+                var result = await agentOrchestrator.ExecuteAsync(envelope).ConfigureAwait(true);
+                return Success(request.Type, request.RequestId, result);
             }
             catch (JsonException)
             {
