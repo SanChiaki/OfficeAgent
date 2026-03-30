@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json;
@@ -33,6 +35,17 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         public async Task InitializeAsync()
         {
+            // VSTO does not call Application.Run, so WindowsFormsSynchronizationContext is
+            // not installed by default on the Excel STA thread. Without it, ConfigureAwait(true)
+            // in the async chain has no SynchronizationContext to capture and continuations land
+            // on thread-pool threads instead of the UI thread, breaking COM calls and WebView2
+            // access. Install it here, before the first await, while we are still on the UI thread.
+            if (!(SynchronizationContext.Current is WindowsFormsSynchronizationContext))
+            {
+                SynchronizationContext.SetSynchronizationContext(
+                    new WindowsFormsSynchronizationContext());
+            }
+
             OfficeAgentLog.Info("webview", "initialize.begin", "Initializing WebView2.");
             var environment = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
@@ -202,7 +215,16 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         {
             try
             {
-                webView.CoreWebView2?.PostWebMessageAsJson(json);
+                // Belt-and-suspenders: if the continuation somehow ran on a thread-pool thread
+                // despite ConfigureAwait(true), marshal explicitly to the control's UI thread.
+                if (webView.InvokeRequired)
+                {
+                    webView.Invoke((Action)(() => webView.CoreWebView2?.PostWebMessageAsJson(json)));
+                }
+                else
+                {
+                    webView.CoreWebView2?.PostWebMessageAsJson(json);
+                }
             }
             catch (Exception error)
             {
