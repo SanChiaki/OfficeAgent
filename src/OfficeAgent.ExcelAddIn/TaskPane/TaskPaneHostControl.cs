@@ -75,7 +75,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 Controls.Add(new Label
                 {
                     Dock = DockStyle.Fill,
-                    Text = "OfficeAgent could not initialize the task pane. Check the local log and reopen Excel.",
+                    Text = "Resy AI could not initialize the task pane. Check the local log and reopen Excel.",
                     TextAlign = System.Drawing.ContentAlignment.MiddleCenter
                 });
             }

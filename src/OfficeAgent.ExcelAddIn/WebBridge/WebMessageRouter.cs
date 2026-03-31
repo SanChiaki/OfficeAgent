@@ -30,6 +30,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             BridgeMessageTypes.GetSettings,
             BridgeMessageTypes.GetSelectionContext,
             BridgeMessageTypes.GetSessions,
+            BridgeMessageTypes.SaveSessions,
             BridgeMessageTypes.SaveSettings,
             BridgeMessageTypes.ExecuteExcelCommand,
             BridgeMessageTypes.RunSkill,
@@ -163,7 +164,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                             request.RequestId,
                             new PingPayload
                             {
-                                Host = "OfficeAgent.ExcelAddIn",
+                                Host = "Resy AI",
                                 Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "dev",
                             });
                     case BridgeMessageTypes.GetSettings:
@@ -188,6 +189,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                         }
 
                         return Success(request.Type, request.RequestId, sessionStore.Load());
+                    case BridgeMessageTypes.SaveSessions:
+                        return SaveSessions(request);
                     case BridgeMessageTypes.GetSelectionContext:
                         if (HasUnexpectedPayload(request.Payload))
                         {
@@ -397,6 +400,33 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.RequestId,
                     code: "agent_failed",
                     message: error.Message);
+            }
+        }
+
+        private WebMessageResponse SaveSessions(WebMessageRequest request)
+        {
+            if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.saveSessions requires a session state payload.");
+            }
+
+            try
+            {
+                var state = request.Payload.ToObject<SessionState>() ?? new SessionState();
+                sessionStore.Save(state);
+                return Success(request.Type, request.RequestId, sessionStore.Load());
+            }
+            catch (JsonException)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.saveSessions requires a valid session state payload.");
             }
         }
 

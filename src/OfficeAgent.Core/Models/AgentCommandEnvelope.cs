@@ -39,6 +39,8 @@ namespace OfficeAgent.Core.Models
         public AgentPlan Plan { get; set; }
 
         public UploadPreview UploadPreview { get; set; }
+
+        public ConversationTurn[] ConversationHistory { get; set; } = System.Array.Empty<ConversationTurn>();
     }
 
     [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]

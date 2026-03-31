@@ -111,6 +111,7 @@ namespace OfficeAgent.Core.Orchestration
                 SessionId = envelope.SessionId ?? string.Empty,
                 UserInput = envelope.UserInput?.Trim() ?? string.Empty,
                 SelectionContext = excelContextService.GetCurrentSelectionContext(),
+                ConversationHistory = envelope.ConversationHistory ?? System.Array.Empty<ConversationTurn>(),
             };
 
             for (var attempt = 0; attempt < 3; attempt++)
@@ -190,6 +191,7 @@ namespace OfficeAgent.Core.Orchestration
                 SessionId = envelope.SessionId ?? string.Empty,
                 UserInput = envelope.UserInput?.Trim() ?? string.Empty,
                 SelectionContext = excelContextService.GetCurrentSelectionContext(),
+                ConversationHistory = envelope.ConversationHistory ?? System.Array.Empty<ConversationTurn>(),
             };
 
             for (var attempt = 0; attempt < 3; attempt++)

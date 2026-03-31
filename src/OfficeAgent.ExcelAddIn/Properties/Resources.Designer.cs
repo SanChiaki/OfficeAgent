@@ -38,5 +38,10 @@ namespace OfficeAgent.ExcelAddIn.Properties
             get => resourceCulture;
             set => resourceCulture = value;
         }
+
+        internal static System.Drawing.Bitmap Logo
+        {
+            get => (System.Drawing.Bitmap)ResourceManager.GetObject("Logo", resourceCulture);
+        }
     }
 }

@@ -71,11 +71,7 @@ namespace OfficeAgent.Infrastructure.Http
             var payload = JsonConvert.SerializeObject(new
             {
                 model = settings.Model,
-                messages = new object[]
-                {
-                    CreateChatMessage("system", BuildPlannerInstructions()),
-                    CreateChatMessage("user", BuildPlannerPrompt(request)),
-                },
+                messages = BuildChatMessages(request),
                 response_format = new
                 {
                     type = "json_object",
@@ -161,6 +157,23 @@ namespace OfficeAgent.Infrastructure.Http
                 });
         }
 
+        private static object[] BuildChatMessages(PlannerRequest request)
+        {
+            var messages = new System.Collections.Generic.List<object>();
+            messages.Add(CreateChatMessage("system", BuildPlannerInstructions()));
+
+            foreach (var turn in request.ConversationHistory ?? System.Array.Empty<ConversationTurn>())
+            {
+                if (!string.IsNullOrWhiteSpace(turn.Role) && !string.IsNullOrWhiteSpace(turn.Content))
+                {
+                    messages.Add(CreateChatMessage(turn.Role, turn.Content));
+                }
+            }
+
+            messages.Add(CreateChatMessage("user", BuildPlannerPrompt(request)));
+            return messages.ToArray();
+        }
+
         private static string BuildPlannerInstructions()
         {
             return "You are OfficeAgent's planner. "
@@ -185,7 +198,8 @@ namespace OfficeAgent.Infrastructure.Http
                 + "When mode=read_step, set step to {\"type\":\"excel.readSelectionTable\",\"args\":{}} and plan to null. "
                 + "When mode=plan, set plan.summary and plan.steps, and set step to null. "
                 + "When mode=message, set both step and plan to null. "
-                + "If the request cannot be completed safely with the supported actions, answer with mode=message.";
+                + "If the request cannot be completed safely with the supported actions, answer with mode=message. "
+                + "Prior conversation turns are included as context. Use them to understand follow-up questions and maintain coherence.";
         }
 
         private static string ExtractChatCompletionsText(string responseBody)

@@ -275,14 +275,14 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 <html lang=""en"">
   <head>
     <meta charset=""utf-8"" />
-    <title>OfficeAgent</title>
+    <title>Resy AI</title>
     <style>
       body { font-family: Segoe UI, sans-serif; padding: 24px; color: #1f2937; }
       code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
     </style>
   </head>
   <body>
-    <h1>OfficeAgent</h1>
+    <h1>Resy AI</h1>
     <p>Frontend assets were not found.</p>
     <p>Build <code>src/OfficeAgent.Frontend</code> and reopen the task pane.</p>
   </body>

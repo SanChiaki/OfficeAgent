@@ -27,6 +27,8 @@ namespace OfficeAgent.Core.Models
         public SelectionContext SelectionContext { get; set; }
 
         public PlannerObservation[] Observations { get; set; } = System.Array.Empty<PlannerObservation>();
+
+        public ConversationTurn[] ConversationHistory { get; set; } = System.Array.Empty<ConversationTurn>();
     }
 
     [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
@@ -97,5 +99,13 @@ namespace OfficeAgent.Core.Models
         public string Message { get; set; } = string.Empty;
 
         public string ErrorMessage { get; set; } = string.Empty;
+    }
+
+    [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+    public sealed class ConversationTurn
+    {
+        public string Role { get; set; } = string.Empty;
+
+        public string Content { get; set; } = string.Empty;
     }
 }

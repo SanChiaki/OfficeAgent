@@ -137,11 +137,17 @@ export interface PlanExecutionJournal {
   steps: PlanExecutionJournalStep[];
 }
 
+export interface ConversationTurn {
+  role: string;
+  content: string;
+}
+
 export interface AgentRequestEnvelope {
   userInput: string;
   confirmed: boolean;
   sessionId?: string;
   plan?: AgentPlan;
+  conversationHistory?: ConversationTurn[];
 }
 
 export interface AgentResult {

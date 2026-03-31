@@ -7,6 +7,7 @@ import type {
   AgentResult,
   AppSettings,
   ChatSession,
+  ConversationTurn,
   ExcelCommand,
   ExcelCommandPreview,
   ExcelCommandResult,
@@ -52,6 +53,7 @@ export function App() {
   const [settingsSaveError, setSettingsSaveError] = useState('');
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [composerValue, setComposerValue] = useState('');
   const [sessionThreads, setSessionThreads] = useState<Record<string, ThreadMessage[]>>({});
   const [pendingConfirmations, setPendingConfirmations] = useState<Record<string, PendingConfirmation>>({});
@@ -64,6 +66,10 @@ export function App() {
   const isSettingsOpenRef = useRef(false);
   const isSettingsDirtyRef = useRef(false);
   const shouldRestoreSettingsButtonFocusRef = useRef(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -240,8 +246,93 @@ export function App() {
   }
 
   function handleSessionSelect(sessionId: string) {
+    if (sessionId !== activeSessionId) {
+      void saveCurrentSessions();
+    }
+
     setActiveSessionId(sessionId);
     setIsSessionsDrawerOpen(false);
+  }
+
+  function handleCreateNewSession() {
+    void saveCurrentSessions();
+    const id = createMessageId();
+    const now = new Date().toISOString();
+    const newSession: ChatSession = {
+      id,
+      title: 'New chat',
+      createdAtUtc: now,
+      updatedAtUtc: now,
+      messages: [],
+    };
+    setSessions((current) => [newSession, ...current]);
+    setSessionThreads((current) => ({
+      ...current,
+      [id]: createInitialThreadMessages(),
+    }));
+    setActiveSessionId(id);
+    setIsSessionsDrawerOpen(false);
+  }
+
+  function handleRenameStart(sessionId: string, currentTitle: string) {
+    setRenamingSessionId(sessionId);
+    setRenameValue(currentTitle);
+  }
+
+  function handleRenameConfirm() {
+    if (!renamingSessionId) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    setSessions((current) =>
+      current.map((s) => s.id === renamingSessionId ? { ...s, title: trimmed } : s),
+    );
+    setRenamingSessionId(null);
+    setRenameValue('');
+  }
+
+  function handleRenameCancel() {
+    setRenamingSessionId(null);
+    setRenameValue('');
+  }
+
+  function handleRenameKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleRenameConfirm();
+    } else if (event.key === 'Escape') {
+      handleRenameCancel();
+    }
+  }
+
+  function handleDeleteConfirm() {
+    const targetId = deleteConfirmSessionId;
+    if (!targetId) return;
+    setDeleteConfirmSessionId(null);
+
+    let nextActiveId: string | undefined;
+    setSessions((current) => {
+      const filtered = current.filter((s) => s.id !== targetId);
+      if (activeSessionId === targetId) {
+        nextActiveId = filtered.length > 0 ? filtered[0].id : '';
+      }
+      return filtered;
+    });
+    setSessionThreads((current) => {
+      const { [targetId]: _, ...rest } = current;
+      return rest;
+    });
+    setPendingConfirmations((current) => {
+      const { [targetId]: _, ...rest } = current;
+      return rest;
+    });
+    setPendingCommandSessions((current) => {
+      const { [targetId]: _, ...rest } = current;
+      return rest;
+    });
+
+    if (nextActiveId !== undefined) {
+      setActiveSessionId(nextActiveId);
+    }
   }
 
   function handleSettingsDialogKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
@@ -329,6 +420,70 @@ export function App() {
       sessionId,
     }, sessionId);
   }
+
+  async function saveCurrentSessions() {
+    const chatSessions = sessions.map((session) => {
+      const thread = sessionThreads[session.id] ?? [];
+      return {
+        ...session,
+        messages: threadToChatMessages(thread),
+        updatedAtUtc: new Date().toISOString(),
+      };
+    });
+
+    try {
+      await nativeBridge.saveSessions({
+        activeSessionId,
+        sessions: chatSessions,
+      });
+    } catch {
+      // best-effort save
+    }
+  }
+
+  // Debounced auto-save when session threads change
+  useEffect(() => {
+    if (Object.keys(sessionThreads).length === 0) {
+      return;
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      void saveCurrentSessions();
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [sessionThreads]);
+
+  // Auto-rename session when first user message arrives
+  useEffect(() => {
+    if (!activeSession || activeSession.title !== 'New chat') {
+      return;
+    }
+
+    const thread = sessionThreads[activeSession.id] ?? [];
+    const firstUserMessage = thread.find((m) => m.role === 'user');
+    if (!firstUserMessage) {
+      return;
+    }
+
+    const newTitle = firstUserMessage.content.length > 20
+      ? firstUserMessage.content.slice(0, 20) + '...'
+      : firstUserMessage.content;
+
+    setSessions((current) =>
+      current.map((s) =>
+        s.id === activeSession.id ? { ...s, title: newTitle } : s,
+      ),
+    );
+  }, [activeSession?.id, activeSession?.title, sessionThreads]);
 
   async function handlePendingConfirmationConfirm() {
     if (!activePendingConfirmation || !activeSession?.id) {
@@ -450,9 +605,11 @@ export function App() {
     setCommandPending(sessionId, true);
 
     try {
+      const threadMessages = sessionThreads[sessionId] ?? [];
       const result = await nativeBridge.runAgent({
         ...request,
         sessionId,
+        conversationHistory: extractConversationHistory(threadMessages),
       });
 
       if (result.requiresConfirmation && result.planner?.mode === 'plan' && result.planner.plan) {
@@ -559,12 +716,7 @@ export function App() {
               <MenuIcon />
             </button>
 
-            <div>
-              <div className="eyebrow">Office Agent</div>
-              <h1 className="title">{activeSession?.title ?? 'Office Agent 任务窗格'}</h1>
-              <div className="subtitle">{settings?.baseUrl ?? '设置尚未加载'}</div>
-              <div className="status-line">{bridgeStatus}</div>
-            </div>
+            <h1 className="title">{activeSession?.title ?? 'Resy AI'}</h1>
           </div>
 
           <button
@@ -651,20 +803,59 @@ export function App() {
                 <MenuIcon />
               </button>
               <div className="sidebar__title">会话</div>
+              <button
+                type="button"
+                className="session-drawer__new-chat"
+                aria-label="新建会话"
+                onClick={handleCreateNewSession}
+              >
+                <NewChatIcon />
+              </button>
             </div>
             {sessions.length === 0 ? (
               <div className="sidebar__empty">暂无会话</div>
             ) : (
               <div className="sidebar__list">
                 {sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    type="button"
-                    className={`session-chip${session.id === activeSession?.id ? ' session-chip--active' : ''}`}
-                    onClick={() => handleSessionSelect(session.id)}
-                  >
-                    {session.title}
-                  </button>
+                  renamingSessionId === session.id ? (
+                    <div key={session.id} className={`session-chip${session.id === activeSession?.id ? ' session-chip--active' : ''} session-chip--editing`}>
+                      <input
+                        className="session-chip__edit-input"
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={handleRenameKeyDown}
+                        autoFocus
+                      />
+                      <div className="session-chip__edit-actions">
+                        <button type="button" className="session-chip__action-btn" aria-label="确认重命名" onClick={handleRenameConfirm}>
+                          <CheckIcon />
+                        </button>
+                        <button type="button" className="session-chip__action-btn" aria-label="取消重命名" onClick={handleRenameCancel}>
+                          <CloseIcon />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      key={session.id}
+                      className={`session-chip${session.id === activeSession?.id ? ' session-chip--active' : ''}`}
+                      onClick={() => handleSessionSelect(session.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSessionSelect(session.id); } }}
+                    >
+                      <span className="session-chip__title">{session.title}</span>
+                      <div className="session-chip__actions">
+                        <button type="button" className="session-chip__action-btn" aria-label="重命名会话" onClick={(e) => { e.stopPropagation(); handleRenameStart(session.id, session.title); }}>
+                          <PencilIcon />
+                        </button>
+                        <button type="button" className="session-chip__action-btn" aria-label="删除会话" onClick={(e) => { e.stopPropagation(); setDeleteConfirmSessionId(session.id); }}>
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ))}
               </div>
             )}
@@ -703,14 +894,25 @@ export function App() {
 
             <label className="settings-field">
               <span>API Key</span>
-              <input
-                ref={apiKeyInputRef}
-                aria-label="API Key"
-                type="text"
-                value={draftSettings.apiKey}
-                disabled={isSettingsSaving}
-                onChange={(event) => updateDraftSettings({ apiKey: event.target.value })}
-              />
+              <div className="settings-field__input-wrapper">
+                <input
+                  ref={apiKeyInputRef}
+                  aria-label="API Key"
+                  type={showApiKey ? 'text' : 'password'}
+                  value={draftSettings.apiKey}
+                  disabled={isSettingsSaving}
+                  onChange={(event) => updateDraftSettings({ apiKey: event.target.value })}
+                />
+                <button
+                  type="button"
+                  className="icon-button--ghost settings-field__toggle"
+                  aria-label={showApiKey ? '隐藏 API Key' : '显示 API Key'}
+                  onClick={() => setShowApiKey((v) => !v)}
+                  disabled={isSettingsSaving}
+                >
+                  {showApiKey ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
             </label>
 
             <label className="settings-field">
@@ -748,11 +950,49 @@ export function App() {
                 保存
               </button>
             </div>
+            <div className="settings-version">{bridgeStatus}</div>
           </section>
+        </div>
+      ) : null}
+
+      {deleteConfirmSessionId ? (
+        <div className="delete-dialog-backdrop">
+          <div className="delete-dialog">
+            <h2 className="delete-dialog__title">删除会话</h2>
+            <p className="delete-dialog__message">
+              确定要删除「{sessions.find((s) => s.id === deleteConfirmSessionId)?.title}」吗？此操作不可撤销。
+            </p>
+            <div className="delete-dialog__actions">
+              <button type="button" className="ghost-button" onClick={() => setDeleteConfirmSessionId(null)}>取消</button>
+              <button type="button" className="send-button" onClick={handleDeleteConfirm}>删除</button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+const MAX_CONVERSATION_HISTORY_TURNS = 10;
+
+function extractConversationHistory(messages: ThreadMessage[]): ConversationTurn[] {
+  const eligible = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
+  const clipped = eligible.slice(-MAX_CONVERSATION_HISTORY_TURNS * 2);
+  return clipped.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+}
+
+function threadToChatMessages(messages: ThreadMessage[]): Array<{ id: string; role: string; content: string; createdAtUtc: string }> {
+  return messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      createdAtUtc: new Date().toISOString(),
+    }));
 }
 
 function createInitialThreadMessages(session?: ChatSession): ThreadMessage[] {
@@ -769,7 +1009,7 @@ function createInitialThreadMessages(session?: ChatSession): ThreadMessage[] {
     {
       id: 'welcome-message',
       role: 'assistant',
-      content: '欢迎使用 Office Agent。你可以直接使用 Excel 命令，完整的 Agent 路由功能正在接入中。',
+      content: '欢迎使用 Resy AI。你可以直接使用 Excel 命令，完整的 Agent 路由功能正在接入中。',
     },
   ];
 }
@@ -971,10 +1211,65 @@ function SettingsIcon() {
   );
 }
 
+function NewChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg" width="18" height="18">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="12" y1="18" x2="12" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="9" y1="15" x2="15" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg" width="14" height="14">
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 17.5 2 22l4.5-1.5L21 7.5z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 5l4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg" width="14" height="14">
+      <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg" width="14" height="14">
+      <polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg">
       <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="icon-svg">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   );
 }

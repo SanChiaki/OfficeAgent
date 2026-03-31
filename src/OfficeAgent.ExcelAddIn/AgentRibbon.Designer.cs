@@ -34,19 +34,19 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.ControlId.ControlIdType = Microsoft.Office.Tools.Ribbon.RibbonControlIdType.Office;
             this.tab1.ControlId.OfficeId = "TabAddIns";
             this.tab1.Groups.Add(this.group1);
-            this.tab1.Label = "OfficeAgent";
+            this.tab1.Label = "Resy AI";
             this.tab1.Name = "tab1";
             // 
             // group1
             // 
             this.group1.Items.Add(this.toggleTaskPaneButton);
-            this.group1.Label = "OfficeAgent";
+            this.group1.Label = "Resy AI";
             this.group1.Name = "group1";
             // 
             // toggleTaskPaneButton
             // 
             this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
-            this.toggleTaskPaneButton.Label = "Open OfficeAgent";
+            this.toggleTaskPaneButton.Label = "Open";
             this.toggleTaskPaneButton.Name = "toggleTaskPaneButton";
             this.toggleTaskPaneButton.ShowImage = true;
             this.toggleTaskPaneButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ToggleTaskPaneButton_Click);

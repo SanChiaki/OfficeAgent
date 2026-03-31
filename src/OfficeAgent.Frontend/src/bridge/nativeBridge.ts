@@ -26,6 +26,7 @@ const BRIDGE_TYPES = {
   getSelectionContext: 'bridge.getSelectionContext',
   selectionContextChanged: 'bridge.selectionContextChanged',
   getSessions: 'bridge.getSessions',
+  saveSessions: 'bridge.saveSessions',
   saveSettings: 'bridge.saveSettings',
   executeExcelCommand: 'bridge.executeExcelCommand',
   runSkill: 'bridge.runSkill',
@@ -149,6 +150,10 @@ export class NativeBridge {
     return this.invoke<void, SessionState>(BRIDGE_TYPES.getSessions);
   }
 
+  saveSessions(payload: SessionState) {
+    return this.invoke<SessionState, SessionState>(BRIDGE_TYPES.saveSessions, payload);
+  }
+
   saveSettings(payload: AppSettings) {
     return this.invoke<AppSettings, AppSettings>(BRIDGE_TYPES.saveSettings, payload);
   }
@@ -188,6 +193,10 @@ export class NativeBridge {
 
       if (type === BRIDGE_TYPES.getSessions) {
         return Promise.resolve(BROWSER_PREVIEW_SESSIONS as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.saveSessions) {
+        return Promise.resolve((payload ?? BROWSER_PREVIEW_SESSIONS) as TResult);
       }
 
       if (type === BRIDGE_TYPES.saveSettings) {

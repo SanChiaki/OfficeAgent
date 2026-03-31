@@ -10,6 +10,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         public const string GetSelectionContext = "bridge.getSelectionContext";
         public const string SelectionContextChanged = "bridge.selectionContextChanged";
         public const string GetSessions = "bridge.getSessions";
+        public const string SaveSessions = "bridge.saveSessions";
         public const string SaveSettings = "bridge.saveSettings";
         public const string ExecuteExcelCommand = "bridge.executeExcelCommand";
         public const string RunSkill = "bridge.runSkill";
