@@ -45,12 +45,32 @@ jobs:
           npm ci
           npm run build
 
+      - name: Generate test signing certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject "CN=OfficeAgent CI Test" `
+            -CertStoreLocation "Cert:\CurrentUser\My"
+          $thumbprint = $cert.Thumbprint
+          Write-Host "Generated cert thumbprint: $thumbprint"
+          echo "SIGNING_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+
       - name: Build VSTO add-in
         run: >
           msbuild src/OfficeAgent.ExcelAddIn/OfficeAgent.ExcelAddIn.csproj
           /restore
           /p:Configuration=${{ env.Configuration }}
-          /p:SignManifests=false
+          /p:SignManifests=true
+          /p:ManifestCertificateThumbprint=${{ env.SIGNING_THUMBPRINT }}
+
+      - name: Remove test certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_THUMBPRINT) {
+            Remove-Item "Cert:\CurrentUser\My\$env:SIGNING_THUMBPRINT" -ErrorAction SilentlyContinue
+          }
 
       - name: Prepare installer payload
         shell: pwsh
