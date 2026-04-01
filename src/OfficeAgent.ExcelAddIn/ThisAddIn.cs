@@ -38,18 +38,42 @@ namespace OfficeAgent.ExcelAddIn
             SettingsStore = new FileSettingsStore(
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
+
+            var sharedCookies = new SharedCookieContainer();
+            var cookieStore = new FileCookieStore(
+                Path.Combine(appDataDirectory, "cookies.json"),
+                new DpapiSecretProtector());
+            cookieStore.Load(sharedCookies.Container);
+
+            // Set SSO domain from settings for login status checks.
+            var initialSettings = SettingsStore.Load();
+            if (!string.IsNullOrWhiteSpace(initialSettings.SsoUrl))
+            {
+                try
+                {
+                    sharedCookies.SsoDomain = new Uri(initialSettings.SsoUrl).Host;
+                }
+                catch (UriFormatException)
+                {
+                    sharedCookies.SsoDomain = string.Empty;
+                }
+            }
+
             ExcelContextService = new ExcelSelectionContextService(Application);
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
             ExcelFocusCoordinator = new ExcelFocusCoordinator(Application);
             var skillRegistry = new SkillRegistry(
-                new UploadDataSkill(ExcelCommandExecutor, new BusinessApiClient(SettingsStore)));
+                new UploadDataSkill(ExcelCommandExecutor, new BusinessApiClient(() => SettingsStore.Load(), cookieContainer: sharedCookies.Container)));
+            var fetchClient = new AgentFetchClient(() => SettingsStore.Load(), cookieContainer: sharedCookies.Container);
             AgentOrchestrator = new AgentOrchestrator(
                 skillRegistry,
                 ExcelContextService,
                 ExcelCommandExecutor,
                 new LlmPlannerClient(SettingsStore),
-                new PlanExecutor(ExcelCommandExecutor, skillRegistry));
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator);
+                new PlanExecutor(ExcelCommandExecutor, skillRegistry),
+                fetchClient,
+                () => SettingsStore.Load());
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, sharedCookies, cookieStore);
             Application.SheetSelectionChange += Application_SheetSelectionChange;
             OfficeAgentLog.Info("host", "startup.completed", "OfficeAgent Excel add-in started.");
         }

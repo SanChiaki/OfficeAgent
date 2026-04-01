@@ -10,6 +10,8 @@
   AgentPlan,
   AgentRequestEnvelope,
   AgentResult,
+  LoginResult,
+  LoginStatus,
   SelectionContext,
   SessionState,
   SkillRequestEnvelope,
@@ -31,6 +33,9 @@ const BRIDGE_TYPES = {
   executeExcelCommand: 'bridge.executeExcelCommand',
   runSkill: 'bridge.runSkill',
   runAgent: 'bridge.runAgent',
+  login: 'bridge.login',
+  logout: 'bridge.logout',
+  getLoginStatus: 'bridge.getLoginStatus',
 } as const;
 
 const BROWSER_PREVIEW_PING: PingPayload = {
@@ -42,6 +47,7 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   model: 'gpt-5-mini',
+  ssoUrl: '',
 };
 
 const BROWSER_PREVIEW_SELECTION_CONTEXT: SelectionContext = {
@@ -170,6 +176,18 @@ export class NativeBridge {
     return this.invoke<AgentRequestEnvelope, AgentResult>(BRIDGE_TYPES.runAgent, payload);
   }
 
+  login(payload: { ssoUrl: string }) {
+    return this.invoke<{ ssoUrl: string }, LoginResult>(BRIDGE_TYPES.login, payload);
+  }
+
+  logout() {
+    return this.invoke<void, LoginResult>(BRIDGE_TYPES.logout);
+  }
+
+  getLoginStatus() {
+    return this.invoke<void, LoginStatus>(BRIDGE_TYPES.getLoginStatus);
+  }
+
   onSelectionContextChanged(listener: SelectionContextListener) {
     this.selectionContextListeners.add(listener);
     return () => {
@@ -208,6 +226,9 @@ export class NativeBridge {
           model: typeof (payload as AppSettings | undefined)?.model === 'string'
             ? (payload as AppSettings).model
             : BROWSER_PREVIEW_SETTINGS.model,
+          ssoUrl: typeof (payload as AppSettings | undefined)?.ssoUrl === 'string'
+            ? (payload as AppSettings).ssoUrl
+            : BROWSER_PREVIEW_SETTINGS.ssoUrl,
         } as TResult);
       }
 
@@ -233,6 +254,18 @@ export class NativeBridge {
         } catch (error) {
           return Promise.reject(error);
         }
+      }
+
+      if (type === BRIDGE_TYPES.getLoginStatus) {
+        return Promise.resolve({ isLoggedIn: false, ssoUrl: '' } as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.login) {
+        return Promise.resolve({ success: false, error: 'SSO login is only available inside the Excel task pane.' } as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.logout) {
+        return Promise.resolve({ success: true } as TResult);
       }
 
       return Promise.reject(

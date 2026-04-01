@@ -5,6 +5,7 @@ using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Skills;
+using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Security;
 using OfficeAgent.Infrastructure.Storage;
 using Xunit;
@@ -435,6 +436,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator)
         {
+            var sharedCookies = new SharedCookieContainer();
+            var cookieStore = new FileCookieStore(
+                Path.Combine(Path.GetTempPath(), "OfficeAgent.Router.Tests", "cookies", Guid.NewGuid().ToString("N"), "cookies.json"),
+                new DpapiSecretProtector());
+
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var routerType = addInAssembly.GetType(
                 "OfficeAgent.ExcelAddIn.WebBridge.WebMessageRouter",
@@ -443,7 +449,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 routerType,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator },
+                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore },
                 culture: null);
         }
 

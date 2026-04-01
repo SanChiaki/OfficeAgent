@@ -10,6 +10,8 @@ namespace OfficeAgent.Core.Models
 
         public string Model { get; set; } = "gpt-5-mini";
 
+        public string SsoUrl { get; set; } = string.Empty;
+
         public static string NormalizeBaseUrl(string value)
         {
             if (string.IsNullOrWhiteSpace(value))

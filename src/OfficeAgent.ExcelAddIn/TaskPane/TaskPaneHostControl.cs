@@ -6,6 +6,7 @@ using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.ExcelAddIn.WebBridge;
+using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.TaskPane
@@ -23,7 +24,9 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             FileSettingsStore settingsStore,
             IExcelContextService excelContextService,
             IExcelCommandExecutor excelCommandExecutor,
-            IAgentOrchestrator agentOrchestrator)
+            IAgentOrchestrator agentOrchestrator,
+            SharedCookieContainer sharedCookies,
+            FileCookieStore cookieStore)
         {
             Dock = DockStyle.Fill;
 
@@ -33,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             };
             Controls.Add(webView);
 
-            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator);
+            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
             Load += TaskPaneHostControl_Load;
         }
 

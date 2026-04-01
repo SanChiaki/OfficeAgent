@@ -26,13 +26,28 @@ namespace OfficeAgent.Infrastructure.Http
         {
         }
 
-        public BusinessApiClient(Func<AppSettings> loadSettings, HttpClient httpClient = null)
+        public BusinessApiClient(Func<AppSettings> loadSettings, HttpClient httpClient = null, CookieContainer cookieContainer = null)
         {
             this.loadSettings = loadSettings ?? throw new ArgumentNullException(nameof(loadSettings));
-            this.httpClient = httpClient ?? new HttpClient
+            if (httpClient != null)
             {
-                Timeout = TimeSpan.FromSeconds(15),
-            };
+                this.httpClient = httpClient;
+            }
+            else if (cookieContainer != null)
+            {
+                this.httpClient = new HttpClient(new HttpClientHandler
+                {
+                    CookieContainer = cookieContainer,
+                    UseCookies = true,
+                })
+                {
+                    Timeout = TimeSpan.FromSeconds(15),
+                };
+            }
+            else
+            {
+                this.httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            }
         }
 
         public UploadExecutionResult Upload(UploadPreview preview)
@@ -44,10 +59,6 @@ namespace OfficeAgent.Infrastructure.Http
 
             var settings = loadSettings() ?? new AppSettings();
             var baseUrl = AppSettings.NormalizeBaseUrl(settings.BaseUrl);
-            if (string.IsNullOrWhiteSpace(settings.ApiKey))
-            {
-                throw new InvalidOperationException("An API Key is required before upload_data can call the business API.");
-            }
 
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
                 (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
@@ -72,8 +83,12 @@ namespace OfficeAgent.Infrastructure.Http
             {
                 using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
                     request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+                    if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+                    {
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
+                    }
 
                     try
                     {

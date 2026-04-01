@@ -183,8 +183,11 @@ namespace OfficeAgent.Infrastructure.Http
                 + "assistantMessage should be concise and use the user's language when possible. "
                 + "Supported modes are message, read_step, and plan. "
                 + "Use message when no Excel action is needed or the request is unsupported. "
-                + "Use read_step only when you need the full current selection table before planning. "
-                + "The only supported read_step is excel.readSelectionTable with empty args. "
+                + "Use read_step when you need data before planning. "
+                + "Supported read_step types are: "
+                + "1. excel.readSelectionTable with empty args — reads the user's current Excel selection as a table. "
+                + "2. excel.readRange with args { address: string, sheetName?: string } — reads a specific range from any worksheet. sheetName defaults to the active sheet if omitted. "
+                + "3. fetch.url with args { url: string } — makes an HTTP GET request to fetch external data. The url must be a full absolute URL (e.g. \"http://localhost:3200/api/performance\"). "
                 + "Use plan for any write or side-effect sequence. "
                 + "Supported plan step types are excel.writeRange, excel.addWorksheet, excel.renameWorksheet, excel.deleteWorksheet, and skill.upload_data. "
                 + "Never invent other step types. "
@@ -193,13 +196,14 @@ namespace OfficeAgent.Infrastructure.Http
                 + "For excel.renameWorksheet use args sheetName and newSheetName. "
                 + "For excel.deleteWorksheet use arg sheetName. "
                 + "For skill.upload_data use arg userInput and preserve the user's upload intent. "
-                + "Use the provided selection metadata, headers, sample rows, and prior observations. "
+                + "Use the provided selection metadata, headers, sample rows, prior observations, and apiBaseUrl. "
                 + "Only request read_step when the summary is insufficient. "
-                + "When mode=read_step, set step to {\"type\":\"excel.readSelectionTable\",\"args\":{}} and plan to null. "
+                + "When mode=read_step, set step to {\"type\":\"excel.readSelectionTable\",\"args\":{}} or {\"type\":\"excel.readRange\",\"args\":{\"address\":\"A1:D10\"}} or {\"type\":\"fetch.url\",\"args\":{\"url\":\"http://...\"}} and set plan to null. "
                 + "When mode=plan, set plan.summary and plan.steps, and set step to null. "
                 + "When mode=message, set both step and plan to null. "
                 + "If the request cannot be completed safely with the supported actions, answer with mode=message. "
-                + "Prior conversation turns are included as context. Use them to understand follow-up questions and maintain coherence.";
+                + "Prior conversation turns are included as context. Use them to understand follow-up questions and maintain coherence. "
+                + "The apiBaseUrl field in the request indicates the configured business API endpoint. Prefer using it as the base for fetch.url requests when the user asks about business data.";
         }
 
         private static string ExtractChatCompletionsText(string responseBody)

@@ -15,6 +15,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         public const string ExecuteExcelCommand = "bridge.executeExcelCommand";
         public const string RunSkill = "bridge.runSkill";
         public const string RunAgent = "bridge.runAgent";
+        public const string Login = "bridge.login";
+        public const string Logout = "bridge.logout";
+        public const string GetLoginStatus = "bridge.getLoginStatus";
     }
 
     internal sealed class WebMessageRequest
@@ -72,5 +75,29 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         [JsonProperty("payload")]
         public object Payload { get; set; }
+    }
+
+    internal sealed class LoginResultPayload
+    {
+        [JsonProperty("success")]
+        public bool Success { get; set; }
+
+        [JsonProperty("error")]
+        public string Error { get; set; } = string.Empty;
+    }
+
+    internal sealed class LoginStatusPayload
+    {
+        [JsonProperty("isLoggedIn")]
+        public bool IsLoggedIn { get; set; }
+
+        [JsonProperty("ssoUrl")]
+        public string SsoUrl { get; set; } = string.Empty;
+    }
+
+    internal sealed class LoginPayload
+    {
+        [JsonProperty("ssoUrl")]
+        public string SsoUrl { get; set; } = string.Empty;
     }
 }

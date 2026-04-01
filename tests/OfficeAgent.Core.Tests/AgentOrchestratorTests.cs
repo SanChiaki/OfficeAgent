@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Orchestration;
@@ -245,6 +246,122 @@ namespace OfficeAgent.Core.Tests
             Assert.Empty(plannerClient.Requests);
         }
 
+        [Fact]
+        public void ExecuteUsesReadRangeStepToReadASpecificRange()
+        {
+            var plannerClient = new FakeLlmPlannerClient(
+                PlannerJson.ReadRangeStep("A1:D10", "Sheet2"),
+                PlannerJson.Plan());
+            var excelCommandExecutor = new FakeExcelCommandExecutor();
+            var orchestrator = CreateOrchestrator(
+                plannerClient: plannerClient,
+                excelCommandExecutor: excelCommandExecutor);
+
+            var result = orchestrator.Execute(new AgentCommandEnvelope
+            {
+                DispatchMode = AgentDispatchModes.Agent,
+                SessionId = "session-1",
+                UserInput = "Read Sheet2 A1:D10 and create a summary",
+                Confirmed = false,
+            });
+
+            Assert.Equal(AgentRouteTypes.Plan, result.Route);
+            Assert.Equal("preview", result.Status);
+            Assert.True(result.RequiresConfirmation);
+            Assert.Equal(2, plannerClient.Requests.Count);
+            Assert.Single(plannerClient.Requests[1].Observations);
+            Assert.Equal("excel.table", plannerClient.Requests[1].Observations[0].Kind);
+            Assert.Equal(1, excelCommandExecutor.ExecuteCalls);
+            Assert.Equal(ExcelCommandTypes.ReadRange, excelCommandExecutor.LastExecutedCommand.CommandType);
+            Assert.Equal("Sheet2", excelCommandExecutor.LastExecutedCommand.SheetName);
+            Assert.Equal("A1:D10", excelCommandExecutor.LastExecutedCommand.TargetAddress);
+        }
+
+        [Fact]
+        public void ExecuteUsesFetchUrlStepToRetrieveExternalData()
+        {
+            var fetchClient = new FakeAgentFetchClient();
+            var plannerClient = new FakeLlmPlannerClient(
+                PlannerJson.FetchUrlStep("http://localhost:3200/api/performance"),
+                PlannerJson.Plan());
+            var orchestrator = CreateOrchestrator(
+                plannerClient: plannerClient,
+                fetchClient: fetchClient);
+
+            var result = orchestrator.Execute(new AgentCommandEnvelope
+            {
+                DispatchMode = AgentDispatchModes.Agent,
+                SessionId = "session-1",
+                UserInput = "查询所有项目业绩并写入Excel",
+                Confirmed = false,
+            });
+
+            Assert.Equal(AgentRouteTypes.Plan, result.Route);
+            Assert.Equal("preview", result.Status);
+            Assert.Equal(1, fetchClient.FetchCalls);
+            Assert.Equal("http://localhost:3200/api/performance", fetchClient.LastUrl);
+            Assert.Equal(2, plannerClient.Requests.Count);
+            Assert.Single(plannerClient.Requests[1].Observations);
+            Assert.Equal("fetch.response", plannerClient.Requests[1].Observations[0].Kind);
+            Assert.NotNull(plannerClient.Requests[1].Observations[0].Data);
+        }
+
+        [Fact]
+        public void ExecuteIncludesFetchErrorAsObservationAndPlannerRecoverable()
+        {
+            var fetchClient = new FakeAgentFetchClient
+            {
+                Result = new FetchResult
+                {
+                    Success = false,
+                    StatusCode = 500,
+                    ErrorMessage = "Internal Server Error",
+                },
+            };
+            var plannerClient = new FakeLlmPlannerClient(
+                PlannerJson.FetchUrlStep("http://localhost:3200/api/error"),
+                PlannerJson.Message("The API returned an error. I cannot retrieve the data right now."));
+            var orchestrator = CreateOrchestrator(
+                plannerClient: plannerClient,
+                fetchClient: fetchClient);
+
+            var result = orchestrator.Execute(new AgentCommandEnvelope
+            {
+                DispatchMode = AgentDispatchModes.Agent,
+                SessionId = "session-1",
+                UserInput = "查询不存在的接口",
+                Confirmed = false,
+            });
+
+            Assert.Equal(AgentRouteTypes.Chat, result.Route);
+            Assert.Equal("completed", result.Status);
+            Assert.Equal(2, plannerClient.Requests.Count);
+            Assert.Single(plannerClient.Requests[1].Observations);
+            Assert.Equal("fetch.error", plannerClient.Requests[1].Observations[0].Kind);
+        }
+
+        [Fact]
+        public void ExecuteReturnsFailureWhenFetchUrlStepIsUsedButFetchClientIsNull()
+        {
+            var plannerClient = new FakeLlmPlannerClient(
+                PlannerJson.FetchUrlStep("http://localhost:3200/api/performance"));
+            var orchestrator = CreateOrchestrator(
+                plannerClient: plannerClient,
+                fetchClient: null);
+
+            var result = orchestrator.Execute(new AgentCommandEnvelope
+            {
+                DispatchMode = AgentDispatchModes.Agent,
+                SessionId = "session-1",
+                UserInput = "查询业绩",
+                Confirmed = false,
+            });
+
+            Assert.Equal(AgentRouteTypes.Chat, result.Route);
+            Assert.Equal("failed", result.Status);
+            Assert.Contains("not supported or not configured", result.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static AgentOrchestrator CreateOrchestrator()
         {
             return CreateOrchestrator(
@@ -256,7 +373,8 @@ namespace OfficeAgent.Core.Tests
         private static AgentOrchestrator CreateOrchestrator(
             ILlmPlannerClient plannerClient,
             FakeExcelCommandExecutor excelCommandExecutor = null,
-            FakePlanExecutor planExecutor = null)
+            FakePlanExecutor planExecutor = null,
+            IAgentFetchClient fetchClient = null)
         {
             excelCommandExecutor = excelCommandExecutor ?? new FakeExcelCommandExecutor();
             var skill = new UploadDataSkill(
@@ -268,7 +386,9 @@ namespace OfficeAgent.Core.Tests
                 new FakeExcelContextService(),
                 excelCommandExecutor,
                 plannerClient,
-                planExecutor ?? new FakePlanExecutor());
+                planExecutor ?? new FakePlanExecutor(),
+                fetchClient,
+                () => new AppSettings { BaseUrl = "http://localhost:3200" });
         }
 
         private sealed class FakeExcelCommandExecutor : IExcelCommandExecutor
@@ -286,6 +406,30 @@ namespace OfficeAgent.Core.Tests
             {
                 ExecuteCalls++;
                 LastExecutedCommand = command;
+
+                if (string.Equals(command.CommandType, ExcelCommandTypes.ReadRange, System.StringComparison.Ordinal))
+                {
+                    var sheetName = string.IsNullOrWhiteSpace(command.SheetName) ? "Sheet1" : command.SheetName;
+                    return new ExcelCommandResult
+                    {
+                        CommandType = ExcelCommandTypes.ReadRange,
+                        RequiresConfirmation = false,
+                        Status = "completed",
+                        Message = $"Read range from {sheetName} {command.TargetAddress}.",
+                        Table = new ExcelTableData
+                        {
+                            SheetName = sheetName,
+                            Address = command.TargetAddress,
+                            Headers = new[] { "Name", "Region" },
+                            Rows = new[]
+                            {
+                                new[] { "Project A", "CN" },
+                                new[] { "Project B", "US" },
+                            },
+                        },
+                    };
+                }
+
                 return new ExcelCommandResult
                 {
                     CommandType = ExcelCommandTypes.ReadSelectionTable,
@@ -441,6 +585,54 @@ namespace OfficeAgent.Core.Tests
                     + "]"
                     + "}"
                     + "}";
+            }
+
+            public static string ReadRangeStep(string address, string sheetName = null)
+            {
+                var args = string.IsNullOrWhiteSpace(sheetName)
+                    ? $"\"address\":\"{address}\""
+                    : $"\"address\":\"{address}\",\"sheetName\":\"{sheetName}\"";
+                return "{"
+                    + "\"mode\":\"read_step\","
+                    + "\"assistantMessage\":\"I need to read a specific range.\","
+                    + "\"step\":{"
+                    + "\"type\":\"excel.readRange\","
+                    + $"\"args\":{{{args}}}"
+                    + "}"
+                    + "}";
+            }
+
+            public static string FetchUrlStep(string url)
+            {
+                return "{"
+                    + "\"mode\":\"read_step\","
+                    + "\"assistantMessage\":\"I need to fetch data from an API.\","
+                    + "\"step\":{"
+                    + "\"type\":\"fetch.url\","
+                    + $"\"args\":{{\"url\":\"{url}\"}}"
+                    + "}"
+                    + "}";
+            }
+        }
+
+        private sealed class FakeAgentFetchClient : IAgentFetchClient
+        {
+            public string LastUrl { get; private set; }
+
+            public int FetchCalls { get; private set; }
+
+            public FetchResult Result { get; set; } = new FetchResult
+            {
+                Success = true,
+                StatusCode = 200,
+                Body = "{\"data\":[{\"name\":\"Project A\"}]}",
+            };
+
+            public Task<FetchResult> FetchAsync(string url)
+            {
+                FetchCalls++;
+                LastUrl = url;
+                return Task.FromResult(Result);
             }
         }
     }

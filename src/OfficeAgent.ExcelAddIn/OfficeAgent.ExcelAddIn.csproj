@@ -173,6 +173,7 @@
     <Compile Include="Excel\ExcelFocusCoordinator.cs" />
     <Compile Include="Excel\ExcelInteropAdapter.cs" />
     <Compile Include="Excel\ExcelSelectionContextService.cs" />
+    <Compile Include="SsoLoginPopup.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />
     <Compile Include="TaskPane\TaskPaneHostControl.cs">
       <SubType>UserControl</SubType>

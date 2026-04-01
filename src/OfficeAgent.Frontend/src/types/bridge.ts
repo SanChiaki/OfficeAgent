@@ -13,6 +13,17 @@ export interface AppSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  ssoUrl: string;
+}
+
+export interface LoginResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface LoginStatus {
+  isLoggedIn: boolean;
+  ssoUrl: string;
 }
 
 export interface ChatMessage {

@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.WebBridge
@@ -27,10 +28,12 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             FileSettingsStore settingsStore,
             IExcelContextService excelContextService,
             IExcelCommandExecutor excelCommandExecutor,
-            IAgentOrchestrator agentOrchestrator)
+            IAgentOrchestrator agentOrchestrator,
+            SharedCookieContainer sharedCookies,
+            FileCookieStore cookieStore)
         {
             this.webView = webView;
-            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator);
+            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
         }
 
         public async Task InitializeAsync()
@@ -190,7 +193,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                 var obj = JsonConvert.DeserializeObject<WebMessageRequest>(rawJson);
                 return obj != null &&
                     (string.Equals(obj.Type, BridgeMessageTypes.RunAgent, StringComparison.Ordinal) ||
-                     string.Equals(obj.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal));
+                     string.Equals(obj.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal) ||
+                     string.Equals(obj.Type, BridgeMessageTypes.Login, StringComparison.Ordinal));
             }
             catch
             {

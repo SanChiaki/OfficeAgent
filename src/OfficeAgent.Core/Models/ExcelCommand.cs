@@ -6,6 +6,7 @@ namespace OfficeAgent.Core.Models
     public static class ExcelCommandTypes
     {
         public const string ReadSelectionTable = "excel.readSelectionTable";
+        public const string ReadRange = "excel.readRange";
         public const string WriteRange = "excel.writeRange";
         public const string AddWorksheet = "excel.addWorksheet";
         public const string RenameWorksheet = "excel.renameWorksheet";

@@ -87,6 +87,7 @@ describe('NativeBridge', () => {
       apiKey: '',
       baseUrl: 'https://api.example.com',
       model: 'gpt-5-mini',
+      ssoUrl: '',
     });
 
     await expect(bridge.getSelectionContext()).resolves.toEqual({

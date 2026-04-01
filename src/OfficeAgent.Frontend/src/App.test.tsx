@@ -16,6 +16,9 @@ vi.mock('./bridge/nativeBridge', () => ({
     executeExcelCommand: vi.fn(),
     runSkill: vi.fn(),
     runAgent: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    getLoginStatus: vi.fn(),
   },
 }));
 
@@ -85,6 +88,11 @@ beforeEach(() => {
     apiKey: '',
     baseUrl: 'https://api.example.com',
     model: 'gpt-5-mini',
+    ssoUrl: '',
+  });
+  mockedBridge.getLoginStatus.mockResolvedValue({
+    isLoggedIn: false,
+    ssoUrl: '',
   });
   mockedBridge.onSelectionContextChanged.mockImplementation((listener) => {
     selectionContextListener = listener;
@@ -167,6 +175,9 @@ describe('App shell', () => {
       await screen.findByText(/已连接 browser-preview \(dev\)/i),
     ).toBeInTheDocument();
     expect(
+      await screen.findByText(/new chat/i, { selector: 'h1' }),
+    ).toBeInTheDocument();
+    expect(
       await screen.findByText(/sheet1 · a1:c4/i),
     ).toBeInTheDocument();
     expect(
@@ -196,17 +207,16 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
 
+    const settingsDialog = screen.getByRole('dialog', { name: /设置对话框/i });
+    expect(settingsDialog).toBeInTheDocument();
     expect(
-      screen.getByRole('dialog', { name: /设置对话框/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('textbox', { name: /api key/i }),
+      within(settingsDialog).getAllByLabelText(/^api key$/i)[0],
     ).toHaveValue('');
     expect(
-      screen.getByRole('textbox', { name: /base url/i }),
+      within(settingsDialog).getByRole('textbox', { name: /base url/i }),
     ).toHaveValue('https://api.example.com');
     expect(
-      screen.getByRole('textbox', { name: /model/i }),
+      within(settingsDialog).getByRole('textbox', { name: /model/i }),
     ).toHaveValue('gpt-5-mini');
   });
 
@@ -218,7 +228,7 @@ describe('App shell', () => {
     const sidebar = await screen.findByRole('complementary', { name: /sessions drawer/i });
 
     expect(
-      await screen.findByRole('heading', { name: /browser preview/i }),
+      await screen.findByRole('heading', { name: /new chat/i }),
     ).toBeInTheDocument();
 
     await user.click(within(sidebar).getByRole('button', { name: /review notes/i }));
@@ -277,6 +287,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       model: string;
+      ssoUrl: string;
     }>();
     mockedBridge.getSettings.mockReturnValueOnce(delayedSettings.promise);
 
@@ -291,6 +302,7 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://loaded.example.com',
       model: 'gpt-5-mini',
+      ssoUrl: '',
     });
 
     expect(
@@ -307,7 +319,7 @@ describe('App shell', () => {
     await user.click(settingsButton);
 
     const dialog = screen.getByRole('dialog', { name: /设置对话框/i });
-    const apiKeyInput = screen.getByRole('textbox', { name: /api key/i });
+    const apiKeyInput = within(dialog).getAllByLabelText(/^api key$/i)[0];
 
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(apiKeyInput).toHaveFocus();
@@ -328,6 +340,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       model: string;
+      ssoUrl: string;
     }>();
     mockedBridge.getSettings.mockReturnValueOnce(delayedSettings.promise);
 
@@ -340,6 +353,7 @@ describe('App shell', () => {
       apiKey: 'loaded-key',
       baseUrl: 'https://loaded.example.com',
       model: 'gpt-5-mini',
+      ssoUrl: '',
     });
 
     expect(
@@ -366,6 +380,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       model: string;
+      ssoUrl: string;
     }>();
     mockedBridge.saveSettings.mockReturnValueOnce(pendingSave.promise);
 
@@ -374,7 +389,7 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
     await user.click(screen.getByRole('button', { name: /保存/i }));
 
-    expect(screen.getByRole('textbox', { name: /api key/i })).toBeDisabled();
+    expect(screen.getAllByLabelText(/^api key$/i)[0]).toBeDisabled();
     expect(screen.getByRole('textbox', { name: /base url/i })).toBeDisabled();
     expect(screen.getByRole('textbox', { name: /model/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /关闭/i })).toBeDisabled();
@@ -385,6 +400,7 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://api.example.com',
       model: 'gpt-5-mini',
+      ssoUrl: '',
     });
 
     expect(
@@ -492,7 +508,8 @@ describe('App shell', () => {
     expect(mockedBridge.runAgent).toHaveBeenCalledWith({
       userInput: 'Create a summary sheet from the current selection',
       confirmed: false,
-      sessionId: 'browser-preview-session',
+      sessionId: expect.any(String),
+      conversationHistory: expect.any(Array),
     });
     expect(mockedBridge.runSkill).not.toHaveBeenCalled();
     expect(
@@ -578,13 +595,15 @@ describe('App shell', () => {
     expect(mockedBridge.runAgent).toHaveBeenNthCalledWith(1, {
       userInput: 'Create a summary sheet from the current selection',
       confirmed: false,
-      sessionId: 'browser-preview-session',
+      sessionId: expect.any(String),
+      conversationHistory: expect.any(Array),
     });
     expect(mockedBridge.runAgent).toHaveBeenNthCalledWith(2, {
       userInput: 'Create a summary sheet from the current selection',
       confirmed: true,
-      sessionId: 'browser-preview-session',
+      sessionId: expect.any(String),
       plan: frozenPlan,
+      conversationHistory: expect.any(Array),
     });
     expect(
       await screen.findByText(/plan executed successfully/i),
@@ -699,7 +718,7 @@ describe('App shell', () => {
 
     await user.click(await screen.findByRole('button', { name: /打开会话列表/i }));
     const sidebar = await screen.findByRole('complementary', { name: /sessions drawer/i });
-    await screen.findByRole('heading', { name: /browser preview/i });
+    await screen.findByRole('heading', { name: /new chat/i });
 
     await user.type(screen.getByRole('textbox', { name: /message composer/i }), 'read selection');
     await user.click(screen.getByRole('button', { name: /发送/i }));
@@ -722,7 +741,7 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('button', { name: /打开会话列表/i }));
     const reopenedSidebar = await screen.findByRole('complementary', { name: /sessions drawer/i });
-    await user.click(within(reopenedSidebar).getByRole('button', { name: /browser preview/i }));
+    await user.click(within(reopenedSidebar).getByText(/read selection/i));
 
     expect(
       await screen.findByText(/read selection from sheet1 a1:c4/i),

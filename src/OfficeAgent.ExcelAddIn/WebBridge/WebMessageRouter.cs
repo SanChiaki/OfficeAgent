@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.WebBridge
@@ -35,22 +37,31 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             BridgeMessageTypes.ExecuteExcelCommand,
             BridgeMessageTypes.RunSkill,
             BridgeMessageTypes.RunAgent,
+            BridgeMessageTypes.Login,
+            BridgeMessageTypes.Logout,
+            BridgeMessageTypes.GetLoginStatus,
         };
         private readonly FileSessionStore sessionStore;
         private readonly FileSettingsStore settingsStore;
+        private readonly SharedCookieContainer sharedCookies;
+        private readonly FileCookieStore cookieStore;
 
         public WebMessageRouter(
             FileSessionStore sessionStore,
             FileSettingsStore settingsStore,
             IExcelContextService excelContextService,
             IExcelCommandExecutor excelCommandExecutor,
-            IAgentOrchestrator agentOrchestrator)
+            IAgentOrchestrator agentOrchestrator,
+            SharedCookieContainer sharedCookies,
+            FileCookieStore cookieStore)
         {
             this.sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
             this.settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
             this.excelContextService = excelContextService ?? throw new ArgumentNullException(nameof(excelContextService));
             this.excelCommandExecutor = excelCommandExecutor ?? throw new ArgumentNullException(nameof(excelCommandExecutor));
             this.agentOrchestrator = agentOrchestrator ?? throw new ArgumentNullException(nameof(agentOrchestrator));
+            this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
+            this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
         }
 
         public string Route(string rawRequestJson)
@@ -79,7 +90,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             }
 
             if (!string.Equals(request.Type, BridgeMessageTypes.RunAgent, StringComparison.Ordinal) &&
-                !string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal))
+                !string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal) &&
+                !string.Equals(request.Type, BridgeMessageTypes.Login, StringComparison.Ordinal))
             {
                 return Route(rawRequestJson);
             }
@@ -89,9 +101,18 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             WebMessageResponse response;
             try
             {
-                response = string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal)
-                    ? await RunSkillAsync(request).ConfigureAwait(true)
-                    : await RunAgentAsync(request).ConfigureAwait(true);
+                if (string.Equals(request.Type, BridgeMessageTypes.RunSkill, StringComparison.Ordinal))
+                {
+                    response = await RunSkillAsync(request).ConfigureAwait(true);
+                }
+                else if (string.Equals(request.Type, BridgeMessageTypes.Login, StringComparison.Ordinal))
+                {
+                    response = await LoginAsync(request).ConfigureAwait(true);
+                }
+                else
+                {
+                    response = await RunAgentAsync(request).ConfigureAwait(true);
+                }
             }
             catch (Exception error)
             {
@@ -210,6 +231,16 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                         return RunSkill(request);
                     case BridgeMessageTypes.RunAgent:
                         return RunAgent(request);
+                    case BridgeMessageTypes.GetLoginStatus:
+                        return GetLoginStatus(request);
+                    case BridgeMessageTypes.Logout:
+                        return Logout(request);
+                    case BridgeMessageTypes.Login:
+                        return Error(
+                            request.Type,
+                            request.RequestId,
+                            code: "invalid_dispatch",
+                            message: "bridge.login must be routed asynchronously.");
                     default:
                         return Error(
                             request.Type,
@@ -400,6 +431,125 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.RequestId,
                     code: "agent_failed",
                     message: error.Message);
+            }
+        }
+
+        private WebMessageResponse GetLoginStatus(WebMessageRequest request)
+        {
+            if (HasUnexpectedPayload(request.Payload))
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.getLoginStatus does not accept a payload.");
+            }
+
+            var settings = settingsStore.Load();
+            var ssoDomain = sharedCookies.SsoDomain;
+            var isLoggedIn = false;
+
+            if (!string.IsNullOrWhiteSpace(ssoDomain))
+            {
+                try
+                {
+                    var cookies = sharedCookies.Container.GetCookies(new Uri($"https://{ssoDomain}"));
+                    isLoggedIn = cookies.Count > 0;
+                }
+                catch (UriFormatException)
+                {
+                    isLoggedIn = false;
+                }
+            }
+
+            return Success(request.Type, request.RequestId, new LoginStatusPayload
+            {
+                IsLoggedIn = isLoggedIn,
+                SsoUrl = settings.SsoUrl,
+            });
+        }
+
+        private WebMessageResponse Logout(WebMessageRequest request)
+        {
+            if (HasUnexpectedPayload(request.Payload))
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: "bridge.logout does not accept a payload.");
+            }
+
+            var ssoDomain = sharedCookies.SsoDomain;
+            if (!string.IsNullOrWhiteSpace(ssoDomain))
+            {
+                try
+                {
+                    var cookies = sharedCookies.Container.GetCookies(new Uri($"https://{ssoDomain}"));
+                    foreach (System.Net.Cookie cookie in cookies)
+                    {
+                        cookie.Expired = true;
+                    }
+                }
+                catch (UriFormatException)
+                {
+                    // Ignore invalid domain.
+                }
+            }
+
+            cookieStore.Clear();
+
+            return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
+        }
+
+#pragma warning disable CS1998 // ShowDialog is synchronous; async signature required for routing consistency.
+        private async Task<WebMessageResponse> LoginAsync(WebMessageRequest request)
+        {
+            // Read SSO URL from the request payload first; fall back to persisted settings.
+            var ssoUrl = string.Empty;
+            if (request.Payload != null && request.Payload.Type == JTokenType.Object)
+            {
+                try
+                {
+                    var loginPayload = request.Payload.ToObject<LoginPayload>();
+                    if (loginPayload != null)
+                    {
+                        ssoUrl = loginPayload.SsoUrl ?? string.Empty;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Ignore malformed payload; fall through to settings.
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(ssoUrl))
+            {
+                ssoUrl = settingsStore.Load().SsoUrl;
+            }
+
+            if (string.IsNullOrWhiteSpace(ssoUrl))
+            {
+                return Error(request.Type, request.RequestId, "missing_sso_url", "\u8BF7\u5148\u914D\u7F6E SSO URL\u3002");
+            }
+
+            try
+            {
+                using (var popup = new SsoLoginPopup(ssoUrl, sharedCookies, cookieStore))
+                {
+                    await popup.InitializeAsync().ConfigureAwait(true);
+                    var result = popup.ShowDialog();
+                    if (result == DialogResult.OK)
+                    {
+                        return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
+                    }
+
+                    return Success(request.Type, request.RequestId, new LoginResultPayload { Success = false, Error = "\u7528\u6237\u53D6\u6D88\u4E86\u767B\u5F55\u3002" });
+                }
+            }
+            catch (Exception error)
+            {
+                return Error(request.Type, request.RequestId, "login_failed", error.Message);
             }
         }
 

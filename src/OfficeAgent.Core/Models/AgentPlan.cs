@@ -14,6 +14,8 @@ namespace OfficeAgent.Core.Models
     public static class PlannerStepTypes
     {
         public const string ReadSelectionTable = ExcelCommandTypes.ReadSelectionTable;
+        public const string ReadRange = ExcelCommandTypes.ReadRange;
+        public const string FetchUrl = "fetch.url";
         public const string UploadData = "skill.upload_data";
     }
 
@@ -29,6 +31,8 @@ namespace OfficeAgent.Core.Models
         public PlannerObservation[] Observations { get; set; } = System.Array.Empty<PlannerObservation>();
 
         public ConversationTurn[] ConversationHistory { get; set; } = System.Array.Empty<ConversationTurn>();
+
+        public string ApiBaseUrl { get; set; } = string.Empty;
     }
 
     [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
@@ -39,6 +43,8 @@ namespace OfficeAgent.Core.Models
         public string Message { get; set; } = string.Empty;
 
         public ExcelTableData Table { get; set; }
+
+        public JToken Data { get; set; }
     }
 
     [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]

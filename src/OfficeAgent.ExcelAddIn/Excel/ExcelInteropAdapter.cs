@@ -123,6 +123,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             {
                 case ExcelCommandTypes.ReadSelectionTable:
                     return ExecuteReadSelectionTable();
+                case ExcelCommandTypes.ReadRange:
+                    return ExecuteReadRange(command);
                 case ExcelCommandTypes.WriteRange:
                     return ExecuteWriteRange(command);
                 case ExcelCommandTypes.AddWorksheet:
@@ -167,6 +169,63 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 {
                     SheetName = worksheet.Name,
                     Address = context.Address,
+                    Headers = headers,
+                    Rows = rows.ToArray(),
+                },
+                SelectionContext = context,
+            };
+        }
+
+        private ExcelCommandResult ExecuteReadRange(ExcelCommand command)
+        {
+            var sheetName = command.SheetName?.Trim() ?? string.Empty;
+            var address = command.TargetAddress?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                throw new InvalidOperationException("A target address is required for readRange.");
+            }
+
+            ExcelInterop.Worksheet worksheet;
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                worksheet = application.ActiveSheet as ExcelInterop.Worksheet;
+            }
+            else
+            {
+                worksheet = GetWorksheet(sheetName);
+            }
+
+            if (worksheet == null)
+            {
+                throw new InvalidOperationException("No worksheet is available for this readRange command.");
+            }
+
+            var range = worksheet.Range[address];
+            if (range == null)
+            {
+                throw new InvalidOperationException($"Range '{address}' could not be resolved on worksheet '{worksheet.Name}'.");
+            }
+
+            var context = excelContextService.GetCurrentSelectionContext();
+            var values = ReadRangeValues(range);
+            var headers = values.Length > 0 ? values[0] : Array.Empty<string>();
+            var rows = new List<string[]>();
+            for (var rowIndex = 1; rowIndex < values.Length; rowIndex++)
+            {
+                rows.Add(values[rowIndex]);
+            }
+
+            return new ExcelCommandResult
+            {
+                CommandType = ExcelCommandTypes.ReadRange,
+                RequiresConfirmation = false,
+                Status = "completed",
+                Message = $"Read range from {worksheet.Name} {address}.",
+                Table = new ExcelTableData
+                {
+                    SheetName = worksheet.Name,
+                    Address = address,
                     Headers = headers,
                     Rows = rows.ToArray(),
                 },

@@ -12,6 +12,7 @@ import type {
   ExcelCommandPreview,
   ExcelCommandResult,
   ExcelTableData,
+  LoginStatus,
   SelectionContext,
   SkillRequestEnvelope,
   SkillResult,
@@ -22,6 +23,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   model: 'gpt-5-mini',
+  ssoUrl: '',
 };
 
 type ThreadMessage = {
@@ -70,6 +72,9 @@ export function App() {
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null);
+  const [loginStatus, setLoginStatus] = useState<LoginStatus | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -98,9 +103,40 @@ export function App() {
           return;
         }
 
-        setSessions(result.sessions);
-        setSessionThreads((current) => hydrateSessionThreads(current, result.sessions));
-        setActiveSessionId(result.activeSessionId);
+        const allSessions = result.sessions;
+        const latestSession = allSessions[0];
+
+        // Check if the most recent session is a usable new chat (empty " untitled and no messages)
+        let reusableSession: ChatSession | undefined;
+        if (latestSession && latestSession.title === 'New chat' && latestSession.messages.length === 0) {
+          reusableSession = latestSession;
+        }
+
+        let newSessionId: string;
+        let displaySessions: ChatSession[];
+
+        if (reusableSession) {
+          // Reuse the latest "New chat" session, keep all sessions in sidebar for reusing
+          newSessionId = reusableSession.id;
+          displaySessions = allSessions;
+        } else {
+          // Create a brand new session
+          const id = createMessageId();
+          const now = new Date().toISOString();
+          const newSession: ChatSession = {
+            id,
+            title: 'New chat',
+            createdAtUtc: now,
+            updatedAtUtc: now,
+            messages: [],
+          };
+          newSessionId = id;
+          displaySessions = [newSession, ...allSessions];
+        }
+
+        setSessions(displaySessions);
+        setSessionThreads((current) => hydrateSessionThreads(current, displaySessions));
+        setActiveSessionId(newSessionId);
       })
       .catch(() => {
         if (!isActive) {
@@ -165,6 +201,23 @@ export function App() {
       setSelectionContext(result);
     });
 
+    nativeBridge
+      .getLoginStatus()
+      .then((result) => {
+        if (!isActive) {
+          return;
+        }
+
+        setLoginStatus(result);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setLoginStatus({ isLoggedIn: false, ssoUrl: '' });
+      });
+
     return () => {
       isActive = false;
       unsubscribeSelectionContext();
@@ -213,6 +266,37 @@ export function App() {
     resetDraftSettings();
     isSettingsOpenRef.current = true;
     setIsSettingsOpen(true);
+  }
+
+  async function handleLogin() {
+    if (!draftSettings.ssoUrl.trim() || isLoggingIn) {
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setLoginError('');
+
+    try {
+      const result = await nativeBridge.login({ ssoUrl: draftSettings.ssoUrl.trim() });
+      if (result.success) {
+        setLoginStatus({ isLoggedIn: true, ssoUrl: draftSettings.ssoUrl.trim() });
+      } else {
+        setLoginError(result.error ?? '登录失败。');
+      }
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : '登录失败。');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await nativeBridge.logout();
+      setLoginStatus({ isLoggedIn: false, ssoUrl: loginStatus?.ssoUrl ?? '' });
+    } catch {
+      // best-effort
+    }
   }
 
   function toggleSessionsDrawer() {
@@ -936,6 +1020,42 @@ export function App() {
                 onChange={(event) => updateDraftSettings({ model: event.target.value })}
               />
             </label>
+
+            <label className="settings-field">
+              <span>SSO URL</span>
+              <input
+                aria-label="SSO URL"
+                type="text"
+                value={draftSettings.ssoUrl}
+                disabled={isSettingsSaving || isLoggingIn}
+                onChange={(event) => updateDraftSettings({ ssoUrl: event.target.value })}
+              />
+            </label>
+
+            <div className="login-status">
+              {loginStatus?.isLoggedIn ? (
+                <>
+                  <span className="login-badge login-badge--active">已登录</span>
+                  <button type="button" className="ghost-button" onClick={handleLogout} disabled={isSettingsSaving}>
+                    登出
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="login-badge">未登录</span>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={handleLogin}
+                    disabled={isSettingsSaving || isLoggingIn || !draftSettings.ssoUrl.trim()}
+                  >
+                    {isLoggingIn ? '登录中...' : '登录'}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {loginError ? <p className="settings-error" role="alert">{loginError}</p> : null}
 
             <div className="settings-actions">
               <button type="button" className="ghost-button" onClick={closeSettings} disabled={isSettingsSaving}>

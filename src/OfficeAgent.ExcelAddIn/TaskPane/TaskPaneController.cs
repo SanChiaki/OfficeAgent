@@ -2,6 +2,7 @@ using Microsoft.Office.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
 namespace OfficeAgent.ExcelAddIn.TaskPane
@@ -14,6 +15,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private readonly IAgentOrchestrator agentOrchestrator;
         private readonly FileSessionStore sessionStore;
         private readonly FileSettingsStore settingsStore;
+        private readonly SharedCookieContainer sharedCookies;
+        private readonly FileCookieStore cookieStore;
         private Microsoft.Office.Tools.CustomTaskPane taskPane;
         private TaskPaneHostControl hostControl;
 
@@ -23,7 +26,9 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             FileSettingsStore settingsStore,
             IExcelContextService excelContextService,
             IExcelCommandExecutor excelCommandExecutor,
-            IAgentOrchestrator agentOrchestrator)
+            IAgentOrchestrator agentOrchestrator,
+            SharedCookieContainer sharedCookies,
+            FileCookieStore cookieStore)
         {
             this.addIn = addIn;
             this.sessionStore = sessionStore;
@@ -31,6 +36,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             this.excelContextService = excelContextService;
             this.excelCommandExecutor = excelCommandExecutor;
             this.agentOrchestrator = agentOrchestrator;
+            this.sharedCookies = sharedCookies;
+            this.cookieStore = cookieStore;
         }
 
         public void Toggle()
@@ -66,7 +73,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 return;
             }
 
-            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator);
+            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
             taskPane = addIn.CustomTaskPanes.Add(hostControl, "OfficeAgent");
             taskPane.DockPosition = MsoCTPDockPosition.msoCTPDockPositionRight;
             taskPane.Width = 800;
