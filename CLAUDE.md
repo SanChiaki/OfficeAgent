@@ -4,22 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OfficeAgent (branded as **Resy AI**) is an AI-powered Excel agent — a chat-based task pane inside Excel that lets users interact with spreadsheet data through natural language. The project pivoted from an Office.js Add-in to a VSTO approach and lives across two git worktrees.
+OfficeAgent (branded as **Resy AI**) is an AI-powered Excel agent — a chat-based task pane inside Excel that lets users interact with spreadsheet data through natural language. The project pivoted from an Office.js Add-in to a VSTO approach.
 
 ## Repository Structure
 
-The repo root contains design docs and environment config. All source code lives in worktrees under `.worktrees/`:
-
-- **`.worktrees/office-agent-mvp/`** — Original Office.js Add-in (React + Office.js, deprecated)
-- **`.worktrees/office-agent-vsto-mvp/`** — Active VSTO implementation (C# + WebView2 + React)
-- **`docs/`** — Design specs and implementation plans (primary language: Chinese)
-
 **Branches:**
-- `codex/office-agent-vsto-mvp` — active development (in the VSTO worktree)
-- `codex/vsto-redesign-plan` — docs/planning (in the repo root)
-- `master` — default branch
+- `main` — active development (VSTO + React frontend, this branch)
+- `codex/office-agent-vsto-mvp` — legacy development branch on GitHub remote
 
-The VSTO worktree pushes via `git push office-agent codex/office-agent-vsto-mvp` (HTTPS remote).
+The repo is a single workspace (git worktrees were cleaned up). Source code, installer, and docs are all at the root level.
 
 ## VSTO Architecture
 
@@ -58,7 +51,7 @@ Excel Process
 
 ## Build & Run Commands
 
-### VSTO Solution (`.worktrees/office-agent-vsto-mvp/`)
+### VSTO Solution (root directory)
 
 ```bash
 # Build .NET projects (Core + Infrastructure only, no signing needed)
@@ -85,15 +78,6 @@ powershell installer/OfficeAgent.Setup/build.ps1
 ```
 
 The .NET solution requires Visual Studio 2022 and targets .NET Framework 4.8. Tests use xUnit.
-
-### Office.js MVP (`.worktrees/office-agent-mvp/` — deprecated)
-
-```bash
-npm run build       # tsc --noEmit && vite build
-npm test            # vitest run
-npm run test:watch  # vitest --watch
-npm run dev         # HTTPS dev server on localhost:3000
-```
 
 ## Key Design Decisions
 
@@ -132,7 +116,7 @@ Runtime logs are written to `%LocalAppData%\OfficeAgent\logs\officeagent.log` (J
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/build-msi.yml`) builds MSI installers on every push to `codex/office-agent-vsto-mvp`. The workflow runs on `windows-latest` (VS 2022 Enterprise), builds the frontend and VSTO add-in, packages x86/x64 MSI installers via WiX v4, and uploads them as artifacts. VSTO ClickOnce manifest signing uses a temporary self-signed certificate generated per build. The `.dotnet-tools.json` manifest declares the `wix` v4.0.5 .NET tool.
+GitHub Actions workflow (`.github/workflows/build-msi.yml`) builds MSI installers on every push to `main`. The workflow runs on `windows-latest` (VS 2022 Enterprise), builds the frontend and VSTO add-in, packages x86/x64 MSI installers via WiX v4, and uploads them as artifacts. VSTO ClickOnce manifest signing uses a temporary self-signed certificate generated per build. The `.dotnet-tools.json` manifest declares the `wix` v4.0.5 .NET tool.
 
 ## Further Reading
 
