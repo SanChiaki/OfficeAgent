@@ -1034,9 +1034,9 @@ export function App() {
             </label>
 
             <label className="settings-field">
-              <span>\u767B\u5F55\u6210\u529F\u8DEF\u5F84</span>
+              <span>登录成功路径</span>
               <input
-                aria-label="\u767B\u5F55\u6210\u529F\u8DEF\u5F84"
+                aria-label="登录成功路径"
                 type="text"
                 value={draftSettings.ssoLoginSuccessPath}
                 disabled={isSettingsSaving || isLoggingIn}
