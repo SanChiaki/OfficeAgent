@@ -40,7 +40,7 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Install mock server dependencies
-        run: npm install --prefix tests/mock-server
+        run: cd tests/mock-server && npm install
 
       - name: Run unit tests
         run: |
