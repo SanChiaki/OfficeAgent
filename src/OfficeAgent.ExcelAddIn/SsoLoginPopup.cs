@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
@@ -18,6 +19,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
         private WebView2 webView;
+        private bool hasLoginSucceeded;
 
         public SsoLoginPopup(string ssoUrl, string loginSuccessPath, SharedCookieContainer sharedCookies, FileCookieStore cookieStore)
         {
@@ -34,11 +36,31 @@ namespace OfficeAgent.ExcelAddIn
             Size = new System.Drawing.Size(1024, 700);
             MinimumSize = new System.Drawing.Size(600, 400);
 
+            var btnPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 44,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(12, 4, 12, 4),
+            };
+
+            var loginOkButton = new Button
+            {
+                Text = "\u5DF2\u767B\u5F55",
+                Width = 90,
+                Height = 34,
+            };
+            loginOkButton.Click += (sender, e) =>
+            {
+                OfficeAgentLog.Info("sso", "login.manual_confirm", "User clicked \"已登录\" button; capturing cookies.");
+                CaptureCookiesAndClose();
+            };
+
             var cancelButton = new Button
             {
                 Text = "\u53D6\u6D88",
-                Dock = DockStyle.Bottom,
-                Height = 36,
+                Width = 90,
+                Height = 34,
             };
             cancelButton.Click += (sender, e) =>
             {
@@ -51,9 +73,10 @@ namespace OfficeAgent.ExcelAddIn
                 Dock = DockStyle.Fill,
             };
 
-            // Add cancel button first so it takes bottom space, then WebView2 fills the rest.
-            Controls.Add(cancelButton);
+            btnPanel.Controls.Add(cancelButton);
+            btnPanel.Controls.Add(loginOkButton);
             Controls.Add(webView);
+            Controls.Add(btnPanel);
         }
 
         /// <summary>
@@ -72,50 +95,124 @@ namespace OfficeAgent.ExcelAddIn
                 userDataFolder: userDataFolder);
 
             await webView.EnsureCoreWebView2Async(environment);
-            webView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+
+            if (!string.IsNullOrWhiteSpace(loginSuccessPath))
+            {
+                webView.CoreWebView2.WebResourceResponseReceived += CoreWebView2_WebResourceResponseReceived;
+                webView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+            }
+
             webView.CoreWebView2.Navigate(ssoUrl);
 
             OfficeAgentLog.Info("sso", "popup.navigating", "SSO login popup navigating.", ssoUrl);
         }
 
-        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        private void CoreWebView2_WebResourceResponseReceived(object sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
         {
-            if (!e.IsSuccess)
+            if (hasLoginSucceeded)
             {
                 return;
             }
 
             try
             {
-                // If a login success path is configured (e.g. /rest/login), check if the
-                // current URL's path contains it AND the page loaded successfully.
-                if (!string.IsNullOrWhiteSpace(loginSuccessPath))
+                var uri = e.Request?.Uri;
+                if (string.IsNullOrEmpty(uri))
                 {
-                    var currentUri = new Uri(webView.CoreWebView2.Source);
-                    var currentPath = currentUri.AbsolutePath.TrimEnd('/');
-                    var normalizedPath = loginSuccessPath.Trim().TrimEnd('/');
+                    return;
+                }
 
-                    if (!string.IsNullOrWhiteSpace(normalizedPath) &&
-                        currentPath.IndexOf(normalizedPath, StringComparison.OrdinalIgnoreCase) >= 0)
+                var requestUri = new Uri(uri);
+                var marker = loginSuccessPath.Trim();
+                var statusCode = e.Response?.StatusCode;
+
+                OfficeAgentLog.Info(
+                    "sso", "login.response_seen",
+                    $"SSO response: {requestUri.AbsolutePath} => {(int?)statusCode ?? 0}  marker='{marker}'");
+
+                if (!string.IsNullOrEmpty(marker))
+                {
+                    var idx = requestUri.AbsolutePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                    if (idx < 0)
                     {
                         OfficeAgentLog.Info(
-                            "sso", "login.success_marker",
-                            $"SSO login detected via success path '{loginSuccessPath}'.", currentUri.AbsoluteUri);
-
-                        CaptureCookies();
-                        DialogResult = DialogResult.OK;
-                        Close();
+                            "sso", "login.path_no_match",
+                            $"Path '{requestUri.AbsolutePath}' does not contain marker '{marker}'.");
                         return;
                     }
+
+                    OfficeAgentLog.Info(
+                        "sso", "login.path_matched",
+                        $"Path '{requestUri.AbsolutePath}' contains marker '{marker}' at index {idx}.");
+                }
+
+                if (statusCode == null || statusCode != 200)
+                {
+                    OfficeAgentLog.Info(
+                        "sso", "login.status_no_match",
+                        $"Status {(int?)statusCode ?? -1} is not 200; not marking login successful.");
+                    return;
+                }
+
+                MarkLoginSucceeded();
+            }
+            catch (Exception error)
+            {
+                OfficeAgentLog.Error("sso", "response.detection_failed", "Error during login response detection.", error);
+            }
+        }
+
+        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (hasLoginSucceeded || string.IsNullOrWhiteSpace(loginSuccessPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var currentUri = webView.CoreWebView2.Source;
+                if (string.IsNullOrEmpty(currentUri))
+                {
+                    return;
+                }
+
+                var marker = loginSuccessPath.Trim();
+                var uri = new Uri(currentUri);
+
+                OfficeAgentLog.Info(
+                    "sso", "login.nav_completed",
+                    $"Navigation completed: {currentUri}, marker='{marker}', success={e.IsSuccess}");
+
+                if (!string.IsNullOrEmpty(marker) &&
+                    uri.AbsolutePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    e.IsSuccess)
+                {
+                    OfficeAgentLog.Info(
+                        "sso", "login.nav_path_matched",
+                        $"Navigation path '{uri.AbsolutePath}' contains marker '{marker}'; marking login successful.");
+                    MarkLoginSucceeded();
                 }
             }
             catch (Exception error)
             {
-                OfficeAgentLog.Error("sso", "cookie.capture.failed", "Failed to capture SSO cookies.", error);
+                OfficeAgentLog.Error("sso", "nav.detection_failed", "Error during navigation detection.", error);
             }
         }
 
-        private async void CaptureCookies()
+        private void MarkLoginSucceeded()
+        {
+            if (hasLoginSucceeded)
+            {
+                return;
+            }
+
+            hasLoginSucceeded = true;
+            OfficeAgentLog.Info("sso", "login.response_detected", "Login success detected; capturing cookies and closing.");
+            BeginInvoke(new Action(CaptureCookiesAndClose));
+        }
+
+        private async void CaptureCookiesAndClose()
         {
             try
             {
@@ -146,6 +243,9 @@ namespace OfficeAgent.ExcelAddIn
             {
                 OfficeAgentLog.Error("sso", "cookie.capture.failed", "Failed to capture SSO cookies.", error);
             }
+
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         protected override void Dispose(bool disposing)

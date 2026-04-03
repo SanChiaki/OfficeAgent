@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>SSO 登录</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f1f5f9; }
+    .card { background: #fff; border-radius: 12px; padding: 32px; width: 360px; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
+    h1 { font-size: 1.25rem; margin: 0 0 24px; text-align: center; }
+    label { display: block; margin-bottom: 4px; font-weight: 600; font-size: .9rem; }
+    input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .95rem; box-sizing: border-box; margin-bottom: 16px; }
+    button { width: 100%; padding: 10px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .error { color: #dc2626; font-size: .85rem; text-align: center; margin-bottom: 12px; min-height: 1.2em; }
+    .ok { color: #166534; font-size: .85rem; text-align: center; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>内网 SSO 登录</h1>
+    <form id="loginForm">
+      <label for="username">用户名</label>
+      <input id="username" name="username" placeholder="admin"/>
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" placeholder="任意密码"/>
+      <button type="submit">登 录</button>
+      <div id="msg"></div>
+    </form>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var msg = document.getElementById('msg');
+      msg.className = '';
+      msg.textContent = '登录中...';
+      var u = document.getElementById('username').value;
+      var p = document.getElementById('password').value;
+      if (!u || !p) {
+        msg.className = 'error';
+        msg.textContent = '用户名和密码不能为空。';
+        return;
+      }
+      try {
+        var resp = await fetch('/rest/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          msg.className = 'ok';
+          msg.textContent = '登录成功 ' + (data.user_name || '');
+          setTimeout(function () { window.location.href = 'http://localhost:3200/logged-in'; }, 1200);
+        } else {
+          var text = await resp.text();
+          msg.className = 'error';
+          msg.textContent = text;
+        }
+      } catch (err) {
+        msg.className = 'error';
+        msg.textContent = '网络错误: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
