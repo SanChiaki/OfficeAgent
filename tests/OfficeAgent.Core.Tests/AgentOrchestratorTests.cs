@@ -307,7 +307,7 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
-        public void ExecuteIncludesFetchErrorAsObservationAndPlannerRecoverable()
+        public void ExecuteReturnsChatErrorForFetchFailure()
         {
             var fetchClient = new FakeAgentFetchClient
             {
@@ -334,10 +334,8 @@ namespace OfficeAgent.Core.Tests
             });
 
             Assert.Equal(AgentRouteTypes.Chat, result.Route);
-            Assert.Equal("completed", result.Status);
-            Assert.Equal(2, plannerClient.Requests.Count);
-            Assert.Single(plannerClient.Requests[1].Observations);
-            Assert.Equal("fetch.error", plannerClient.Requests[1].Observations[0].Kind);
+            Assert.Equal("failed", result.Status);
+            Assert.Contains("Internal Server Error", result.Message);
         }
 
         [Fact]
@@ -628,7 +626,7 @@ namespace OfficeAgent.Core.Tests
                 Body = "{\"data\":[{\"name\":\"Project A\"}]}",
             };
 
-            public Task<FetchResult> FetchAsync(string url)
+            public Task<FetchResult> FetchAsync(string url, JObject headers = null)
             {
                 FetchCalls++;
                 LastUrl = url;

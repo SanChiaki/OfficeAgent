@@ -39,6 +39,17 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Install mock server dependencies
+        run: npm install --prefix tests/mock-server
+
+      - name: Run unit tests
+        run: |
+          dotnet test tests/OfficeAgent.Core.Tests/OfficeAgent.Core.Tests.csproj --verbosity minimal
+          dotnet test tests/OfficeAgent.Infrastructure.Tests/OfficeAgent.Infrastructure.Tests.csproj --verbosity minimal
+
+      - name: Run integration tests
+        run: dotnet test tests/OfficeAgent.IntegrationTests/OfficeAgent.IntegrationTests.csproj --verbosity minimal
+
       - name: Build installer
         shell: pwsh
         run: |

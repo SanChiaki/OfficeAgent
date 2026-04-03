@@ -8,3 +8,4 @@
 /artifacts/installer/
 *.user
 *.suo
+.env
