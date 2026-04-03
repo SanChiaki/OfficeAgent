@@ -99,5 +99,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
     {
         [JsonProperty("ssoUrl")]
         public string SsoUrl { get; set; } = string.Empty;
+
+        [JsonProperty("ssoLoginSuccessPath")]
+        public string SsoLoginSuccessPath { get; set; } = string.Empty;
     }
 }

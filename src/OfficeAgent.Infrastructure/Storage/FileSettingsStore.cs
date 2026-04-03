@@ -39,6 +39,7 @@ namespace OfficeAgent.Infrastructure.Storage
                     BaseUrl = AppSettings.NormalizeBaseUrl(persisted.BaseUrl),
                     Model = string.IsNullOrWhiteSpace(persisted.Model) ? "gpt-5-mini" : persisted.Model,
                     SsoUrl = persisted.SsoUrl ?? string.Empty,
+                    SsoLoginSuccessPath = persisted.SsoLoginSuccessPath ?? string.Empty,
                 };
 
                 try
@@ -70,6 +71,7 @@ namespace OfficeAgent.Infrastructure.Storage
                 BaseUrl = AppSettings.NormalizeBaseUrl(settings?.BaseUrl),
                 Model = string.IsNullOrWhiteSpace(settings?.Model) ? "gpt-5-mini" : settings.Model,
                 SsoUrl = settings?.SsoUrl ?? string.Empty,
+                SsoLoginSuccessPath = settings?.SsoLoginSuccessPath ?? string.Empty,
             };
 
             var directoryPath = Path.GetDirectoryName(settingsPath);
@@ -90,6 +92,8 @@ namespace OfficeAgent.Infrastructure.Storage
             public string Model { get; set; } = string.Empty;
 
             public string SsoUrl { get; set; } = string.Empty;
+
+            public string SsoLoginSuccessPath { get; set; } = string.Empty;
         }
     }
 }

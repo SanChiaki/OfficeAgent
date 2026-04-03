@@ -12,6 +12,8 @@ namespace OfficeAgent.Core.Models
 
         public string SsoUrl { get; set; } = string.Empty;
 
+        public string SsoLoginSuccessPath { get; set; } = string.Empty;
+
         public static string NormalizeBaseUrl(string value)
         {
             if (string.IsNullOrWhiteSpace(value))

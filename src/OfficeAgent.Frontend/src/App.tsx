@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   baseUrl: 'https://api.example.com',
   model: 'gpt-5-mini',
   ssoUrl: '',
+  ssoLoginSuccessPath: '',
 };
 
 type ThreadMessage = {
@@ -277,7 +278,7 @@ export function App() {
     setLoginError('');
 
     try {
-      const result = await nativeBridge.login({ ssoUrl: draftSettings.ssoUrl.trim() });
+      const result = await nativeBridge.login({ ssoUrl: draftSettings.ssoUrl.trim(), ssoLoginSuccessPath: draftSettings.ssoLoginSuccessPath?.trim() });
       if (result.success) {
         setLoginStatus({ isLoggedIn: true, ssoUrl: draftSettings.ssoUrl.trim() });
       } else {
@@ -1029,6 +1030,17 @@ export function App() {
                 value={draftSettings.ssoUrl}
                 disabled={isSettingsSaving || isLoggingIn}
                 onChange={(event) => updateDraftSettings({ ssoUrl: event.target.value })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>\u767B\u5F55\u6210\u529F\u8DEF\u5F84</span>
+              <input
+                aria-label="\u767B\u5F55\u6210\u529F\u8DEF\u5F84"
+                type="text"
+                value={draftSettings.ssoLoginSuccessPath}
+                disabled={isSettingsSaving || isLoggingIn}
+                onChange={(event) => updateDraftSettings({ ssoLoginSuccessPath: event.target.value })}
               />
             </label>
 

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -13,13 +14,15 @@ namespace OfficeAgent.ExcelAddIn
     internal sealed class SsoLoginPopup : Form
     {
         private readonly string ssoUrl;
+        private readonly string loginSuccessPath;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
         private WebView2 webView;
 
-        public SsoLoginPopup(string ssoUrl, SharedCookieContainer sharedCookies, FileCookieStore cookieStore)
+        public SsoLoginPopup(string ssoUrl, string loginSuccessPath, SharedCookieContainer sharedCookies, FileCookieStore cookieStore)
         {
             this.ssoUrl = ssoUrl ?? throw new ArgumentNullException(nameof(ssoUrl));
+            this.loginSuccessPath = loginSuccessPath ?? string.Empty;
             this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
             this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
 
@@ -75,7 +78,7 @@ namespace OfficeAgent.ExcelAddIn
             OfficeAgentLog.Info("sso", "popup.navigating", "SSO login popup navigating.", ssoUrl);
         }
 
-        private async void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (!e.IsSuccess)
             {
@@ -84,37 +87,60 @@ namespace OfficeAgent.ExcelAddIn
 
             try
             {
-                var ssoAuthority = new Uri(ssoUrl).Authority;
-                var currentAuthority = new Uri(webView.CoreWebView2.Source).Authority;
-
-                // If navigated away from the SSO origin, capture cookies and close.
-                if (!string.Equals(currentAuthority, ssoAuthority, StringComparison.OrdinalIgnoreCase))
+                // If a login success path is configured (e.g. /rest/login), check if the
+                // current URL's path contains it AND the page loaded successfully.
+                if (!string.IsNullOrWhiteSpace(loginSuccessPath))
                 {
-                    var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(ssoUrl);
+                    var currentUri = new Uri(webView.CoreWebView2.Source);
+                    var currentPath = currentUri.AbsolutePath.TrimEnd('/');
+                    var normalizedPath = loginSuccessPath.Trim().TrimEnd('/');
 
-                    foreach (var cookie in cookies)
+                    if (!string.IsNullOrWhiteSpace(normalizedPath) &&
+                        currentPath.IndexOf(normalizedPath, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        var netCookie = new System.Net.Cookie(cookie.Name, cookie.Value, cookie.Path, cookie.Domain)
-                        {
-                            Secure = cookie.IsSecure,
-                            HttpOnly = cookie.IsHttpOnly,
-                        };
+                        OfficeAgentLog.Info(
+                            "sso", "login.success_marker",
+                            $"SSO login detected via success path '{loginSuccessPath}'.", currentUri.AbsoluteUri);
 
-                        if (cookie.Expires != DateTime.MinValue)
-                        {
-                            netCookie.Expires = cookie.Expires;
-                        }
+                        CaptureCookies();
+                        DialogResult = DialogResult.OK;
+                        Close();
+                        return;
+                    }
+                }
+            }
+            catch (Exception error)
+            {
+                OfficeAgentLog.Error("sso", "cookie.capture.failed", "Failed to capture SSO cookies.", error);
+            }
+        }
 
-                        sharedCookies.Container.Add(netCookie);
+        private async void CaptureCookies()
+        {
+            try
+            {
+                var ssoAuthority = new Uri(ssoUrl).Authority;
+                var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(ssoUrl);
+
+                foreach (var cookie in cookies)
+                {
+                    var netCookie = new System.Net.Cookie(cookie.Name, cookie.Value, cookie.Path, cookie.Domain)
+                    {
+                        Secure = cookie.IsSecure,
+                        HttpOnly = cookie.IsHttpOnly,
+                    };
+
+                    if (cookie.Expires != DateTime.MinValue)
+                    {
+                        netCookie.Expires = cookie.Expires;
                     }
 
-                    cookieStore.Save(sharedCookies.Container, ssoAuthority);
-
-                    OfficeAgentLog.Info("sso", "login.succeeded", "SSO login completed, cookies captured.", ssoAuthority);
-
-                    DialogResult = DialogResult.OK;
-                    Close();
+                    sharedCookies.Container.Add(netCookie);
                 }
+
+                cookieStore.Save(sharedCookies.Container, ssoAuthority);
+
+                OfficeAgentLog.Info("sso", "login.succeeded", "SSO login completed, cookies captured.", ssoAuthority);
             }
             catch (Exception error)
             {

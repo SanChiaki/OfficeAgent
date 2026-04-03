@@ -40,7 +40,7 @@ namespace OfficeAgent.ExcelAddIn
 
             try
             {
-                var popup = new SsoLoginPopup(ssoUrl, Globals.ThisAddIn.SharedCookies, Globals.ThisAddIn.CookieStore);
+                var popup = new SsoLoginPopup(ssoUrl, settings.SsoLoginSuccessPath, Globals.ThisAddIn.SharedCookies, Globals.ThisAddIn.CookieStore);
                 await popup.InitializeAsync();
                 popup.ShowDialog();
             }

@@ -48,6 +48,7 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   baseUrl: 'https://api.example.com',
   model: 'gpt-5-mini',
   ssoUrl: '',
+  ssoLoginSuccessPath: '',
 };
 
 const BROWSER_PREVIEW_SELECTION_CONTEXT: SelectionContext = {
@@ -176,8 +177,8 @@ export class NativeBridge {
     return this.invoke<AgentRequestEnvelope, AgentResult>(BRIDGE_TYPES.runAgent, payload);
   }
 
-  login(payload: { ssoUrl: string }) {
-    return this.invoke<{ ssoUrl: string }, LoginResult>(BRIDGE_TYPES.login, payload);
+  login(payload: { ssoUrl: string; ssoLoginSuccessPath?: string }) {
+    return this.invoke<{ ssoUrl: string; ssoLoginSuccessPath?: string }, LoginResult>(BRIDGE_TYPES.login, payload);
   }
 
   logout() {
@@ -229,6 +230,9 @@ export class NativeBridge {
           ssoUrl: typeof (payload as AppSettings | undefined)?.ssoUrl === 'string'
             ? (payload as AppSettings).ssoUrl
             : BROWSER_PREVIEW_SETTINGS.ssoUrl,
+          ssoLoginSuccessPath: typeof (payload as AppSettings | undefined)?.ssoLoginSuccessPath === 'string'
+            ? (payload as AppSettings).ssoLoginSuccessPath
+            : BROWSER_PREVIEW_SETTINGS.ssoLoginSuccessPath,
         } as TResult);
       }
 

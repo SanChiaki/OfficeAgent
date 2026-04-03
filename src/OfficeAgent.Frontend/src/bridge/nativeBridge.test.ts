@@ -88,6 +88,7 @@ describe('NativeBridge', () => {
       baseUrl: 'https://api.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
+      ssoLoginSuccessPath: '',
     });
 
     await expect(bridge.getSelectionContext()).resolves.toEqual({

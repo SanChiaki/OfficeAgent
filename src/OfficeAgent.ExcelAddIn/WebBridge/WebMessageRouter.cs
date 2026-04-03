@@ -507,6 +507,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         {
             // Read SSO URL from the request payload first; fall back to persisted settings.
             var ssoUrl = string.Empty;
+            var successPath = string.Empty;
             if (request.Payload != null && request.Payload.Type == JTokenType.Object)
             {
                 try
@@ -515,6 +516,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     if (loginPayload != null)
                     {
                         ssoUrl = loginPayload.SsoUrl ?? string.Empty;
+                        successPath = loginPayload.SsoLoginSuccessPath ?? string.Empty;
                     }
                 }
                 catch (JsonException)
@@ -525,7 +527,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             if (string.IsNullOrWhiteSpace(ssoUrl))
             {
-                ssoUrl = settingsStore.Load().SsoUrl;
+                var persisted = settingsStore.Load();
+                ssoUrl = persisted.SsoUrl;
+                successPath = persisted.SsoLoginSuccessPath;
             }
 
             if (string.IsNullOrWhiteSpace(ssoUrl))
@@ -535,7 +539,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             try
             {
-                using (var popup = new SsoLoginPopup(ssoUrl, sharedCookies, cookieStore))
+                using (var popup = new SsoLoginPopup(ssoUrl, successPath, sharedCookies, cookieStore))
                 {
                     await popup.InitializeAsync().ConfigureAwait(true);
                     var result = popup.ShowDialog();

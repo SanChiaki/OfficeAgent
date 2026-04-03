@@ -14,6 +14,7 @@ export interface AppSettings {
   baseUrl: string;
   model: string;
   ssoUrl: string;
+  ssoLoginSuccessPath: string;
 }
 
 export interface LoginResult {

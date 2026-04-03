@@ -89,6 +89,7 @@ beforeEach(() => {
     baseUrl: 'https://api.example.com',
     model: 'gpt-5-mini',
     ssoUrl: '',
+    ssoLoginSuccessPath: '',
   });
   mockedBridge.getLoginStatus.mockResolvedValue({
     isLoggedIn: false,
@@ -288,6 +289,7 @@ describe('App shell', () => {
       baseUrl: string;
       model: string;
       ssoUrl: string;
+      ssoLoginSuccessPath: string;
     }>();
     mockedBridge.getSettings.mockReturnValueOnce(delayedSettings.promise);
 
@@ -303,6 +305,7 @@ describe('App shell', () => {
       baseUrl: 'https://loaded.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
+      ssoLoginSuccessPath: '',
     });
 
     expect(
@@ -341,6 +344,7 @@ describe('App shell', () => {
       baseUrl: string;
       model: string;
       ssoUrl: string;
+      ssoLoginSuccessPath: string;
     }>();
     mockedBridge.getSettings.mockReturnValueOnce(delayedSettings.promise);
 
@@ -354,6 +358,7 @@ describe('App shell', () => {
       baseUrl: 'https://loaded.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
+      ssoLoginSuccessPath: '',
     });
 
     expect(
@@ -381,6 +386,7 @@ describe('App shell', () => {
       baseUrl: string;
       model: string;
       ssoUrl: string;
+      ssoLoginSuccessPath: string;
     }>();
     mockedBridge.saveSettings.mockReturnValueOnce(pendingSave.promise);
 
@@ -401,6 +407,7 @@ describe('App shell', () => {
       baseUrl: 'https://api.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
+      ssoLoginSuccessPath: '',
     });
 
     expect(
