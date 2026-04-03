@@ -23,6 +23,8 @@ namespace OfficeAgent.ExcelAddIn
         internal IExcelCommandExecutor ExcelCommandExecutor { get; private set; }
         internal IAgentOrchestrator AgentOrchestrator { get; private set; }
         internal ExcelFocusCoordinator ExcelFocusCoordinator { get; private set; }
+        internal SharedCookieContainer SharedCookies { get; private set; }
+        internal FileCookieStore CookieStore { get; private set; }
 
         private bool isRestoringWorksheetFocus;
 
@@ -39,11 +41,11 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
 
-            var sharedCookies = new SharedCookieContainer();
-            var cookieStore = new FileCookieStore(
+            SharedCookies = new SharedCookieContainer();
+            CookieStore = new FileCookieStore(
                 Path.Combine(appDataDirectory, "cookies.json"),
                 new DpapiSecretProtector());
-            cookieStore.Load(sharedCookies.Container);
+            CookieStore.Load(SharedCookies.Container);
 
             // Set SSO domain from settings for login status checks.
             var initialSettings = SettingsStore.Load();
@@ -51,11 +53,11 @@ namespace OfficeAgent.ExcelAddIn
             {
                 try
                 {
-                    sharedCookies.SsoDomain = new Uri(initialSettings.SsoUrl).Host;
+                    SharedCookies.SsoDomain = new Uri(initialSettings.SsoUrl).Host;
                 }
                 catch (UriFormatException)
                 {
-                    sharedCookies.SsoDomain = string.Empty;
+                    SharedCookies.SsoDomain = string.Empty;
                 }
             }
 
@@ -63,8 +65,8 @@ namespace OfficeAgent.ExcelAddIn
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
             ExcelFocusCoordinator = new ExcelFocusCoordinator(Application);
             var skillRegistry = new SkillRegistry(
-                new UploadDataSkill(ExcelCommandExecutor, new BusinessApiClient(() => SettingsStore.Load(), cookieContainer: sharedCookies.Container)));
-            var fetchClient = new AgentFetchClient(() => SettingsStore.Load(), cookieContainer: sharedCookies.Container);
+                new UploadDataSkill(ExcelCommandExecutor, new BusinessApiClient(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container)));
+            var fetchClient = new AgentFetchClient(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container);
             AgentOrchestrator = new AgentOrchestrator(
                 skillRegistry,
                 ExcelContextService,
@@ -73,7 +75,7 @@ namespace OfficeAgent.ExcelAddIn
                 new PlanExecutor(ExcelCommandExecutor, skillRegistry),
                 fetchClient,
                 () => SettingsStore.Load());
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, sharedCookies, cookieStore);
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore);
             Application.SheetSelectionChange += Application_SheetSelectionChange;
             OfficeAgentLog.Info("host", "startup.completed", "OfficeAgent Excel add-in started.");
         }

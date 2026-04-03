@@ -24,9 +24,12 @@ namespace OfficeAgent.ExcelAddIn
         {
             this.tab1 = Factory.CreateRibbonTab();
             this.group1 = Factory.CreateRibbonGroup();
+            this.group2 = Factory.CreateRibbonGroup();
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
+            this.loginButton = Factory.CreateRibbonButton();
             this.tab1.SuspendLayout();
             this.group1.SuspendLayout();
+            this.group2.SuspendLayout();
             this.SuspendLayout();
             // 
             // tab1
@@ -34,6 +37,7 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.ControlId.ControlIdType = Microsoft.Office.Tools.Ribbon.RibbonControlIdType.Office;
             this.tab1.ControlId.OfficeId = "TabAddIns";
             this.tab1.Groups.Add(this.group1);
+            this.tab1.Groups.Add(this.group2);
             this.tab1.Label = "Resy AI";
             this.tab1.Name = "tab1";
             // 
@@ -50,6 +54,16 @@ namespace OfficeAgent.ExcelAddIn
             this.toggleTaskPaneButton.Name = "toggleTaskPaneButton";
             this.toggleTaskPaneButton.ShowImage = true;
             this.toggleTaskPaneButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ToggleTaskPaneButton_Click);
+            //
+            // loginButton
+            //
+            this.group2.Items.Add(this.loginButton);
+            this.group2.Label = "\u8D26\u53F7";
+            this.group2.Name = "group2";
+            this.loginButton.Label = "\u767B\u5F55";
+            this.loginButton.Name = "loginButton";
+            this.loginButton.ShowImage = false;
+            this.loginButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.LoginButton_Click);
             // 
             // AgentRibbon
             // 
@@ -61,12 +75,16 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.PerformLayout();
             this.group1.ResumeLayout(false);
             this.group1.PerformLayout();
+            this.group2.ResumeLayout(false);
+            this.group2.PerformLayout();
             this.ResumeLayout(false);
         }
 
         internal Microsoft.Office.Tools.Ribbon.RibbonTab tab1;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group1;
+        internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton loginButton;
     }
 
     partial class ThisRibbonCollection
