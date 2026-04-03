@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Authentication;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -47,7 +48,7 @@ namespace OfficeAgent.Infrastructure.Http
             }
         }
 
-        public async Task<FetchResult> FetchAsync(string url)
+        public async Task<FetchResult> FetchAsync(string url, JObject headers = null)
         {
             if (string.IsNullOrWhiteSpace(url))
             {
@@ -78,6 +79,8 @@ namespace OfficeAgent.Infrastructure.Http
                     {
                         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
                     }
+
+                    ApplyCustomHeaders(request, headers);
 
                     OfficeAgentLog.Info("agent_fetch", "request.begin", $"GET {uri}");
 
@@ -124,6 +127,49 @@ namespace OfficeAgent.Infrastructure.Http
                     Success = false,
                     ErrorMessage = $"请求失败：{error.Message}",
                 };
+            }
+        }
+
+        private static void ApplyCustomHeaders(HttpRequestMessage request, JObject headers)
+        {
+            if (headers == null || !headers.HasValues)
+            {
+                return;
+            }
+
+            foreach (var prop in headers.Properties())
+            {
+                var name = prop.Name;
+                var value = prop.Value?.Value<string>() ?? string.Empty;
+
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(value))
+                {
+                    continue;
+                }
+
+                // Skip headers that are managed by the HttpClient handler (cookies).
+                if (string.Equals(name, "cookie", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, "set-cookie", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Handle headers that require specific HttpRequestMessage properties
+                switch (name.ToLowerInvariant())
+                {
+                    case "authorization":
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", value);
+                        break;
+                    case "content-type":
+                        if (request.Content != null)
+                        {
+                            request.Content.Headers.ContentType = new MediaTypeHeaderValue(value);
+                        }
+                        break;
+                    default:
+                        request.Headers.TryAddWithoutValidation(name, value);
+                        break;
+                }
             }
         }
     }

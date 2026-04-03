@@ -380,9 +380,10 @@ namespace OfficeAgent.Core.Orchestration
             }
 
             var url = step.Args?["url"]?.Value<string>() ?? string.Empty;
+            var headers = step.Args?["headers"]?.Type == JTokenType.Object ? step.Args["headers"] as JObject : null;
             OfficeAgentLog.Info("agent", "fetch.begin", $"Fetching URL: {url}");
 
-            var fetchResult = fetchClient.FetchAsync(url).GetAwaiter().GetResult();
+            var fetchResult = fetchClient.FetchAsync(url, headers).GetAwaiter().GetResult();
 
             if (!fetchResult.Success)
             {
@@ -424,9 +425,10 @@ namespace OfficeAgent.Core.Orchestration
             }
 
             var url = step.Args?["url"]?.Value<string>() ?? string.Empty;
+            var headers = step.Args?["headers"]?.Type == JTokenType.Object ? step.Args["headers"] as JObject : null;
             OfficeAgentLog.Info("agent", "fetch.begin", $"Fetching URL: {url}");
 
-            var fetchResult = await fetchClient.FetchAsync(url).ConfigureAwait(false);
+            var fetchResult = await fetchClient.FetchAsync(url, headers).ConfigureAwait(false);
 
             if (!fetchResult.Success)
             {

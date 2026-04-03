@@ -194,6 +194,7 @@ namespace OfficeAgent.Infrastructure.Http
                 + "3. fetch.url with args { url: string } — makes an HTTP GET request to fetch external data. The url must be a full absolute URL (e.g. \"http://localhost:3200/api/performance\"). "
                 + "Use plan for any write or side-effect sequence. "
                 + "Supported plan step types are excel.writeRange, excel.addWorksheet, excel.renameWorksheet, excel.deleteWorksheet, and skill.upload_data. "
+                + "When the user explicitly asks to include custom request headers (e.g., 'with header X-Api-Key: abc'), add a headers object to fetch.url args: {\"type\":\"fetch.url\",\"args\":{\"url\":\"http://...\",\"headers\":{\"X-Api-Key\":\"abc\"}}}. Headers is an optional flat object of string key-value pairs, only present when the user specifies headers. "
                 + "Never invent other step types. "
                 + "For excel.writeRange use args targetAddress and values. "
                 + "For excel.addWorksheet use arg newSheetName. "
