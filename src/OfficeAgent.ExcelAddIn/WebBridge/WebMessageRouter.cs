@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
@@ -186,7 +185,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                             new PingPayload
                             {
                                 Host = "Resy AI",
-                                Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "dev",
+                                Version = VersionInfo.AppVersion,
                             });
                     case BridgeMessageTypes.GetSettings:
                         if (HasUnexpectedPayload(request.Payload))

@@ -130,6 +130,37 @@ try {
 }
 
 try {
+    Write-Host "Restoring installer tools..."
+    Push-Location $repoRoot
+    try {
+        Invoke-NativeCommand "dotnet" "tool" "restore"
+    }
+    finally {
+        Pop-Location
+    }
+
+    $commitCount = [int](git rev-list --count HEAD).Trim()
+    $productVersion = "1.0.$commitCount"
+    Write-Host "App version: $productVersion"
+
+    $versionFile = Join-Path $repoRoot "src\\OfficeAgent.ExcelAddIn\\Properties\\Version.g.cs"
+    $versionContent = @"
+using System.Reflection;
+
+[assembly: AssemblyVersion("$productVersion")]
+[assembly: AssemblyFileVersion("$productVersion")]
+
+namespace OfficeAgent.ExcelAddIn
+{
+    internal static class VersionInfo
+    {
+        public const string AppVersion = "$productVersion";
+    }
+}
+"@
+    [System.IO.File]::WriteAllText($versionFile, $versionContent)
+    Write-Host "Generated Version.g.cs with version $productVersion"
+
     Write-Host "Building VSTO add-in..."
     $msbuildArgs = @(
         $addinProject
@@ -167,17 +198,6 @@ try {
         }
     }
 
-    Write-Host "Restoring installer tools..."
-    Push-Location $repoRoot
-    try {
-        Invoke-NativeCommand "dotnet" "tool" "restore"
-    }
-    finally {
-        Pop-Location
-    }
-
-    $commitCount = [int](git rev-list --count HEAD).Trim()
-    $productVersion = "1.0.$commitCount"
     Write-Host "Building MSI version $productVersion..."
 
     $builtMsiPaths = @()

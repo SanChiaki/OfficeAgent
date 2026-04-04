@@ -96,7 +96,9 @@ dotnet test --filter "FullyQualifiedName~Name"  # single test
 MSBuild OfficeAgent.sln /restore
 
 # MSI installer (builds frontend + VSTO + MSI x86/x64)
-powershell installer/OfficeAgent.Setup/build.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1
+
+> **Important:** Always use `pwsh` (PowerShell 7.x) to run the build script. Windows PowerShell 5.1 lacks the `Cert:` PSDrive and will fail when generating the code-signing certificate.
 ```
 
 ## Environment & Testing
