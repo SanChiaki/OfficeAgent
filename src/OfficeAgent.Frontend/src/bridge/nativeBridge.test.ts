@@ -86,6 +86,7 @@ describe('NativeBridge', () => {
     await expect(bridge.getSettings()).resolves.toEqual({
       apiKey: '',
       baseUrl: 'https://api.example.com',
+      businessBaseUrl: '',
       model: 'gpt-5-mini',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
@@ -339,6 +340,7 @@ describe('NativeBridge', () => {
       payload: {
         apiKey: '',
         baseUrl: 'https://api.example.com',
+        businessBaseUrl: 'https://business.example.com',
         model: 'gpt-5-mini',
       },
     });
@@ -346,6 +348,7 @@ describe('NativeBridge', () => {
     await expect(pending).resolves.toEqual({
       apiKey: '',
       baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'https://business.example.com',
       model: 'gpt-5-mini',
     });
   });

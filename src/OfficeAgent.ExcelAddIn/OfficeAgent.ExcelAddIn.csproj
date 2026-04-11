@@ -22,8 +22,8 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)')">$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)')">$(ProgramFiles)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
     <LangVersion>latest</LangVersion>
-    <SignManifests>true</SignManifests>
     <ManifestCertificateThumbprint />
+    <SignManifests>true</SignManifests>
   </PropertyGroup>
 
   <ItemGroup>
@@ -147,6 +147,9 @@
     <Compile Include="AgentRibbon.Designer.cs">
       <DependentUpon>AgentRibbon.cs</DependentUpon>
     </Compile>
+    <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
+    <Compile Include="Dialogs\OperationResultDialog.cs" />
+    <Compile Include="Dialogs\UploadConfirmDialog.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -174,6 +177,14 @@
     <Compile Include="Excel\ExcelFocusCoordinator.cs" />
     <Compile Include="Excel\ExcelInteropAdapter.cs" />
     <Compile Include="Excel\ExcelSelectionContextService.cs" />
+    <Compile Include="Excel\ExcelVisibleSelectionReader.cs" />
+    <Compile Include="Excel\ExcelWorksheetGridAdapter.cs" />
+    <Compile Include="Excel\IWorksheetGridAdapter.cs" />
+    <Compile Include="Excel\IWorksheetMetadataAdapter.cs" />
+    <Compile Include="Excel\ExcelWorkbookMetadataAdapter.cs" />
+    <Compile Include="Excel\WorksheetMetadataStore.cs" />
+    <Compile Include="Excel\WorksheetSchemaLayoutService.cs" />
+    <Compile Include="Excel\WorksheetSelectionResolver.cs" />
     <Compile Include="SsoLoginPopup.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />
     <Compile Include="TaskPane\TaskPaneHostControl.cs">
@@ -182,6 +193,8 @@
     <Compile Include="WebBridge\WebMessageEnvelope.cs" />
     <Compile Include="WebBridge\WebMessageRouter.cs" />
     <Compile Include="WebBridge\WebViewBootstrapper.cs" />
+    <Compile Include="RibbonSyncController.cs" />
+    <Compile Include="WorksheetSyncExecutionService.cs" />
     <Compile Include="ThisAddIn.cs">
       <SubType>Code</SubType>
     </Compile>

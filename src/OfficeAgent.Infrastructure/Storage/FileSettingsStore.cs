@@ -37,6 +37,7 @@ namespace OfficeAgent.Infrastructure.Storage
                 {
                     ApiKey = string.Empty,
                     BaseUrl = AppSettings.NormalizeBaseUrl(persisted.BaseUrl),
+                    BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(persisted.BusinessBaseUrl),
                     Model = string.IsNullOrWhiteSpace(persisted.Model) ? "gpt-5-mini" : persisted.Model,
                     SsoUrl = persisted.SsoUrl ?? string.Empty,
                     SsoLoginSuccessPath = persisted.SsoLoginSuccessPath ?? string.Empty,
@@ -69,6 +70,7 @@ namespace OfficeAgent.Infrastructure.Storage
             {
                 EncryptedApiKey = secretProtector.Protect(settings?.ApiKey ?? string.Empty),
                 BaseUrl = AppSettings.NormalizeBaseUrl(settings?.BaseUrl),
+                BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(settings?.BusinessBaseUrl),
                 Model = string.IsNullOrWhiteSpace(settings?.Model) ? "gpt-5-mini" : settings.Model,
                 SsoUrl = settings?.SsoUrl ?? string.Empty,
                 SsoLoginSuccessPath = settings?.SsoLoginSuccessPath ?? string.Empty,
@@ -88,6 +90,8 @@ namespace OfficeAgent.Infrastructure.Storage
             public string EncryptedApiKey { get; set; } = string.Empty;
 
             public string BaseUrl { get; set; } = string.Empty;
+
+            public string BusinessBaseUrl { get; set; } = string.Empty;
 
             public string Model { get; set; } = string.Empty;
 

@@ -620,8 +620,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             var payloadObject = (JObject)payload;
             return IsStringToken(payloadObject["apiKey"]) &&
                    IsStringToken(payloadObject["baseUrl"]) &&
+                   IsStringToken(payloadObject["businessBaseUrl"]) &&
                    IsStringToken(payloadObject["model"]) &&
-                   payloadObject.Count >= 3;
+                   payloadObject.Count >= 4;
         }
 
         private static bool HasUnexpectedPayload(JToken payload)

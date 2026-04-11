@@ -66,7 +66,7 @@ namespace OfficeAgent.Infrastructure.Http
             }
 
             var settings = loadSettings() ?? new AppSettings();
-            var baseUrl = AppSettings.NormalizeBaseUrl(settings.BaseUrl);
+            var baseUrl = AppSettings.NormalizeOptionalUrl(settings.BusinessBaseUrl);
 
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
                 (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))

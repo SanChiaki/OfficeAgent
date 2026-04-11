@@ -51,7 +51,7 @@ namespace OfficeAgent.IntegrationTests
         public void UploadWithoutAuthReturns401()
         {
             var client = new BusinessApiClient(
-                () => new AppSettings { BaseUrl = fixture.BusinessUrl, ApiKey = string.Empty },
+                () => new AppSettings { BusinessBaseUrl = fixture.BusinessUrl, ApiKey = string.Empty },
                 CreateHttpClientWithoutCookies());
 
             var ex = Assert.Throws<InvalidOperationException>(() => client.Upload(CreatePreview()));
@@ -82,7 +82,7 @@ namespace OfficeAgent.IntegrationTests
         {
             var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + "_settings.json");
             var store = new FileSettingsStore(path, new DpapiSecretProtector());
-            store.Save(new AppSettings { BaseUrl = baseUrl, ApiKey = string.Empty });
+            store.Save(new AppSettings { BusinessBaseUrl = baseUrl, ApiKey = string.Empty });
             return store;
         }
 

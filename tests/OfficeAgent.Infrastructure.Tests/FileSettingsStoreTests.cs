@@ -24,6 +24,7 @@ namespace OfficeAgent.Infrastructure.Tests
 
             Assert.Equal(string.Empty, settings.ApiKey);
             Assert.Equal("https://api.example.com", settings.BaseUrl);
+            Assert.Equal(string.Empty, settings.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settings.Model);
         }
 
@@ -37,6 +38,7 @@ namespace OfficeAgent.Infrastructure.Tests
             {
                 ApiKey = "secret-token",
                 BaseUrl = "https://api.internal.example",
+                BusinessBaseUrl = "https://business.internal.example",
                 Model = "gpt-5-mini",
             });
 
@@ -46,6 +48,7 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.DoesNotContain("secret-token", persistedJson);
             Assert.Equal("secret-token", loaded.ApiKey);
             Assert.Equal("https://api.internal.example", loaded.BaseUrl);
+            Assert.Equal("https://business.internal.example", loaded.BusinessBaseUrl);
         }
 
         [Fact]
@@ -58,12 +61,14 @@ namespace OfficeAgent.Infrastructure.Tests
             {
                 ApiKey = "secret-token",
                 BaseUrl = " https://api.internal.example/// ",
+                BusinessBaseUrl = " https://business.internal.example/// ",
                 Model = "gpt-5-mini",
             });
 
             var loaded = store.Load();
 
             Assert.Equal("https://api.internal.example", loaded.BaseUrl);
+            Assert.Equal("https://business.internal.example", loaded.BusinessBaseUrl);
         }
 
         [Fact]
@@ -80,6 +85,7 @@ namespace OfficeAgent.Infrastructure.Tests
 
             Assert.Equal(string.Empty, settings.ApiKey);
             Assert.Equal("https://api.internal.example", settings.BaseUrl);
+            Assert.Equal(string.Empty, settings.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settings.Model);
         }
 

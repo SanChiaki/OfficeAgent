@@ -19,6 +19,30 @@ namespace OfficeAgent.Core.Tests
         private const string UploadWithoutTargetSeparator = "\u628A\u9009\u4E2D\u6570\u636E\u4E0A\u4F20\u9879\u76EEA";
 
         [Fact]
+        public void ExecuteUsesBusinessBaseUrlForPlannerFetchContext()
+        {
+            var plannerClient = new FakeLlmPlannerClient(PlannerJson.Message("ok"));
+            var orchestrator = CreateOrchestrator(
+                plannerClient: plannerClient,
+                settingsFactory: () => new AppSettings
+                {
+                    BaseUrl = "https://llm.internal.example",
+                    BusinessBaseUrl = "https://business.internal.example",
+                });
+
+            orchestrator.Execute(new AgentCommandEnvelope
+            {
+                DispatchMode = AgentDispatchModes.Agent,
+                SessionId = "session-1",
+                UserInput = "Read current sheet",
+                Confirmed = false,
+            });
+
+            Assert.Single(plannerClient.Requests);
+            Assert.Equal("https://business.internal.example", plannerClient.Requests[0].ApiBaseUrl);
+        }
+
+        [Fact]
         public void ExecuteRoutesSlashUploadCommandToTheUploadDataSkill()
         {
             var orchestrator = CreateOrchestrator();
@@ -372,7 +396,8 @@ namespace OfficeAgent.Core.Tests
             ILlmPlannerClient plannerClient,
             FakeExcelCommandExecutor excelCommandExecutor = null,
             FakePlanExecutor planExecutor = null,
-            IAgentFetchClient fetchClient = null)
+            IAgentFetchClient fetchClient = null,
+            Func<AppSettings> settingsFactory = null)
         {
             excelCommandExecutor = excelCommandExecutor ?? new FakeExcelCommandExecutor();
             var skill = new UploadDataSkill(
@@ -386,7 +411,13 @@ namespace OfficeAgent.Core.Tests
                 plannerClient,
                 planExecutor ?? new FakePlanExecutor(),
                 fetchClient,
-                () => new AppSettings { BaseUrl = "http://localhost:3200" });
+                settingsFactory != null
+                    ? settingsFactory
+                    : new Func<AppSettings>(() => new AppSettings
+                    {
+                        BaseUrl = "http://localhost:3200",
+                        BusinessBaseUrl = "http://localhost:3200",
+                    }));
         }
 
         private sealed class FakeExcelCommandExecutor : IExcelCommandExecutor

@@ -14,6 +14,25 @@ namespace OfficeAgent.Infrastructure.Tests
         private const string ProjectA = "\u9879\u76EEA";
 
         [Fact]
+        public void UploadUsesBusinessBaseUrlInsteadOfTheLlmBaseUrl()
+        {
+            var handler = new RecordingHandler(_ => CreateSuccessResponse());
+            var client = new BusinessApiClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://llm.internal.example",
+                    BusinessBaseUrl = "https://business.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            client.Upload(CreatePreview());
+
+            Assert.Equal("https://business.internal.example/upload_data", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
         public void UploadFallsBackToTheDefaultBaseUrlWhenSettingsLeaveItBlank()
         {
             var handler = new RecordingHandler(_ => CreateSuccessResponse());
@@ -23,12 +42,13 @@ namespace OfficeAgent.Infrastructure.Tests
                 {
                     ApiKey = "secret-token",
                     BaseUrl = "   ",
+                    BusinessBaseUrl = "   ",
                     Model = "gpt-5-mini",
                 });
 
-            client.Upload(CreatePreview());
+            var error = Assert.Throws<InvalidOperationException>(() => client.Upload(CreatePreview()));
 
-            Assert.Equal("https://api.example.com/upload_data", handler.LastRequest.RequestUri.ToString());
+            Assert.Equal("The configured Business API Base URL is invalid. Update settings and try again.", error.Message);
         }
 
         [Fact]
@@ -40,7 +60,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = " https://api.internal.example/ ",
+                    BusinessBaseUrl = " https://api.internal.example/ ",
                     Model = "gpt-5-mini",
                 });
 
@@ -64,7 +84,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = "https://api.internal.example",
+                    BusinessBaseUrl = "https://api.internal.example",
                     Model = "gpt-5-mini",
                 });
 
@@ -95,7 +115,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = "https://api.internal.example",
+                    BusinessBaseUrl = "https://api.internal.example",
                     Model = "gpt-5-mini",
                 });
 
@@ -118,7 +138,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = "https://api.internal.example",
+                    BusinessBaseUrl = "https://api.internal.example",
                     Model = "gpt-5-mini",
                 });
 
@@ -137,7 +157,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = "api.internal.example",
+                    BusinessBaseUrl = "api.internal.example",
                     Model = "gpt-5-mini",
                 });
 
@@ -156,7 +176,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings
                 {
                     ApiKey = "secret-token",
-                    BaseUrl = "https://api.internal.example/v1/",
+                    BusinessBaseUrl = "https://api.internal.example/v1/",
                     Model = "gpt-5-mini",
                 });
 

@@ -263,7 +263,7 @@ namespace OfficeAgent.Core.Orchestration
         private PlannerRequest BuildPlannerRequest(AgentCommandEnvelope envelope)
         {
             var settings = loadSettings?.Invoke();
-            var apiBaseUrl = settings != null ? AppSettings.NormalizeBaseUrl(settings.BaseUrl) : string.Empty;
+            var apiBaseUrl = settings != null ? AppSettings.NormalizeOptionalUrl(settings.BusinessBaseUrl) : string.Empty;
 
             return new PlannerRequest
             {

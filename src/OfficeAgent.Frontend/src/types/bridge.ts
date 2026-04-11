@@ -12,6 +12,7 @@ export interface BridgeErrorPayload {
 export interface AppSettings {
   apiKey: string;
   baseUrl: string;
+  businessBaseUrl: string;
   model: string;
   ssoUrl: string;
   ssoLoginSuccessPath: string;

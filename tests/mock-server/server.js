@@ -23,6 +23,23 @@ const performances = [
 
 const uploadedProjects = {};
 
+const connectorRows = [
+  { id: "row-1", name: "项目 A", start_12345678: "2026-01-02", end_12345678: "2026-01-05" },
+  { id: "row-2", name: "项目 B", start_12345678: "2026-01-10", end_12345678: "2026-01-15" },
+];
+
+const connectorHeadList = [
+  { fieldKey: "id", headerText: "行 ID", headType: "single", isId: true },
+  { fieldKey: "name", headerText: "名称", headType: "single" },
+  {
+    fieldKey: "start_12345678",
+    headerText: "开始时间",
+    headType: "activity",
+    activityId: "12345678",
+    activityName: "测试活动111",
+  },
+];
+
 // ---------------------------------------------------------------------------
 // SSO Login Server :3100
 // ---------------------------------------------------------------------------
@@ -139,6 +156,68 @@ apiApp.post("/upload_data", requireAuth, function (req, res) {
   });
 });
 
+apiApp.post("/head", requireAuth, function (_req, res) {
+  res.json({ headList: connectorHeadList });
+});
+
+apiApp.post("/find", requireAuth, function (req, res) {
+  var ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  var fieldKeys = Array.isArray(req.body?.fieldKeys) ? req.body.fieldKeys : [];
+  var result = connectorRows;
+
+  if (ids.length > 0) {
+    result = result.filter(function (row) {
+      return ids.indexOf(row.id) >= 0;
+    });
+  }
+
+  if (fieldKeys.length > 0) {
+    result = result.map(function (row) {
+      var filtered = { id: row.id };
+      fieldKeys.forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(row, key)) {
+          filtered[key] = row[key];
+        }
+      });
+      if (!Object.prototype.hasOwnProperty.call(filtered, "id")) {
+        filtered.id = row.id;
+      }
+      return filtered;
+    });
+  }
+
+  res.json(result);
+});
+
+apiApp.post("/batchSave", requireAuth, function (req, res) {
+  var items = Array.isArray(req.body) ? req.body : [];
+  if (items.length === 0) {
+    return res.status(400).json({ code: "bad_request", message: "items 必须为非空数组。" });
+  }
+  items.forEach(function (item) {
+    if (!item) {
+      return;
+    }
+
+    var rowId = item.id || item.Id;
+    var fieldKey = item.fieldKey || item.FieldKey;
+    var value = item.value != null ? item.value : item.Value;
+    if (!rowId || !fieldKey) {
+      return;
+    }
+
+    var target = connectorRows.find(function (row) { return row.id === rowId; });
+    if (target) {
+      target[fieldKey] = value != null ? value : "";
+    }
+  });
+
+  res.json({
+    savedCount: items.length,
+    message: "Received batchSave with " + items.length + " item(s).",
+  });
+});
+
 apiApp.get("/api/download/:projectName", requireAuth, function (req, res) {
   var projectName = req.params.projectName;
   if (projectName === "performance") {
@@ -156,9 +235,10 @@ apiApp.listen(3200, function () {
   console.log("[Business] http://localhost:3200/api/download/:project");
   console.log("[Business] http://localhost:3200/upload_data");
   console.log("\nReady. Configure the add-in with:");
+  console.log("  Base URL              = <LLM service URL>");
+  console.log("  Business Base URL     = http://localhost:3200");
   console.log("  SSO URL               = http://localhost:3100/login");
   console.log("  登录成功路径           = /rest/login");
-  console.log("  Base URL              = http://localhost:3200");
   console.log("  API Key               = (留空，使用 SSO cookies)");
 });
 

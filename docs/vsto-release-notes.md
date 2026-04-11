@@ -4,7 +4,7 @@
 
 - Excel VSTO add-in host with Ribbon entry and a single reusable task pane.
 - WebView2-hosted React chat UI packaged locally with the add-in.
-- Local session persistence and local settings persistence for `API Key`, `Base URL`, and `Model`.
+- Local session persistence and local settings persistence for `API Key`, `Base URL`, `Business Base URL`, `Model`, `SSO URL`, and `登录成功路径`.
 - Live Excel selection context updates in the task pane.
 - `upload_data` skill with preview, confirmation, external API call, and result message flow.
 - Read-immediately and write-with-confirmation command routing.
@@ -27,4 +27,5 @@
 
 - Install the MSI that matches the target Excel bitness.
 - Ensure `VSTO Runtime` and `WebView2 Runtime` are already present before MSI installation.
+- `Base URL` is reserved for the LLM service. Use `Business Base URL` for business APIs such as the mock server, Ribbon Sync, and `upload_data`.
 - Runtime logs are written under `%LocalAppData%\\OfficeAgent\\logs\\officeagent.log`.

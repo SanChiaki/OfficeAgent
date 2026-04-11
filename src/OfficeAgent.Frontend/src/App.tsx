@@ -22,6 +22,7 @@ import type {
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
+  businessBaseUrl: '',
   model: 'gpt-5-mini',
   ssoUrl: '',
   ssoLoginSuccessPath: '',
@@ -1008,6 +1009,17 @@ export function App() {
                 value={draftSettings.baseUrl}
                 disabled={isSettingsSaving}
                 onChange={(event) => updateDraftSettings({ baseUrl: event.target.value })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>Business Base URL</span>
+              <input
+                aria-label="Business Base URL"
+                type="text"
+                value={draftSettings.businessBaseUrl}
+                disabled={isSettingsSaving}
+                onChange={(event) => updateDraftSettings({ businessBaseUrl: event.target.value })}
               />
             </label>
 

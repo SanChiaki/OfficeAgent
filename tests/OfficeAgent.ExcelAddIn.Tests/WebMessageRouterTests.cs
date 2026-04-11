@@ -32,6 +32,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 ApiKey = "secret-token",
                 BaseUrl = "https://api.internal.example",
+                BusinessBaseUrl = "https://business.internal.example",
                 Model = "gpt-5-mini",
             });
 
@@ -43,6 +44,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
             Assert.Equal("secret-token", settingsAfter.ApiKey);
             Assert.Equal("https://api.internal.example", settingsAfter.BaseUrl);
+            Assert.Equal("https://business.internal.example", settingsAfter.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settingsAfter.Model);
         }
 
@@ -57,6 +59,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 ApiKey = "secret-token",
                 BaseUrl = "https://api.internal.example",
+                BusinessBaseUrl = "https://business.internal.example",
                 Model = "gpt-5-mini",
             });
 
@@ -68,6 +71,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
             Assert.Equal("secret-token", settingsAfter.ApiKey);
             Assert.Equal("https://api.internal.example", settingsAfter.BaseUrl);
+            Assert.Equal("https://business.internal.example", settingsAfter.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settingsAfter.Model);
         }
 
@@ -82,20 +86,43 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 ApiKey = "secret-token",
                 BaseUrl = "https://api.internal.example",
+                BusinessBaseUrl = "https://business.internal.example",
                 Model = "gpt-5-mini",
             });
 
             var router = CreateRouter(sessionStore, settingsStore);
             var responseJson = InvokeRoute(
                 router,
-                "{\"type\":\"bridge.saveSettings\",\"requestId\":\"req-1\",\"payload\":{\"baseUrl\":\"https://api.internal.example\",\"model\":\"gpt-5-mini\"}}");
+                "{\"type\":\"bridge.saveSettings\",\"requestId\":\"req-1\",\"payload\":{\"baseUrl\":\"https://api.internal.example\",\"businessBaseUrl\":\"https://business.internal.example\",\"model\":\"gpt-5-mini\"}}");
             var settingsAfter = settingsStore.Load();
 
             Assert.Contains("\"ok\":false", responseJson);
             Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
             Assert.Equal("secret-token", settingsAfter.ApiKey);
             Assert.Equal("https://api.internal.example", settingsAfter.BaseUrl);
+            Assert.Equal("https://business.internal.example", settingsAfter.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settingsAfter.Model);
+        }
+
+        [Fact]
+        public void SaveSettingsRoundTripsBusinessBaseUrl()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+
+            var router = CreateRouter(sessionStore, settingsStore);
+            var responseJson = InvokeRoute(
+                router,
+                "{\"type\":\"bridge.saveSettings\",\"requestId\":\"req-1\",\"payload\":{\"apiKey\":\"secret-token\",\"baseUrl\":\"https://llm.internal.example\",\"businessBaseUrl\":\"https://business.internal.example\",\"model\":\"gpt-5-mini\",\"ssoUrl\":\"\",\"ssoLoginSuccessPath\":\"\"}}");
+
+            Assert.Contains("\"ok\":true", responseJson);
+            Assert.Contains("\"businessBaseUrl\":\"https://business.internal.example\"", responseJson);
+
+            var settingsAfter = settingsStore.Load();
+            Assert.Equal("https://llm.internal.example", settingsAfter.BaseUrl);
+            Assert.Equal("https://business.internal.example", settingsAfter.BusinessBaseUrl);
         }
 
         [Fact]

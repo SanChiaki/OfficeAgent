@@ -46,6 +46,7 @@ const BROWSER_PREVIEW_PING: PingPayload = {
 const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
+  businessBaseUrl: '',
   model: 'gpt-5-mini',
   ssoUrl: '',
   ssoLoginSuccessPath: '',
@@ -224,6 +225,9 @@ export class NativeBridge {
           baseUrl: typeof (payload as AppSettings | undefined)?.baseUrl === 'string'
             ? (payload as AppSettings).baseUrl
             : BROWSER_PREVIEW_SETTINGS.baseUrl,
+          businessBaseUrl: typeof (payload as AppSettings | undefined)?.businessBaseUrl === 'string'
+            ? (payload as AppSettings).businessBaseUrl
+            : BROWSER_PREVIEW_SETTINGS.businessBaseUrl,
           model: typeof (payload as AppSettings | undefined)?.model === 'string'
             ? (payload as AppSettings).model
             : BROWSER_PREVIEW_SETTINGS.model,

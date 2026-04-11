@@ -8,6 +8,8 @@ namespace OfficeAgent.Core.Models
 
         public string BaseUrl { get; set; } = DefaultBaseUrl;
 
+        public string BusinessBaseUrl { get; set; } = string.Empty;
+
         public string Model { get; set; } = "gpt-5-mini";
 
         public string SsoUrl { get; set; } = string.Empty;
@@ -23,6 +25,16 @@ namespace OfficeAgent.Core.Models
 
             var normalized = value.Trim().TrimEnd('/');
             return string.IsNullOrWhiteSpace(normalized) ? DefaultBaseUrl : normalized;
+        }
+
+        public static string NormalizeOptionalUrl(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Trim().TrimEnd('/');
         }
     }
 }

@@ -4,6 +4,7 @@ using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Skills;
+using OfficeAgent.Core.Sync;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.TaskPane;
 using OfficeAgent.Infrastructure.Diagnostics;
@@ -25,6 +26,11 @@ namespace OfficeAgent.ExcelAddIn
         internal ExcelFocusCoordinator ExcelFocusCoordinator { get; private set; }
         internal SharedCookieContainer SharedCookies { get; private set; }
         internal FileCookieStore CookieStore { get; private set; }
+        internal ISystemConnector CurrentBusinessConnector { get; private set; }
+        internal IWorksheetMetadataStore WorksheetMetadataStore { get; private set; }
+        internal WorksheetSyncService WorksheetSyncService { get; private set; }
+        internal WorksheetSyncExecutionService WorksheetSyncExecutionService { get; private set; }
+        internal RibbonSyncController RibbonSyncController { get; private set; }
 
         private bool isRestoringWorksheetFocus;
 
@@ -75,6 +81,26 @@ namespace OfficeAgent.ExcelAddIn
                 new PlanExecutor(ExcelCommandExecutor, skillRegistry),
                 fetchClient,
                 () => SettingsStore.Load());
+            CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container);
+            WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
+            WorksheetSyncService = new WorksheetSyncService(
+                CurrentBusinessConnector,
+                WorksheetMetadataStore,
+                new WorksheetChangeTracker(),
+                new SyncOperationPreviewFactory());
+            WorksheetSyncExecutionService = new WorksheetSyncExecutionService(
+                WorksheetSyncService,
+                WorksheetMetadataStore,
+                new ExcelVisibleSelectionReader(Application),
+                new ExcelWorksheetGridAdapter(Application),
+                new SyncOperationPreviewFactory());
+            RibbonSyncController = new RibbonSyncController(
+                CurrentBusinessConnector,
+                WorksheetMetadataStore,
+                WorksheetSyncService,
+                GetActiveWorksheetName,
+                WorksheetSyncExecutionService);
+            RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
             TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore);
             Application.SheetSelectionChange += Application_SheetSelectionChange;
             OfficeAgentLog.Info("host", "startup.completed", "OfficeAgent Excel add-in started.");
@@ -96,8 +122,22 @@ namespace OfficeAgent.ExcelAddIn
         private void Application_SheetSelectionChange(object sh, ExcelInterop.Range target)
         {
             OfficeAgentLog.Info("excel", "selection.changed", "Excel selection changed.");
+            RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
             TaskPaneController?.PublishSelectionContext(ExcelContextService.GetCurrentSelectionContext());
             RestoreWorksheetFocus(target);
+        }
+
+        private string GetActiveWorksheetName()
+        {
+            try
+            {
+                var worksheet = Application?.ActiveSheet as ExcelInterop.Worksheet;
+                return worksheet?.Name ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private void RestoreWorksheetFocus(ExcelInterop.Range target)

@@ -26,7 +26,8 @@
 
 ## Session And Settings
 
-- Open Settings and save `API Key`, `Base URL`, and `Model`.
+- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `SSO URL`, and `登录成功路径`.
+- Confirm `Base URL` stays reserved for the LLM endpoint and `Business Base URL` points to the business API or mock server.
 - Restart Excel and confirm settings reload correctly.
 - Create or switch sessions and confirm existing thread history is preserved per session.
 
@@ -42,10 +43,19 @@
 - Cancel the preview and confirm the thread logs the cancellation without changing Excel.
 - Confirm the preview and verify the external API is called with the selected rows.
 - Simulate a 4xx/5xx API failure and confirm the error message is shown in the task pane.
-- Configure a `Base URL` with a path prefix such as `/v1/` and confirm the request preserves the prefix.
+- Configure a `Business Base URL` with a path prefix such as `/v1/` and confirm the request preserves the prefix.
 
 ## Excel Command Confirmation
 
 - Run a read command and confirm it executes immediately.
 - Run a write command and confirm it requires preview + confirmation.
 - Leave a confirmation card open and verify the composer stays disabled until confirm or cancel.
+
+## Ribbon Sync
+
+- Bind a blank worksheet through the Ribbon project dropdown and confirm `_OfficeAgentMetadata` stays visible and records the current `sheetName`, `systemKey`, `projectId`, and `projectName`.
+- Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project instead of showing `先选择项目`.
+- Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
+- Click `全量下载`, `部分下载`, `全量上传`, `部分上传`, and `增量上传` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
+- Confirm the `下载` and `上传` controls are rendered in separate Ribbon groups.
+- Verify the task pane button and login button still work after the Ribbon Sync controls are added.

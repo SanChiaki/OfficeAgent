@@ -87,6 +87,7 @@ beforeEach(() => {
   mockedBridge.getSettings.mockResolvedValue({
     apiKey: '',
     baseUrl: 'https://api.example.com',
+    businessBaseUrl: 'https://business.example.com',
     model: 'gpt-5-mini',
     ssoUrl: '',
     ssoLoginSuccessPath: '',
@@ -158,7 +159,7 @@ describe('App shell', () => {
       screen.getByRole('region', { name: /message thread/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/欢迎使用 Resy AI/),
+      screen.getByText(/欢迎使用\s*Resy AI/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('status', { name: /selection capsule/i }),
@@ -171,9 +172,6 @@ describe('App shell', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /打开设置/i }),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText(/已连接 browser-preview \(dev\)/i),
     ).toBeInTheDocument();
     expect(
       await screen.findByText(/new chat/i, { selector: 'h1' }),
@@ -214,11 +212,33 @@ describe('App shell', () => {
       within(settingsDialog).getAllByLabelText(/^api key$/i)[0],
     ).toHaveValue('');
     expect(
-      within(settingsDialog).getByRole('textbox', { name: /base url/i }),
+      within(settingsDialog).getByRole('textbox', { name: /^base url$/i }),
     ).toHaveValue('https://api.example.com');
+    expect(
+      within(settingsDialog).getByRole('textbox', { name: /^business base url$/i }),
+    ).toHaveValue('https://business.example.com');
+    expect(
+      within(settingsDialog).getByText(/已连接 browser-preview \(dev\)/i),
+    ).toBeInTheDocument();
     expect(
       within(settingsDialog).getByRole('textbox', { name: /model/i }),
     ).toHaveValue('gpt-5-mini');
+  });
+
+  it('saves business base url independently from the llm base url', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /打开设置/i }));
+    await user.clear(screen.getByRole('textbox', { name: /^business base url$/i }));
+    await user.type(screen.getByRole('textbox', { name: /^business base url$/i }), 'http://localhost:3200');
+    await user.click(screen.getByRole('button', { name: /保存/i }));
+
+    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'http://localhost:3200',
+    }));
   });
 
   it('switches the active session when a session chip is clicked', async () => {
@@ -245,22 +265,22 @@ describe('App shell', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
-    await user.clear(screen.getByRole('textbox', { name: /base url/i }));
-    await user.type(screen.getByRole('textbox', { name: /base url/i }), 'https://changed.example.com');
+    await user.clear(screen.getByRole('textbox', { name: /^base url$/i }));
+    await user.type(screen.getByRole('textbox', { name: /^base url$/i }), 'https://changed.example.com');
     await user.click(screen.getByRole('button', { name: /取消/i }));
 
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
     expect(
-      screen.getByRole('textbox', { name: /base url/i }),
+      screen.getByRole('textbox', { name: /^base url$/i }),
     ).toHaveValue('https://api.example.com');
 
-    await user.clear(screen.getByRole('textbox', { name: /base url/i }));
-    await user.type(screen.getByRole('textbox', { name: /base url/i }), 'https://closed.example.com');
+    await user.clear(screen.getByRole('textbox', { name: /^base url$/i }));
+    await user.type(screen.getByRole('textbox', { name: /^base url$/i }), 'https://closed.example.com');
     await user.click(screen.getByRole('button', { name: /关闭/i }));
 
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
     expect(
-      screen.getByRole('textbox', { name: /base url/i }),
+      screen.getByRole('textbox', { name: /^base url$/i }),
     ).toHaveValue('https://api.example.com');
   });
 
@@ -287,6 +307,7 @@ describe('App shell', () => {
     const delayedSettings = createDeferred<{
       apiKey: string;
       baseUrl: string;
+      businessBaseUrl: string;
       model: string;
       ssoUrl: string;
       ssoLoginSuccessPath: string;
@@ -296,13 +317,14 @@ describe('App shell', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /打开设置/i }));
-    const baseUrlInput = screen.getByRole('textbox', { name: /base url/i });
+    const baseUrlInput = screen.getByRole('textbox', { name: /^base url$/i });
     await user.clear(baseUrlInput);
     await user.type(baseUrlInput, 'https://draft.example.com');
 
     delayedSettings.resolve({
       apiKey: '',
       baseUrl: 'https://loaded.example.com',
+      businessBaseUrl: 'https://business-loaded.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
@@ -342,6 +364,7 @@ describe('App shell', () => {
     const delayedSettings = createDeferred<{
       apiKey: string;
       baseUrl: string;
+      businessBaseUrl: string;
       model: string;
       ssoUrl: string;
       ssoLoginSuccessPath: string;
@@ -356,6 +379,7 @@ describe('App shell', () => {
     delayedSettings.resolve({
       apiKey: 'loaded-key',
       baseUrl: 'https://loaded.example.com',
+      businessBaseUrl: 'https://business-loaded.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
@@ -384,6 +408,7 @@ describe('App shell', () => {
     const pendingSave = createDeferred<{
       apiKey: string;
       baseUrl: string;
+      businessBaseUrl: string;
       model: string;
       ssoUrl: string;
       ssoLoginSuccessPath: string;
@@ -396,7 +421,8 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: /保存/i }));
 
     expect(screen.getAllByLabelText(/^api key$/i)[0]).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: /base url/i })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /^base url$/i })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /^business base url$/i })).toBeDisabled();
     expect(screen.getByRole('textbox', { name: /model/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /关闭/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /取消/i })).toBeDisabled();
@@ -405,6 +431,7 @@ describe('App shell', () => {
     pendingSave.resolve({
       apiKey: '',
       baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'https://business.example.com',
       model: 'gpt-5-mini',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
