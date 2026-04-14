@@ -8,7 +8,14 @@ namespace OfficeAgent.ExcelAddIn.Excel
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
         private const string MetadataSheetName = "_OfficeAgentMetadata";
+        private static readonly string[] OrderedTables =
+        {
+            "SheetBindings",
+            "SheetFieldMappings",
+        };
+
         private readonly ExcelInterop.Application application;
+        private readonly MetadataSheetLayoutSerializer serializer = new MetadataSheetLayoutSerializer();
 
         public ExcelWorkbookMetadataAdapter(ExcelInterop.Application application)
         {
@@ -17,10 +24,13 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         public void EnsureWorksheet(string name, bool visible)
         {
-            var worksheet = EnsureWorksheetExists(name);
-            worksheet.Visible = visible
-                ? ExcelInterop.XlSheetVisibility.xlSheetVisible
-                : ExcelInterop.XlSheetVisibility.xlSheetHidden;
+            ExecutePreservingActiveWorksheet(() =>
+            {
+                var worksheet = EnsureWorksheetExists(name);
+                worksheet.Visible = visible
+                    ? ExcelInterop.XlSheetVisibility.xlSheetVisible
+                    : ExcelInterop.XlSheetVisibility.xlSheetHidden;
+            });
         }
 
         public void WriteTable(string tableName, string[] headers, string[][] rows)
@@ -40,17 +50,13 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentNullException(nameof(rows));
             }
 
-            var worksheet = EnsureWorksheetExists(MetadataSheetName);
-            var dataColumns = Math.Max(headers.Length, rows.Length > 0 ? rows.Max(row => row?.Length ?? 0) : 0);
-            var columnsToClear = 1 + Math.Max(dataColumns, 0);
-            ClearTableRows(worksheet, tableName, columnsToClear);
-
-            var startRow = GetFirstEmptyRow(worksheet);
-            for (var i = 0; i < rows.Length; i++)
+            ExecutePreservingActiveWorksheet(() =>
             {
-                var values = rows[i] ?? Array.Empty<string>();
-                WriteRow(worksheet, startRow + i, tableName, values, dataColumns);
-            }
+                var worksheet = EnsureWorksheetExists(MetadataSheetName);
+                var sections = LoadSections(worksheet);
+                sections[tableName] = new MetadataSectionDocument(tableName, headers, rows);
+                RewriteSheet(worksheet, sections);
+            });
         }
 
         public string[][] ReadTable(string tableName)
@@ -60,44 +66,44 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Table name is required.", nameof(tableName));
             }
 
-            var worksheet = EnsureWorksheetExists(MetadataSheetName);
-            var usedRange = worksheet.UsedRange;
-            if (usedRange == null || usedRange.Rows.Count == 0)
+            return ExecutePreservingActiveWorksheet(() =>
             {
-                return Array.Empty<string[]>();
-            }
+                var worksheet = EnsureWorksheetExists(MetadataSheetName);
+                return serializer.ReadTable(tableName, ReadUsedRows(worksheet));
+            });
+        }
 
-            var dataColumns = Math.Max(0, usedRange.Columns.Count - 1);
-            var results = new List<string[]>();
-            var startRow = usedRange.Row;
-            var endRow = startRow + usedRange.Rows.Count - 1;
-
-            for (var row = startRow; row <= endRow; row++)
+        private void ExecutePreservingActiveWorksheet(Action action)
+        {
+            ExecutePreservingActiveWorksheet(() =>
             {
-                var tableCell = worksheet.Cells[row, 1] as ExcelInterop.Range;
-                if (tableCell?.Value2 is not string storedTable)
-                {
-                    continue;
-                }
+                action();
+                return true;
+            });
+        }
 
-                if (!string.Equals(storedTable, tableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+        private T ExecutePreservingActiveWorksheet<T>(Func<T> action)
+        {
+            var activeSheet = application.ActiveSheet as ExcelInterop.Worksheet;
 
-                var columnCount = DetermineActualColumnCount(worksheet, row, dataColumns);
-                var values = new string[columnCount];
-
-                for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
-                {
-                    var cell = worksheet.Cells[row, columnIndex + 2] as ExcelInterop.Range;
-                    values[columnIndex] = cell?.Value2 as string ?? string.Empty;
-                }
-
-                results.Add(values);
+            try
+            {
+                return action();
             }
-
-            return results.ToArray();
+            finally
+            {
+                if (activeSheet != null)
+                {
+                    try
+                    {
+                        activeSheet.Activate();
+                    }
+                    catch
+                    {
+                        // Ignore focus restoration failures and keep metadata operations successful.
+                    }
+                }
+            }
         }
 
         private ExcelInterop.Worksheet EnsureWorksheetExists(string name)
@@ -129,92 +135,78 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return workbook;
         }
 
-        private static void ClearTableRows(ExcelInterop.Worksheet worksheet, string tableName, int columnsToClear)
+        private Dictionary<string, MetadataSectionDocument> LoadSections(ExcelInterop.Worksheet worksheet)
+        {
+            var sheetRows = ReadUsedRows(worksheet);
+            var sections = new Dictionary<string, MetadataSectionDocument>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var tableName in OrderedTables)
+            {
+                var section = serializer.ReadSection(tableName, sheetRows);
+                if (section == null || section.Headers.Length == 0)
+                {
+                    continue;
+                }
+
+                sections[tableName] = section;
+            }
+
+            return sections;
+        }
+
+        private void RewriteSheet(
+            ExcelInterop.Worksheet worksheet,
+            IReadOnlyDictionary<string, MetadataSectionDocument> sections)
+        {
+            var cells = worksheet.Cells as ExcelInterop.Range;
+            cells?.ClearContents();
+
+            var rendered = serializer.Render(sections);
+            for (var rowIndex = 0; rowIndex < rendered.Length; rowIndex++)
+            {
+                var values = rendered[rowIndex] ?? Array.Empty<string>();
+                for (var columnIndex = 0; columnIndex < values.Length; columnIndex++)
+                {
+                    var cell = worksheet.Cells[rowIndex + 1, columnIndex + 1] as ExcelInterop.Range;
+                    cell.Value2 = values[columnIndex];
+                }
+            }
+        }
+
+        private static string[][] ReadUsedRows(ExcelInterop.Worksheet worksheet)
         {
             var usedRange = worksheet.UsedRange;
-            if (usedRange == null || usedRange.Rows.Count == 0)
+            if (usedRange == null || usedRange.Rows.Count == 0 || usedRange.Columns.Count == 0)
             {
-                return;
+                return Array.Empty<string[]>();
             }
 
             var startRow = usedRange.Row;
-            var endRow = startRow + usedRange.Rows.Count - 1;
-            var targetColumns = Math.Max(columnsToClear, 1);
+            var rowCount = usedRange.Rows.Count;
+            var columnCount = usedRange.Columns.Count;
+            var rows = new string[rowCount][];
 
-            for (var row = startRow; row <= endRow; row++)
+            for (var rowOffset = 0; rowOffset < rowCount; rowOffset++)
             {
-                var cell = worksheet.Cells[row, 1] as ExcelInterop.Range;
-                if (cell?.Value2 is not string storedTable)
+                var values = new string[columnCount];
+                var lastValueColumn = 0;
+
+                for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
                 {
-                    continue;
+                    var cell = worksheet.Cells[startRow + rowOffset, columnIndex + 1] as ExcelInterop.Range;
+                    values[columnIndex] = Convert.ToString(cell?.Value2) ?? string.Empty;
+                    if (!string.IsNullOrEmpty(values[columnIndex]))
+                    {
+                        lastValueColumn = columnIndex + 1;
+                    }
                 }
 
-                if (!string.Equals(storedTable, tableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var range = worksheet.Range[
-                    worksheet.Cells[row, 1],
-                    worksheet.Cells[row, targetColumns]];
-                range.ClearContents();
-            }
-        }
-
-        private static int GetFirstEmptyRow(ExcelInterop.Worksheet worksheet)
-        {
-            var usedRange = worksheet.UsedRange;
-            if (usedRange == null || usedRange.Rows.Count == 0)
-            {
-                return 1;
+                rows[rowOffset] = lastValueColumn == 0
+                    ? Array.Empty<string>()
+                    : values.Take(lastValueColumn).ToArray();
             }
 
-            var lastRow = usedRange.Row + usedRange.Rows.Count - 1;
-
-            for (var row = 1; row <= lastRow; row++)
-            {
-                var cell = worksheet.Cells[row, 1] as ExcelInterop.Range;
-                if (cell?.Value2 == null)
-                {
-                    return row;
-                }
-            }
-
-            return lastRow + 1;
-        }
-
-        private static void WriteRow(ExcelInterop.Worksheet worksheet, int row, string tableName, string[] values, int dataColumns)
-        {
-            var totalColumns = 1 + Math.Max(dataColumns, 0);
-
-            for (var column = 0; column < totalColumns; column++)
-            {
-                var cell = worksheet.Cells[row, column + 1] as ExcelInterop.Range;
-
-                if (column == 0)
-                {
-                    cell.Value2 = tableName;
-                    continue;
-                }
-
-                var valueIndex = column - 1;
-                var entry = valueIndex < values.Length ? values[valueIndex] : null;
-                cell.Value2 = entry;
-            }
-        }
-
-        private static int DetermineActualColumnCount(ExcelInterop.Worksheet worksheet, int row, int dataColumns)
-        {
-            for (var columnIndex = dataColumns; columnIndex >= 1; columnIndex--)
-            {
-                var cell = worksheet.Cells[row, columnIndex + 1] as ExcelInterop.Range;
-                if (cell?.Value2 != null)
-                {
-                    return columnIndex;
-                }
-            }
-
-            return 0;
+            return rows;
         }
     }
 }

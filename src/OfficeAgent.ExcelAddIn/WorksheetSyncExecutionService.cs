@@ -12,32 +12,33 @@ namespace OfficeAgent.ExcelAddIn
     {
         public string OperationName { get; set; } = string.Empty;
         public string SheetName { get; set; } = string.Empty;
+        public SheetBinding Binding { get; set; }
         public WorksheetSchema Schema { get; set; }
+        public WorksheetRuntimeColumn[] RuntimeColumns { get; set; } = Array.Empty<WorksheetRuntimeColumn>();
         public IReadOnlyList<IDictionary<string, object>> Rows { get; set; } = Array.Empty<IDictionary<string, object>>();
-        public SyncOperationPreview Preview { get; set; }
+        public SyncOperationPreview Preview { get; set; } = new SyncOperationPreview();
         public ResolvedSelection Selection { get; set; }
+        public bool UsesExistingLayout { get; set; }
     }
 
     internal sealed class WorksheetUploadPlan
     {
         public string OperationName { get; set; } = string.Empty;
         public string SheetName { get; set; } = string.Empty;
+        public string ProjectId { get; set; } = string.Empty;
         public SyncOperationPreview Preview { get; set; } = new SyncOperationPreview();
-        public bool ReplaceSnapshot { get; set; }
     }
 
     internal sealed class WorksheetSyncExecutionService
     {
-        private const int HeaderRowCount = 2;
-        private const int DataStartRow = 3;
-
         private readonly WorksheetSyncService worksheetSyncService;
-        private readonly IWorksheetMetadataStore metadataStore;
         private readonly IWorksheetSelectionReader selectionReader;
         private readonly IWorksheetGridAdapter gridAdapter;
         private readonly WorksheetSelectionResolver selectionResolver;
         private readonly WorksheetSchemaLayoutService layoutService;
         private readonly SyncOperationPreviewFactory previewFactory;
+        private readonly WorksheetHeaderMatcher headerMatcher;
+        private readonly FieldMappingValueAccessor valueAccessor;
 
         public WorksheetSyncExecutionService(
             WorksheetSyncService worksheetSyncService,
@@ -47,47 +48,95 @@ namespace OfficeAgent.ExcelAddIn
             SyncOperationPreviewFactory previewFactory)
         {
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
-            this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
+            _ = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.selectionReader = selectionReader ?? throw new ArgumentNullException(nameof(selectionReader));
             this.gridAdapter = gridAdapter ?? throw new ArgumentNullException(nameof(gridAdapter));
             this.previewFactory = previewFactory ?? throw new ArgumentNullException(nameof(previewFactory));
             selectionResolver = new WorksheetSelectionResolver();
             layoutService = new WorksheetSchemaLayoutService();
+            valueAccessor = new FieldMappingValueAccessor();
+            headerMatcher = new WorksheetHeaderMatcher(valueAccessor);
+        }
+
+        public void InitializeCurrentSheet(string sheetName, ProjectOption project)
+        {
+            worksheetSyncService.InitializeSheet(sheetName, project);
+        }
+
+        public void TryAutoInitializeCurrentSheet(string sheetName, ProjectOption project)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            try
+            {
+                var binding = worksheetSyncService.LoadBinding(sheetName);
+                if (!string.Equals(binding.ProjectId, project.ProjectId, StringComparison.OrdinalIgnoreCase))
+                {
+                    InitializeCurrentSheet(sheetName, project);
+                    return;
+                }
+
+                var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
+                var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId);
+                if (!HasUsableMappings(definition, mappings))
+                {
+                    InitializeCurrentSheet(sheetName, project);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                InitializeCurrentSheet(sheetName, project);
+            }
         }
 
         public WorksheetDownloadPlan PrepareFullDownload(string sheetName)
         {
-            var schema = worksheetSyncService.LoadSchemaForSheet(sheetName);
-            var rows = worksheetSyncService.ExecutePartialDownload(sheetName, new ResolvedSelection());
-            var overwritePreview = worksheetSyncService.PrepareIncrementalUpload(sheetName, ReadAllCurrentCells(sheetName, schema));
+            var context = ResolveFullDownloadContext(sheetName);
+            var rows = worksheetSyncService.Download(
+                context.Binding.ProjectId,
+                Array.Empty<string>(),
+                GetRequestedFieldKeys(context.RuntimeColumns));
 
             return new WorksheetDownloadPlan
             {
                 OperationName = "全量下载",
                 SheetName = sheetName,
-                Schema = schema,
+                Binding = context.Binding,
+                Schema = context.Schema,
+                RuntimeColumns = context.RuntimeColumns,
                 Rows = rows,
-                Preview = overwritePreview,
+                Preview = new SyncOperationPreview { OperationName = "全量下载" },
+                UsesExistingLayout = context.UsesExistingLayout,
             };
         }
 
         public WorksheetDownloadPlan PreparePartialDownload(string sheetName)
         {
-            var schema = worksheetSyncService.LoadSchemaForSheet(sheetName);
-            var selection = ResolveCurrentSelection(sheetName, schema);
+            var context = ResolveMatchedSheetContext(sheetName);
+            var selection = ResolveCurrentSelection(sheetName, context.Schema);
             var rows = selection.RowIds.Length == 0
                 ? Array.Empty<IDictionary<string, object>>()
-                : worksheetSyncService.ExecutePartialDownload(sheetName, selection);
-            var overwritePreview = worksheetSyncService.PrepareIncrementalUpload(sheetName, ReadSelectionChanges(sheetName, schema, selection));
+                : worksheetSyncService.Download(context.Binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
 
             return new WorksheetDownloadPlan
             {
                 OperationName = "部分下载",
                 SheetName = sheetName,
-                Schema = schema,
+                Binding = context.Binding,
+                Schema = context.Schema,
+                RuntimeColumns = context.RuntimeColumns,
                 Rows = rows,
-                Preview = overwritePreview,
+                Preview = new SyncOperationPreview { OperationName = "部分下载" },
                 Selection = selection,
+                UsesExistingLayout = true,
             };
         }
 
@@ -101,61 +150,38 @@ namespace OfficeAgent.ExcelAddIn
             if (plan.Selection == null)
             {
                 WriteFullWorksheet(plan);
-                metadataStore.SaveSnapshot(
-                    plan.SheetName,
-                    BuildSnapshotCellsFromRows(plan.SheetName, plan.Schema, plan.Rows, includedFieldKeys: null));
                 return;
             }
 
             WritePartialCells(plan);
-            MergeSnapshot(
-                plan.SheetName,
-                BuildSnapshotCellsFromRows(plan.SheetName, plan.Schema, plan.Rows, plan.Selection.ApiFieldKeys));
         }
 
         public WorksheetUploadPlan PrepareFullUpload(string sheetName)
         {
-            var schema = worksheetSyncService.LoadSchemaForSheet(sheetName);
-            var changes = ReadAllCurrentCells(sheetName, schema);
+            var context = ResolveMatchedSheetContext(sheetName);
+            var changes = ReadAllCurrentCells(sheetName, context.Binding, context.Schema);
 
             return new WorksheetUploadPlan
             {
                 OperationName = "全量上传",
                 SheetName = sheetName,
+                ProjectId = context.Binding.ProjectId,
                 Preview = BuildUploadPreview("全量上传", changes),
-                ReplaceSnapshot = true,
             };
         }
 
         public WorksheetUploadPlan PreparePartialUpload(string sheetName)
         {
-            var schema = worksheetSyncService.LoadSchemaForSheet(sheetName);
-            var selection = ResolveCurrentSelection(sheetName, schema);
-            var changes = ReadSelectionChanges(sheetName, schema, selection);
+            var context = ResolveMatchedSheetContext(sheetName);
+            var selection = ResolveCurrentSelection(sheetName, context.Schema);
+            var changes = ReadSelectionChanges(sheetName, context.Schema, selection);
 
             return new WorksheetUploadPlan
             {
                 OperationName = "部分上传",
                 SheetName = sheetName,
+                ProjectId = context.Binding.ProjectId,
                 Preview = BuildUploadPreview("部分上传", changes),
-                ReplaceSnapshot = false,
-            };
-        }
-
-        public WorksheetUploadPlan PrepareIncrementalUpload(string sheetName)
-        {
-            var schema = worksheetSyncService.LoadSchemaForSheet(sheetName);
-            var currentCells = ReadAllCurrentCells(sheetName, schema);
-            var preview = worksheetSyncService.PrepareIncrementalUpload(sheetName, currentCells);
-            preview.OperationName = "增量上传";
-            preview.Summary = $"增量上传将提交 {preview.Changes.Length} 个单元格。";
-
-            return new WorksheetUploadPlan
-            {
-                OperationName = "增量上传",
-                SheetName = sheetName,
-                Preview = preview,
-                ReplaceSnapshot = false,
             };
         }
 
@@ -172,50 +198,255 @@ namespace OfficeAgent.ExcelAddIn
                 return;
             }
 
-            worksheetSyncService.ExecutePartialUpload(plan.SheetName, changes);
-            var snapshotCells = BuildSnapshotCellsFromChanges(plan.SheetName, changes);
+            worksheetSyncService.Upload(plan.ProjectId, changes);
+        }
 
-            if (plan.ReplaceSnapshot)
+        private SheetExecutionContext ResolveFullDownloadContext(string sheetName)
+        {
+            var context = LoadSheetContext(sheetName);
+            var runtimeColumns = LoadRuntimeColumns(sheetName, context.Binding, context.Definition, context.Mappings);
+
+            if (runtimeColumns.Length > 0)
             {
-                metadataStore.SaveSnapshot(plan.SheetName, snapshotCells);
-                return;
+                EnsureIdColumn(runtimeColumns);
+                context.RuntimeColumns = runtimeColumns;
+                context.Schema = BuildSchema(context.Binding, runtimeColumns);
+                context.UsesExistingLayout = true;
+                return context;
             }
 
-            MergeSnapshot(plan.SheetName, snapshotCells);
+            if (HasAnyHeaderText(sheetName, context.Binding))
+            {
+                throw CreateHeaderMatchException();
+            }
+
+            var configuredColumns = BuildConfiguredColumns(context.Binding, context.Definition, context.Mappings);
+            if (configuredColumns.Length == 0)
+            {
+                throw CreateInitializationRequiredException();
+            }
+
+            EnsureIdColumn(configuredColumns);
+            context.RuntimeColumns = configuredColumns;
+            context.Schema = BuildSchema(context.Binding, configuredColumns);
+            context.UsesExistingLayout = false;
+            return context;
+        }
+
+        private SheetExecutionContext ResolveMatchedSheetContext(string sheetName)
+        {
+            var context = LoadSheetContext(sheetName);
+            var runtimeColumns = LoadRuntimeColumns(sheetName, context.Binding, context.Definition, context.Mappings);
+
+            if (runtimeColumns.Length == 0)
+            {
+                throw CreateHeaderMatchException();
+            }
+
+            EnsureIdColumn(runtimeColumns);
+            context.RuntimeColumns = runtimeColumns;
+            context.Schema = BuildSchema(context.Binding, runtimeColumns);
+            context.UsesExistingLayout = true;
+            return context;
+        }
+
+        private SheetExecutionContext LoadSheetContext(string sheetName)
+        {
+            var binding = worksheetSyncService.LoadBinding(sheetName);
+            ValidateBinding(binding);
+            var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
+            var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
+
+            if (!HasUsableMappings(definition, mappings))
+            {
+                worksheetSyncService.InitializeSheet(sheetName, CreateProjectOption(binding));
+                definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
+                mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
+            }
+
+            return new SheetExecutionContext
+            {
+                Binding = binding,
+                Definition = definition,
+                Mappings = mappings,
+            };
+        }
+
+        private WorksheetRuntimeColumn[] LoadRuntimeColumns(
+            string sheetName,
+            SheetBinding binding,
+            FieldMappingTableDefinition definition,
+            IReadOnlyList<SheetFieldMappingRow> mappings)
+        {
+            return headerMatcher.Match(sheetName, binding, definition, mappings, gridAdapter);
+        }
+
+        private WorksheetRuntimeColumn[] BuildConfiguredColumns(
+            SheetBinding binding,
+            FieldMappingTableDefinition definition,
+            IReadOnlyList<SheetFieldMappingRow> mappings)
+        {
+            var rows = mappings ?? Array.Empty<SheetFieldMappingRow>();
+            var result = new List<WorksheetRuntimeColumn>(rows.Count);
+            var columnIndex = 1;
+
+            foreach (var mapping in rows)
+            {
+                if (mapping == null)
+                {
+                    continue;
+                }
+
+                var apiFieldKey = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.ApiFieldKey);
+                if (string.IsNullOrWhiteSpace(apiFieldKey))
+                {
+                    continue;
+                }
+
+                var headerType = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.HeaderType);
+                var isActivityProperty = IsActivityProperty(headerType);
+                var singleText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentSingleHeaderText);
+                var parentText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentParentHeaderText);
+                var childText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentChildHeaderText);
+
+                result.Add(new WorksheetRuntimeColumn
+                {
+                    ColumnIndex = columnIndex++,
+                    ApiFieldKey = apiFieldKey,
+                    HeaderType = NormalizeHeaderType(headerType),
+                    DisplayText = isActivityProperty ? childText : singleText,
+                    ParentDisplayText = isActivityProperty && binding.HeaderRowCount > 1 ? parentText : string.Empty,
+                    ChildDisplayText = isActivityProperty ? childText : string.Empty,
+                    IsIdColumn = valueAccessor.GetBoolean(definition, mapping, FieldMappingSemanticRole.IsIdColumn),
+                });
+            }
+
+            return result.ToArray();
+        }
+
+        private WorksheetSchema BuildSchema(SheetBinding binding, IReadOnlyList<WorksheetRuntimeColumn> runtimeColumns)
+        {
+            var columns = (runtimeColumns ?? Array.Empty<WorksheetRuntimeColumn>())
+                .Where(column => column != null)
+                .OrderBy(column => column.ColumnIndex)
+                .Select(column => new WorksheetColumnBinding
+                {
+                    ColumnIndex = column.ColumnIndex,
+                    ApiFieldKey = column.ApiFieldKey,
+                    ColumnKind = IsActivityProperty(column.HeaderType)
+                        ? WorksheetColumnKind.ActivityProperty
+                        : WorksheetColumnKind.Single,
+                    ParentHeaderText = IsActivityProperty(column.HeaderType)
+                        ? column.ParentDisplayText
+                        : column.DisplayText,
+                    ChildHeaderText = IsActivityProperty(column.HeaderType)
+                        ? column.ChildDisplayText
+                        : column.DisplayText,
+                    IsIdColumn = column.IsIdColumn,
+                })
+                .ToArray();
+
+            return new WorksheetSchema
+            {
+                SystemKey = binding?.SystemKey ?? string.Empty,
+                ProjectId = binding?.ProjectId ?? string.Empty,
+                Columns = columns,
+            };
+        }
+
+        private bool HasAnyHeaderText(string sheetName, SheetBinding binding)
+        {
+            var lastUsedColumn = gridAdapter.GetLastUsedColumn(sheetName);
+            if (lastUsedColumn <= 0)
+            {
+                return false;
+            }
+
+            var startRow = binding.HeaderStartRow;
+            var rowCount = binding.HeaderRowCount;
+
+            for (var row = startRow; row < startRow + rowCount; row++)
+            {
+                for (var column = 1; column <= lastUsedColumn; column++)
+                {
+                    if (!string.IsNullOrWhiteSpace(gridAdapter.GetCellText(sheetName, row, column)))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private void WriteFullWorksheet(WorksheetDownloadPlan plan)
         {
-            gridAdapter.ClearWorksheet(plan.SheetName);
+            var binding = plan.Binding;
+            var columns = plan.RuntimeColumns ?? Array.Empty<WorksheetRuntimeColumn>();
+            var clearEndRow = Math.Max(gridAdapter.GetLastUsedRow(plan.SheetName), binding.DataStartRow + (plan.Rows?.Count ?? 0) + 10);
 
-            var headerPlan = layoutService.BuildHeaderPlan(plan.Schema);
-            foreach (var headerCell in headerPlan)
+            ClearManagedArea(plan.SheetName, binding, columns, plan.UsesExistingLayout, clearEndRow);
+
+            if (!plan.UsesExistingLayout)
             {
-                gridAdapter.SetCellText(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.Text);
-                gridAdapter.MergeCells(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.RowSpan, headerCell.ColumnSpan);
+                var headerPlan = layoutService.BuildHeaderPlan(binding, columns);
+                foreach (var headerCell in headerPlan)
+                {
+                    gridAdapter.SetCellText(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.Text);
+                    gridAdapter.MergeCells(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.RowSpan, headerCell.ColumnSpan);
+                }
             }
 
-            for (var rowIndex = 0; rowIndex < plan.Rows.Count; rowIndex++)
+            for (var rowIndex = 0; rowIndex < (plan.Rows?.Count ?? 0); rowIndex++)
             {
                 var row = plan.Rows[rowIndex];
-                var targetRow = DataStartRow + rowIndex;
-                foreach (var column in plan.Schema.Columns ?? Array.Empty<WorksheetColumnBinding>())
+                var targetRow = binding.DataStartRow + rowIndex;
+                foreach (var column in columns)
                 {
-                    var value = GetRowValue(row, column.ApiFieldKey);
-                    gridAdapter.SetCellText(plan.SheetName, targetRow, column.ColumnIndex, value);
+                    gridAdapter.SetCellText(plan.SheetName, targetRow, column.ColumnIndex, GetRowValue(row, column.ApiFieldKey));
                 }
+            }
+        }
+
+        private void ClearManagedArea(
+            string sheetName,
+            SheetBinding binding,
+            IReadOnlyList<WorksheetRuntimeColumn> columns,
+            bool usesExistingLayout,
+            int clearEndRow)
+        {
+            var runtimeColumns = (columns ?? Array.Empty<WorksheetRuntimeColumn>())
+                .Where(column => column != null)
+                .ToArray();
+            if (runtimeColumns.Length == 0)
+            {
+                return;
+            }
+
+            var headerEndRow = binding.HeaderStartRow + Math.Max(binding.HeaderRowCount, 1) - 1;
+            if (!usesExistingLayout)
+            {
+                var lastColumn = runtimeColumns.Max(column => column.ColumnIndex);
+                gridAdapter.ClearRange(sheetName, binding.HeaderStartRow, headerEndRow, 1, lastColumn);
+                gridAdapter.ClearRange(sheetName, binding.DataStartRow, clearEndRow, 1, lastColumn);
+                return;
+            }
+
+            foreach (var columnIndex in runtimeColumns.Select(column => column.ColumnIndex).Distinct().OrderBy(index => index))
+            {
+                gridAdapter.ClearRange(sheetName, binding.DataStartRow, clearEndRow, columnIndex, columnIndex);
             }
         }
 
         private void WritePartialCells(WorksheetDownloadPlan plan)
         {
-            var columnsByIndex = (plan.Schema.Columns ?? Array.Empty<WorksheetColumnBinding>())
+            var columnsByIndex = (plan.Schema?.Columns ?? Array.Empty<WorksheetColumnBinding>())
                 .ToDictionary(column => column.ColumnIndex, column => column);
-            var rowsById = plan.Rows
+            var rowsById = (plan.Rows ?? Array.Empty<IDictionary<string, object>>())
                 .Where(row => !string.IsNullOrWhiteSpace(GetRowId(plan.Schema, row)))
                 .ToDictionary(row => GetRowId(plan.Schema, row), row => row, StringComparer.Ordinal);
 
-            foreach (var targetCell in plan.Selection.TargetCells ?? Array.Empty<SelectedVisibleCell>())
+            foreach (var targetCell in plan.Selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
             {
                 if (!columnsByIndex.TryGetValue(targetCell.Column, out var column))
                 {
@@ -223,18 +454,12 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 var rowId = GetRowId(plan.SheetName, plan.Schema, targetCell.Row);
-                if (string.IsNullOrWhiteSpace(rowId))
+                if (string.IsNullOrWhiteSpace(rowId) || !rowsById.TryGetValue(rowId, out var row))
                 {
                     continue;
                 }
 
-                if (!rowsById.TryGetValue(rowId, out var row))
-                {
-                    continue;
-                }
-
-                var value = GetRowValue(row, column.ApiFieldKey);
-                gridAdapter.SetCellText(plan.SheetName, targetCell.Row, targetCell.Column, value);
+                gridAdapter.SetCellText(plan.SheetName, targetCell.Row, targetCell.Column, GetRowValue(row, column.ApiFieldKey));
             }
         }
 
@@ -244,7 +469,7 @@ namespace OfficeAgent.ExcelAddIn
             return selectionResolver.Resolve(schema, visibleCells, row => GetRowId(sheetName, schema, row));
         }
 
-        private CellChange[] ReadAllCurrentCells(string sheetName, WorksheetSchema schema)
+        private CellChange[] ReadAllCurrentCells(string sheetName, SheetBinding binding, WorksheetSchema schema)
         {
             var idColumn = GetIdColumn(schema);
             if (idColumn == null)
@@ -252,11 +477,10 @@ namespace OfficeAgent.ExcelAddIn
                 return Array.Empty<CellChange>();
             }
 
-            var snapshotLookup = BuildSnapshotLookup(sheetName);
-            var lastUsedRow = gridAdapter.GetLastUsedRow(sheetName);
             var result = new List<CellChange>();
+            var lastUsedRow = gridAdapter.GetLastUsedRow(sheetName);
 
-            for (var row = DataStartRow; row <= lastUsedRow; row++)
+            for (var row = binding.DataStartRow; row <= lastUsedRow; row++)
             {
                 var rowId = gridAdapter.GetCellText(sheetName, row, idColumn.ColumnIndex);
                 if (string.IsNullOrWhiteSpace(rowId))
@@ -266,14 +490,12 @@ namespace OfficeAgent.ExcelAddIn
 
                 foreach (var column in schema.Columns.Where(item => !item.IsIdColumn))
                 {
-                    var key = BuildSnapshotKey(rowId, column.ApiFieldKey);
-                    snapshotLookup.TryGetValue(key, out var oldValue);
                     result.Add(new CellChange
                     {
                         SheetName = sheetName,
                         RowId = rowId,
                         ApiFieldKey = column.ApiFieldKey,
-                        OldValue = oldValue ?? string.Empty,
+                        OldValue = string.Empty,
                         NewValue = gridAdapter.GetCellText(sheetName, row, column.ColumnIndex),
                     });
                 }
@@ -284,12 +506,11 @@ namespace OfficeAgent.ExcelAddIn
 
         private CellChange[] ReadSelectionChanges(string sheetName, WorksheetSchema schema, ResolvedSelection selection)
         {
-            var columnsByIndex = (schema.Columns ?? Array.Empty<WorksheetColumnBinding>())
+            var columnsByIndex = (schema?.Columns ?? Array.Empty<WorksheetColumnBinding>())
                 .ToDictionary(column => column.ColumnIndex, column => column);
-            var snapshotLookup = BuildSnapshotLookup(sheetName);
             var result = new List<CellChange>();
 
-            foreach (var targetCell in selection.TargetCells ?? Array.Empty<SelectedVisibleCell>())
+            foreach (var targetCell in selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
             {
                 if (!columnsByIndex.TryGetValue(targetCell.Column, out var column) || column.IsIdColumn)
                 {
@@ -302,14 +523,12 @@ namespace OfficeAgent.ExcelAddIn
                     continue;
                 }
 
-                var key = BuildSnapshotKey(rowId, column.ApiFieldKey);
-                snapshotLookup.TryGetValue(key, out var oldValue);
                 result.Add(new CellChange
                 {
                     SheetName = sheetName,
                     RowId = rowId,
                     ApiFieldKey = column.ApiFieldKey,
-                    OldValue = oldValue ?? string.Empty,
+                    OldValue = string.Empty,
                     NewValue = gridAdapter.GetCellText(sheetName, targetCell.Row, targetCell.Column),
                 });
             }
@@ -317,93 +536,53 @@ namespace OfficeAgent.ExcelAddIn
             return result.ToArray();
         }
 
-        private WorksheetSnapshotCell[] BuildSnapshotCellsFromRows(
-            string sheetName,
-            WorksheetSchema schema,
-            IReadOnlyList<IDictionary<string, object>> rows,
-            IReadOnlyList<string> includedFieldKeys)
+        private static IReadOnlyList<string> GetRequestedFieldKeys(IReadOnlyList<WorksheetRuntimeColumn> columns)
         {
-            var allowedFieldKeys = includedFieldKeys == null
-                ? null
-                : new HashSet<string>(includedFieldKeys, StringComparer.Ordinal);
-            var result = new List<WorksheetSnapshotCell>();
-
-            foreach (var row in rows ?? Array.Empty<IDictionary<string, object>>())
-            {
-                var rowId = GetRowId(schema, row);
-                if (string.IsNullOrWhiteSpace(rowId))
-                {
-                    continue;
-                }
-
-                foreach (var column in schema.Columns.Where(item => !item.IsIdColumn))
-                {
-                    if (allowedFieldKeys != null && !allowedFieldKeys.Contains(column.ApiFieldKey))
-                    {
-                        continue;
-                    }
-
-                    result.Add(new WorksheetSnapshotCell
-                    {
-                        SheetName = sheetName,
-                        RowId = rowId,
-                        ApiFieldKey = column.ApiFieldKey,
-                        Value = GetRowValue(row, column.ApiFieldKey),
-                    });
-                }
-            }
-
-            return result.ToArray();
-        }
-
-        private static WorksheetSnapshotCell[] BuildSnapshotCellsFromChanges(string sheetName, IReadOnlyList<CellChange> changes)
-        {
-            return (changes ?? Array.Empty<CellChange>())
-                .Select(change => new WorksheetSnapshotCell
-                {
-                    SheetName = sheetName,
-                    RowId = change.RowId,
-                    ApiFieldKey = change.ApiFieldKey,
-                    Value = change.NewValue ?? string.Empty,
-                })
+            return (columns ?? Array.Empty<WorksheetRuntimeColumn>())
+                .Where(column => column != null && !string.IsNullOrWhiteSpace(column.ApiFieldKey))
+                .Select(column => column.ApiFieldKey)
+                .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
 
-        private void MergeSnapshot(string sheetName, IReadOnlyList<WorksheetSnapshotCell> updates)
+        private static void EnsureIdColumn(IReadOnlyList<WorksheetRuntimeColumn> columns)
         {
-            var merged = (metadataStore.LoadSnapshot(sheetName) ?? Array.Empty<WorksheetSnapshotCell>())
-                .ToDictionary(
-                    item => BuildSnapshotKey(item.RowId, item.ApiFieldKey),
-                    item => new WorksheetSnapshotCell
-                    {
-                        SheetName = sheetName,
-                        RowId = item.RowId,
-                        ApiFieldKey = item.ApiFieldKey,
-                        Value = item.Value,
-                    },
-                    StringComparer.Ordinal);
-
-            foreach (var update in updates ?? Array.Empty<WorksheetSnapshotCell>())
+            if (!(columns ?? Array.Empty<WorksheetRuntimeColumn>()).Any(column => column != null && column.IsIdColumn))
             {
-                merged[BuildSnapshotKey(update.RowId, update.ApiFieldKey)] = new WorksheetSnapshotCell
-                {
-                    SheetName = sheetName,
-                    RowId = update.RowId,
-                    ApiFieldKey = update.ApiFieldKey,
-                    Value = update.Value,
-                };
+                throw new InvalidOperationException("SheetFieldMappings 缺少 ID 列定义，无法继续。");
             }
-
-            metadataStore.SaveSnapshot(sheetName, merged.Values.ToArray());
         }
 
-        private Dictionary<string, string> BuildSnapshotLookup(string sheetName)
+        private bool HasUsableMappings(FieldMappingTableDefinition definition, IReadOnlyList<SheetFieldMappingRow> mappings)
         {
-            return (metadataStore.LoadSnapshot(sheetName) ?? Array.Empty<WorksheetSnapshotCell>())
-                .ToDictionary(
-                    item => BuildSnapshotKey(item.RowId, item.ApiFieldKey),
-                    item => item.Value ?? string.Empty,
-                    StringComparer.Ordinal);
+            var rows = mappings ?? Array.Empty<SheetFieldMappingRow>();
+            if (rows.Count == 0)
+            {
+                return false;
+            }
+
+            var hasApiFieldKey = rows.Any(row =>
+                row != null &&
+                !string.IsNullOrWhiteSpace(valueAccessor.GetValue(definition, row, FieldMappingSemanticRole.ApiFieldKey)));
+            if (!hasApiFieldKey)
+            {
+                return false;
+            }
+
+            return rows.Any(row =>
+                row != null &&
+                valueAccessor.GetBoolean(definition, row, FieldMappingSemanticRole.IsIdColumn) &&
+                !string.IsNullOrWhiteSpace(valueAccessor.GetValue(definition, row, FieldMappingSemanticRole.ApiFieldKey)));
+        }
+
+        private static ProjectOption CreateProjectOption(SheetBinding binding)
+        {
+            return new ProjectOption
+            {
+                SystemKey = binding?.SystemKey ?? string.Empty,
+                ProjectId = binding?.ProjectId ?? string.Empty,
+                DisplayName = binding?.ProjectName ?? string.Empty,
+            };
         }
 
         private SyncOperationPreview BuildUploadPreview(string operationName, IReadOnlyList<CellChange> changes)
@@ -417,12 +596,7 @@ namespace OfficeAgent.ExcelAddIn
         private string GetRowId(string sheetName, WorksheetSchema schema, int row)
         {
             var idColumn = GetIdColumn(schema);
-            if (idColumn == null)
-            {
-                return string.Empty;
-            }
-
-            return gridAdapter.GetCellText(sheetName, row, idColumn.ColumnIndex);
+            return idColumn == null ? string.Empty : gridAdapter.GetCellText(sheetName, row, idColumn.ColumnIndex);
         }
 
         private static WorksheetColumnBinding GetIdColumn(WorksheetSchema schema)
@@ -460,9 +634,57 @@ namespace OfficeAgent.ExcelAddIn
             return string.Empty;
         }
 
-        private static string BuildSnapshotKey(string rowId, string apiFieldKey)
+        private static InvalidOperationException CreateInitializationRequiredException()
         {
-            return string.Concat(rowId ?? string.Empty, "|", apiFieldKey ?? string.Empty);
+            return new InvalidOperationException("当前 sheet 未初始化，请先执行初始化当前表。");
         }
+
+        private static InvalidOperationException CreateHeaderMatchException()
+        {
+            return new InvalidOperationException("当前表头无法与映射表匹配，请先修正 _OfficeAgentMetadata。");
+        }
+
+        private static void ValidateBinding(SheetBinding binding)
+        {
+            if (binding == null)
+            {
+                throw new InvalidOperationException("SheetBindings 缺少必要配置。");
+            }
+
+            if (binding.HeaderStartRow <= 0)
+            {
+                throw new InvalidOperationException("SheetBindings.HeaderStartRow 必须大于 0。");
+            }
+
+            if (binding.HeaderRowCount <= 0)
+            {
+                throw new InvalidOperationException("SheetBindings.HeaderRowCount 必须大于 0。");
+            }
+
+            if (binding.DataStartRow <= 0)
+            {
+                throw new InvalidOperationException("SheetBindings.DataStartRow 必须大于 0。");
+            }
+        }
+
+        private static bool IsActivityProperty(string headerType)
+        {
+            return string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeHeaderType(string headerType)
+        {
+            return string.IsNullOrWhiteSpace(headerType) ? "single" : headerType;
+        }
+    }
+
+    internal sealed class SheetExecutionContext
+    {
+        public SheetBinding Binding { get; set; }
+        public FieldMappingTableDefinition Definition { get; set; }
+        public SheetFieldMappingRow[] Mappings { get; set; } = Array.Empty<SheetFieldMappingRow>();
+        public WorksheetRuntimeColumn[] RuntimeColumns { get; set; } = Array.Empty<WorksheetRuntimeColumn>();
+        public WorksheetSchema Schema { get; set; }
+        public bool UsesExistingLayout { get; set; }
     }
 }

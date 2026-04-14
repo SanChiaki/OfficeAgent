@@ -179,6 +179,11 @@ namespace OfficeAgent.ExcelAddIn
             Globals.ThisAddIn.RibbonSyncController?.SelectProject(project);
         }
 
+        private void InitializeSheetButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn.RibbonSyncController?.ExecuteInitializeCurrentSheet();
+        }
+
         private void SyncController_ActiveProjectChanged(object sender, EventArgs e)
         {
             RefreshProjectDropDownFromController();
@@ -202,11 +207,6 @@ namespace OfficeAgent.ExcelAddIn
         private void PartialUploadButton_Click(object sender, RibbonControlEventArgs e)
         {
             Globals.ThisAddIn.RibbonSyncController?.ExecutePartialUpload();
-        }
-
-        private void IncrementalUploadButton_Click(object sender, RibbonControlEventArgs e)
-        {
-            Globals.ThisAddIn.RibbonSyncController?.ExecuteIncrementalUpload();
         }
     }
 }

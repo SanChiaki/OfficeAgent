@@ -11,178 +11,120 @@ namespace OfficeAgent.Core.Tests
     public sealed class WorksheetSyncServiceTests
     {
         [Fact]
-        public void PrepareIncrementalUploadBuildsPreviewFromDirtySnapshotBackedCells()
+        public void InitializeSheetSavesBindingAndFieldMappingsFromConnectorSeeds()
         {
             var connector = new FakeSystemConnector();
             var metadataStore = new FakeWorksheetMetadataStore();
-            metadataStore.SnapshotsToReturn.Enqueue(new[]
+            var service = CreateService(connector, metadataStore);
+            var project = new ProjectOption
             {
-                new WorksheetSnapshotCell { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", Value = "old name" },
-                new WorksheetSnapshotCell { SheetName = "Sync-performance", RowId = "row-2", ApiFieldKey = "status", Value = "inactive" },
-            });
-
-            var service = new WorksheetSyncService(
-                connector,
-                metadataStore,
-                new WorksheetChangeTracker(),
-                new SyncOperationPreviewFactory());
-
-            var preview = service.PrepareIncrementalUpload(
-                "Sync-performance",
-                new[]
-                {
-                    new CellChange { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", OldValue = "old name", NewValue = "new name" },
-                    new CellChange { SheetName = "Sync-performance", RowId = "row-2", ApiFieldKey = "status", OldValue = "inactive", NewValue = "inactive" },
-                    new CellChange { SheetName = "Sync-performance", RowId = string.Empty, ApiFieldKey = "name", OldValue = string.Empty, NewValue = "ignored" },
-                });
-
-            Assert.Equal("增量上传", preview.OperationName);
-            var changed = Assert.Single(preview.Changes);
-            Assert.Equal("row-1", changed.RowId);
-            Assert.Equal("name", changed.ApiFieldKey);
-            Assert.Equal("new name", changed.NewValue);
-        }
-
-        [Fact]
-        public void PrepareIncrementalUploadTreatsMissingSnapshotAsEmpty()
-        {
-            var service = CreateService(out _, out var metadataStore);
-            metadataStore.SnapshotsToReturn.Enqueue(null);
-
-            var preview = service.PrepareIncrementalUpload(
-                "Sync-performance",
-                new[]
-                {
-                    new CellChange { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", OldValue = "old", NewValue = "new" },
-                });
-
-            Assert.Empty(preview.Changes);
-        }
-
-        [Fact]
-        public void PrepareIncrementalUploadReloadsLatestSnapshotOnEachCall()
-        {
-            var service = CreateService(out _, out var metadataStore);
-            metadataStore.SnapshotsToReturn.Enqueue(new[]
-            {
-                new WorksheetSnapshotCell { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", Value = "v1" },
-            });
-            metadataStore.SnapshotsToReturn.Enqueue(new[]
-            {
-                new WorksheetSnapshotCell { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", Value = "v2" },
-            });
-
-            var first = service.PrepareIncrementalUpload(
-                "Sync-performance",
-                new[]
-                {
-                    new CellChange { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", OldValue = "v1", NewValue = "v2" },
-                });
-
-            var second = service.PrepareIncrementalUpload(
-                "Sync-performance",
-                new[]
-                {
-                    new CellChange { SheetName = "Sync-performance", RowId = "row-1", ApiFieldKey = "name", OldValue = "v1", NewValue = "v2" },
-                });
-
-            Assert.Single(first.Changes);
-            Assert.Empty(second.Changes);
-            Assert.Equal(2, metadataStore.LoadSnapshotCalls);
-        }
-
-        [Fact]
-        public void LoadSchemaForSheetUsesLatestBindingOnEachCall()
-        {
-            var service = CreateService(out var connector, out var metadataStore);
-            var firstSchema = new WorksheetSchema { ProjectId = "project-1" };
-            var secondSchema = new WorksheetSchema { ProjectId = "project-2" };
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-1" });
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-2" });
-            connector.SchemaByProjectId["project-1"] = firstSchema;
-            connector.SchemaByProjectId["project-2"] = secondSchema;
-
-            var schema1 = service.LoadSchemaForSheet("Sync");
-            var schema2 = service.LoadSchemaForSheet("Sync");
-
-            Assert.Same(firstSchema, schema1);
-            Assert.Same(secondSchema, schema2);
-            Assert.Equal(new[] { "project-1", "project-2" }, connector.GetSchemaProjectIds);
-            Assert.Equal(2, metadataStore.LoadBindingCalls);
-        }
-
-        [Fact]
-        public void LoadSchemaForSheetLetsMissingBindingErrorSurface()
-        {
-            var service = CreateService(out var connector, out var metadataStore);
-            metadataStore.BindingLoadError = new InvalidOperationException("Missing binding");
-
-            var error = Assert.Throws<InvalidOperationException>(() => service.LoadSchemaForSheet("Sync"));
-
-            Assert.Equal("Missing binding", error.Message);
-            Assert.Empty(connector.GetSchemaProjectIds);
-        }
-
-        [Fact]
-        public void ExecutePartialDownloadLoadsBindingAndCallsFind()
-        {
-            var service = CreateService(out var connector, out var metadataStore);
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-9" });
-            var selection = new ResolvedSelection
-            {
-                RowIds = new[] { "row-1", "row-2" },
-                ApiFieldKeys = new[] { "name", "status" },
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
             };
-            var findResult = new[]
-            {
-                new Dictionary<string, object> { ["rowId"] = "row-1", ["name"] = "Alpha" },
-            };
-            connector.FindResult = findResult;
 
-            var result = service.ExecutePartialDownload("Sync", selection);
+            service.InitializeSheet("Sheet1", project);
 
-            Assert.Same(findResult, result);
-            Assert.Equal("project-9", connector.LastFindProjectId);
-            Assert.Equal(selection.RowIds, connector.LastFindRowIds);
-            Assert.Equal(selection.ApiFieldKeys, connector.LastFindFieldKeys);
+            Assert.Equal("Sheet1", connector.LastCreateBindingSeedSheetName);
+            Assert.Same(project, connector.LastCreateBindingSeedProject);
+            Assert.Equal("performance", connector.LastFieldMappingDefinitionProjectId);
+            Assert.Equal("Sheet1", connector.LastBuildFieldMappingSeedSheetName);
+            Assert.Equal("performance", connector.LastBuildFieldMappingSeedProjectId);
+            Assert.Equal("Sheet1", metadataStore.LastSavedBinding.SheetName);
+            Assert.Same(connector.FieldMappingDefinition, metadataStore.LastSavedFieldMappingDefinition);
+            Assert.Equal(connector.FieldMappingSeedRows.Select(row => row.Values["ApiFieldKey"]), metadataStore.LastSavedFieldMappings.Select(row => row.Values["ApiFieldKey"]));
         }
 
         [Fact]
-        public void ExecutePartialUploadLoadsBindingAndCallsBatchSave()
+        public void InitializeSheetThrowsWhenProjectIsMissing()
         {
-            var service = CreateService(out var connector, out var metadataStore);
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-77" });
+            var service = CreateService(new FakeSystemConnector(), new FakeWorksheetMetadataStore());
+
+            Assert.Throws<ArgumentNullException>(() => service.InitializeSheet("Sheet1", null));
+        }
+
+        [Fact]
+        public void LoadBindingReturnsStoredBinding()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var expected = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = expected;
+            var service = CreateService(connector, metadataStore);
+
+            var binding = service.LoadBinding("Sheet1");
+
+            Assert.Same(expected, binding);
+        }
+
+        [Fact]
+        public void LoadFieldMappingsUsesConnectorDefinitionForProject()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.FieldMappings["Sheet1"] = connector.FieldMappingSeedRows.ToArray();
+            var service = CreateService(connector, metadataStore);
+
+            var rows = service.LoadFieldMappings("Sheet1", "performance");
+
+            Assert.Equal("performance", connector.LastFieldMappingDefinitionProjectId);
+            Assert.Same(connector.FieldMappingDefinition, metadataStore.LastLoadFieldMappingsDefinition);
+            Assert.Equal(connector.FieldMappingSeedRows.Select(row => row.Values["ApiFieldKey"]), rows.Select(row => row.Values["ApiFieldKey"]));
+        }
+
+        [Fact]
+        public void DownloadDelegatesToConnectorFind()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = CreateService(connector, metadataStore);
+            var rowIds = new[] { "row-1", "row-2" };
+            var fieldKeys = new[] { "owner_name", "start_12345678" };
+
+            var rows = service.Download("performance", rowIds, fieldKeys);
+
+            Assert.Same(connector.FindResult, rows);
+            Assert.Equal("performance", connector.LastFindProjectId);
+            Assert.Equal(rowIds, connector.LastFindRowIds);
+            Assert.Equal(fieldKeys, connector.LastFindFieldKeys);
+        }
+
+        [Fact]
+        public void UploadDelegatesToConnectorBatchSave()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = CreateService(connector, metadataStore);
             var changes = new[]
             {
-                new CellChange { SheetName = "Sync", RowId = "row-1", ApiFieldKey = "name", NewValue = "Next" },
+                new CellChange
+                {
+                    SheetName = "Sheet1",
+                    RowId = "row-1",
+                    ApiFieldKey = "owner_name",
+                    NewValue = "李四",
+                },
             };
 
-            service.ExecutePartialUpload("Sync", changes);
+            service.Upload("performance", changes);
 
-            Assert.Equal("project-77", connector.LastBatchSaveProjectId);
+            Assert.Equal("performance", connector.LastBatchSaveProjectId);
             Assert.Same(changes, connector.LastBatchSaveChanges);
         }
 
-        [Fact]
-        public void ExecutePartialUploadReloadsLatestBindingOnEachCall()
+        private static WorksheetSyncService CreateService(
+            FakeSystemConnector connector,
+            FakeWorksheetMetadataStore metadataStore)
         {
-            var service = CreateService(out var connector, out var metadataStore);
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-1" });
-            metadataStore.BindingsToReturn.Enqueue(new SheetBinding { SheetName = "Sync", ProjectId = "project-2" });
-            var changes = new[] { new CellChange { SheetName = "Sync", RowId = "row-1", ApiFieldKey = "name", NewValue = "A" } };
-
-            service.ExecutePartialUpload("Sync", changes);
-            service.ExecutePartialUpload("Sync", changes);
-
-            Assert.Equal(new[] { "project-1", "project-2" }, connector.BatchSaveProjectIds);
-            Assert.Equal(2, metadataStore.LoadBindingCalls);
-        }
-
-        private static WorksheetSyncService CreateService(out FakeSystemConnector connector, out FakeWorksheetMetadataStore metadataStore)
-        {
-            connector = new FakeSystemConnector();
-            metadataStore = new FakeWorksheetMetadataStore();
-
             return new WorksheetSyncService(
                 connector,
                 metadataStore,
@@ -192,33 +134,102 @@ namespace OfficeAgent.Core.Tests
 
         private sealed class FakeSystemConnector : ISystemConnector
         {
-            public Dictionary<string, WorksheetSchema> SchemaByProjectId { get; } = new Dictionary<string, WorksheetSchema>(StringComparer.Ordinal);
+            public FakeSystemConnector()
+            {
+                FieldMappingDefinition = new FieldMappingTableDefinition
+                {
+                    SystemKey = "current-business-system",
+                    Columns = new[]
+                    {
+                        new FieldMappingColumnDefinition { ColumnName = "ApiFieldKey", Role = FieldMappingSemanticRole.ApiFieldKey },
+                        new FieldMappingColumnDefinition { ColumnName = "HeaderType", Role = FieldMappingSemanticRole.HeaderType },
+                        new FieldMappingColumnDefinition { ColumnName = "IsIdColumn", Role = FieldMappingSemanticRole.IsIdColumn },
+                        new FieldMappingColumnDefinition { ColumnName = "CurrentSingleDisplayName", Role = FieldMappingSemanticRole.CurrentSingleHeaderText },
+                        new FieldMappingColumnDefinition { ColumnName = "CurrentParentDisplayName", Role = FieldMappingSemanticRole.CurrentParentHeaderText },
+                        new FieldMappingColumnDefinition { ColumnName = "CurrentChildDisplayName", Role = FieldMappingSemanticRole.CurrentChildHeaderText },
+                    },
+                };
 
-            public List<string> GetSchemaProjectIds { get; } = new List<string>();
+                FieldMappingSeedRows = new[]
+                {
+                    CreateMappingRow("Sheet1", "row_id", "single", true, currentSingle: "ID"),
+                    CreateMappingRow("Sheet1", "owner_name", "single", false, currentSingle: "项目负责人"),
+                    CreateMappingRow("Sheet1", "start_12345678", "activityProperty", false, currentParent: "测试活动111", currentChild: "开始时间"),
+                };
+            }
 
-            public IReadOnlyList<IDictionary<string, object>> FindResult { get; set; } = Array.Empty<IDictionary<string, object>>();
+            public SheetBinding BindingSeed { get; set; } = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 2,
+                DataStartRow = 3,
+            };
+
+            public FieldMappingTableDefinition FieldMappingDefinition { get; }
+
+            public IReadOnlyList<SheetFieldMappingRow> FieldMappingSeedRows { get; }
+
+            public IReadOnlyList<IDictionary<string, object>> FindResult { get; } = new[]
+            {
+                (IDictionary<string, object>)new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["row_id"] = "row-1",
+                    ["owner_name"] = "张三",
+                },
+            };
+
+            public string LastCreateBindingSeedSheetName { get; private set; }
+
+            public ProjectOption LastCreateBindingSeedProject { get; private set; }
+
+            public string LastFieldMappingDefinitionProjectId { get; private set; }
+
+            public string LastBuildFieldMappingSeedSheetName { get; private set; }
+
+            public string LastBuildFieldMappingSeedProjectId { get; private set; }
 
             public string LastFindProjectId { get; private set; }
 
-            public IReadOnlyList<string> LastFindRowIds { get; private set; }
+            public IReadOnlyList<string> LastFindRowIds { get; private set; } = Array.Empty<string>();
 
-            public IReadOnlyList<string> LastFindFieldKeys { get; private set; }
+            public IReadOnlyList<string> LastFindFieldKeys { get; private set; } = Array.Empty<string>();
 
             public string LastBatchSaveProjectId { get; private set; }
 
-            public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; }
-
-            public List<string> BatchSaveProjectIds { get; } = new List<string>();
+            public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; } = Array.Empty<CellChange>();
 
             public IReadOnlyList<ProjectOption> GetProjects()
             {
                 return Array.Empty<ProjectOption>();
             }
 
+            public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
+            {
+                LastCreateBindingSeedSheetName = sheetName;
+                LastCreateBindingSeedProject = project;
+                return BindingSeed;
+            }
+
+            public FieldMappingTableDefinition GetFieldMappingDefinition(string projectId)
+            {
+                LastFieldMappingDefinitionProjectId = projectId;
+                return FieldMappingDefinition;
+            }
+
+            public IReadOnlyList<SheetFieldMappingRow> BuildFieldMappingSeed(string sheetName, string projectId)
+            {
+                LastBuildFieldMappingSeedSheetName = sheetName;
+                LastBuildFieldMappingSeedProjectId = projectId;
+                return FieldMappingSeedRows;
+            }
+
             public WorksheetSchema GetSchema(string projectId)
             {
-                GetSchemaProjectIds.Add(projectId);
-                return SchemaByProjectId[projectId];
+                throw new NotSupportedException();
             }
 
             public IReadOnlyList<IDictionary<string, object>> Find(
@@ -236,57 +247,90 @@ namespace OfficeAgent.Core.Tests
             {
                 LastBatchSaveProjectId = projectId;
                 LastBatchSaveChanges = changes;
-                BatchSaveProjectIds.Add(projectId);
+            }
+
+            private static SheetFieldMappingRow CreateMappingRow(
+                string sheetName,
+                string apiFieldKey,
+                string headerType,
+                bool isIdColumn,
+                string currentSingle = "",
+                string currentParent = "",
+                string currentChild = "")
+            {
+                return new SheetFieldMappingRow
+                {
+                    SheetName = sheetName,
+                    Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["ApiFieldKey"] = apiFieldKey,
+                        ["HeaderType"] = headerType,
+                        ["IsIdColumn"] = isIdColumn ? "true" : "false",
+                        ["CurrentSingleDisplayName"] = currentSingle,
+                        ["CurrentParentDisplayName"] = currentParent,
+                        ["CurrentChildDisplayName"] = currentChild,
+                    },
+                };
             }
         }
 
         private sealed class FakeWorksheetMetadataStore : IWorksheetMetadataStore
         {
-            public Queue<SheetBinding> BindingsToReturn { get; } = new Queue<SheetBinding>();
+            public Dictionary<string, SheetBinding> Bindings { get; } = new Dictionary<string, SheetBinding>(StringComparer.OrdinalIgnoreCase);
 
-            public Queue<WorksheetSnapshotCell[]> SnapshotsToReturn { get; } = new Queue<WorksheetSnapshotCell[]>();
+            public Dictionary<string, SheetFieldMappingRow[]> FieldMappings { get; } = new Dictionary<string, SheetFieldMappingRow[]>(StringComparer.OrdinalIgnoreCase);
 
-            public Exception BindingLoadError { get; set; }
+            public SheetBinding LastSavedBinding { get; private set; }
 
-            public int LoadBindingCalls { get; private set; }
+            public FieldMappingTableDefinition LastSavedFieldMappingDefinition { get; private set; }
 
-            public int LoadSnapshotCalls { get; private set; }
+            public SheetFieldMappingRow[] LastSavedFieldMappings { get; private set; } = Array.Empty<SheetFieldMappingRow>();
+
+            public FieldMappingTableDefinition LastLoadFieldMappingsDefinition { get; private set; }
 
             public void SaveBinding(SheetBinding binding)
             {
-                BindingsToReturn.Enqueue(binding);
+                LastSavedBinding = binding;
+                Bindings[binding.SheetName] = binding;
             }
 
             public SheetBinding LoadBinding(string sheetName)
             {
-                LoadBindingCalls++;
-                if (BindingLoadError != null)
+                if (!Bindings.TryGetValue(sheetName, out var binding))
                 {
-                    throw BindingLoadError;
+                    throw new InvalidOperationException("No binding.");
                 }
 
-                if (BindingsToReturn.Count == 0)
-                {
-                    throw new InvalidOperationException("No binding queued.");
-                }
+                return binding;
+            }
 
-                return BindingsToReturn.Dequeue();
+            public void SaveFieldMappings(string sheetName, FieldMappingTableDefinition definition, IReadOnlyList<SheetFieldMappingRow> rows)
+            {
+                LastSavedFieldMappingDefinition = definition;
+                LastSavedFieldMappings = (rows ?? Array.Empty<SheetFieldMappingRow>()).ToArray();
+                FieldMappings[sheetName] = LastSavedFieldMappings;
+            }
+
+            public SheetFieldMappingRow[] LoadFieldMappings(string sheetName, FieldMappingTableDefinition definition)
+            {
+                LastLoadFieldMappingsDefinition = definition;
+                return FieldMappings.TryGetValue(sheetName, out var rows)
+                    ? rows
+                    : Array.Empty<SheetFieldMappingRow>();
+            }
+
+            public void ClearFieldMappings(string sheetName)
+            {
+                FieldMappings.Remove(sheetName);
             }
 
             public WorksheetSnapshotCell[] LoadSnapshot(string sheetName)
             {
-                LoadSnapshotCalls++;
-                if (SnapshotsToReturn.Count == 0)
-                {
-                    return Array.Empty<WorksheetSnapshotCell>();
-                }
-
-                return SnapshotsToReturn.Dequeue();
+                return Array.Empty<WorksheetSnapshotCell>();
             }
 
             public void SaveSnapshot(string sheetName, WorksheetSnapshotCell[] cells)
             {
-                SnapshotsToReturn.Enqueue(cells);
             }
         }
     }

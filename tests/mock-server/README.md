@@ -2,12 +2,14 @@
 
 `tests/mock-server` 提供本地联调用的 Node.js mock 服务。
 
-当前它同时启动两类服务：
+当前会同时启动两类服务：
 
 - SSO 登录服务：`http://localhost:3100`
 - 业务 API 服务：`http://localhost:3200`
 
-服务入口脚本是 [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js)。
+服务入口脚本：
+
+- [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js)
 
 ## 手工启动
 
@@ -19,17 +21,17 @@ npm install
 npm start
 ```
 
-`npm start` 会执行：
+`npm start` 实际执行：
 
 ```powershell
 node server.js
 ```
 
-启动成功后，控制台会输出当前可访问地址和推荐的插件配置项。
+启动成功后，控制台会输出推荐的插件配置项。
 
 ## 插件联调配置
 
-本地联调 Excel 插件时，使用以下配置：
+本地联调 Excel 插件时建议使用：
 
 - `Base URL = 你的大模型服务地址`
 - `Business Base URL = http://localhost:3200`
@@ -39,10 +41,10 @@ node server.js
 
 说明：
 
-- `Base URL` 只用于大模型或 Agent 能力，不绑定业务 mock 服务
-- `Business Base URL` 才是 Ribbon Sync、`/find`、`/head`、`/batchSave` 和 `upload_data` 等业务接口的基地址
+- `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
+- `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
 - 当前 mock 服务通过 SSO cookie 鉴权，不走 API Key
-- 业务接口在未登录状态下会返回 `401`
+- 业务接口在未登录时会返回 `401`
 
 ## 当前接口
 
@@ -54,7 +56,7 @@ node server.js
   - 提交用户名密码
   - 返回登录成功响应并写入 cookie
 
-### 业务 API
+### 通用业务 API
 
 - `GET /logged-in`
   - 返回登录成功提示页
@@ -71,48 +73,102 @@ node server.js
 
 ### Ribbon Sync 相关接口
 
-- `POST /head`
-  - 返回表头定义
-  - 当前返回体包含 `headList`
-- `POST /find`
-  - 同时用于全量下载和部分下载
-  - 请求体支持：
-    - `projectId`
-    - `ids`
-    - `fieldKeys`
-  - `ids` 为空时返回全量行
-  - `fieldKeys` 为空时返回整行字段
-- `POST /batchSave`
-  - 用于全量上传、部分上传、增量上传
-  - 请求体是一个 list
-  - 每个 item 对应一个单元格改动，字段包括：
-    - `id`
-    - `fieldKey`
-    - `value`
-    - `projectId`
+#### `POST /head`
+
+返回：
+
+- `headList`
+
+当前约定：
+
+- 返回所有非活动字段头
+- 活动列只返回活动头
+- 活动属性字段本身不在 `/head` 中单独列出
+
+当前示例：
+
+```json
+{
+  "headList": [
+    { "fieldKey": "row_id", "headerText": "ID", "headType": "single", "isId": true },
+    { "fieldKey": "owner_name", "headerText": "负责人", "headType": "single" },
+    { "headType": "activity", "activityId": "12345678", "activityName": "测试活动111" }
+  ]
+}
+```
+
+#### `POST /find`
+
+同时用于：
+
+- 全量下载
+- 部分下载
+- `BuildFieldMappingSeed` 的样本数据获取
+
+请求体支持：
+
+- `projectId`
+- `ids`
+- `rowIds`
+- `fieldKeys`
+
+约定：
+
+- `ids` / `rowIds` 为空时返回全量数据
+- `fieldKeys` 为空时返回整行平铺数据
+- 每行的唯一 ID 字段是 `row_id`
+
+当前示例返回：
+
+```json
+[
+  {
+    "row_id": "row-1",
+    "owner_name": "张三",
+    "start_12345678": "2026-01-02",
+    "end_12345678": "2026-01-05"
+  }
+]
+```
+
+#### `POST /batchSave`
+
+用于：
+
+- 全量上传
+- 部分上传
+
+请求体是一个 list，每个 item 对应一个单元格改动。
+
+当前字段：
+
+- `projectId`
+- `id`
+- `fieldKey`
+- `value`
+
+当前实现会把 `id` 映射到行的 `row_id`。
 
 ## 当前内置数据
 
-当前 Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js) 内存变量中，主要包括：
+Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js) 的内存变量中，主要包括：
 
 - `connectorRows`
-  - `/find` 和 `/batchSave` 使用的数据行
+  - `/find` 与 `/batchSave` 使用的数据行
 - `connectorHeadList`
-  - `/head` 返回的表头定义
+  - `/head` 返回的字段头定义
 
-当前内置了一组活动属性字段示例：
-
-- `start_12345678`
-- `end_12345678`
-
-其中活动信息为：
+当前内置活动示例：
 
 - `activityId = 12345678`
 - `activityName = 测试活动111`
+- 活动属性字段：
+  - `start_12345678`
+  - `end_12345678`
 
 ## 数据持久化说明
 
-当前 mock 服务不落库，所有数据都在内存中维护。
+当前 mock 服务不落库，所有数据都保存在内存中。
 
 这意味着：
 
@@ -121,21 +177,17 @@ node server.js
 
 ## 集成测试如何使用它
 
-`tests/OfficeAgent.IntegrationTests` 中的集成测试不会复用你手工启动的服务。
+`tests/OfficeAgent.IntegrationTests` 中的测试不会复用你手工启动的服务。
 
 测试里的 `MockServerFixture` 会自动：
 
 - 启动 `node tests/mock-server/server.js`
 - 等待 `http://localhost:3100/login` 可访问
-- 测试结束后关闭该进程
-
-相关实现位于：
-
-- [BusinessApiIntegrationTests.cs](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/OfficeAgent.IntegrationTests/BusinessApiIntegrationTests.cs)
+- 在测试结束后关闭该进程
 
 因此：
 
-- 手工联调插件时，请自己运行 `npm start`
+- 手工联调插件时，需要自己运行 `npm start`
 - 跑集成测试时，不需要提前手工启动 mock 服务
 
 ## 常见问题
@@ -149,7 +201,7 @@ node server.js
 
 如果启动失败，先检查本机是否已有其他进程占用了这两个端口。
 
-### 2. 业务接口返回 401
+### 2. 业务接口返回 `401`
 
 说明当前请求没有带上 SSO 登录产生的 cookie。
 
@@ -161,4 +213,4 @@ node server.js
 
 ### 3. 上传后数据又恢复了
 
-这是当前 mock 服务的预期行为，因为数据只保存在内存里。重启服务后会回到脚本初始状态。
+这是预期行为，因为 mock 数据只保存在内存里。重启服务后会回到脚本初始状态。

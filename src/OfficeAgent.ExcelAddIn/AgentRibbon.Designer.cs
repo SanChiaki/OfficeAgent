@@ -30,11 +30,11 @@ namespace OfficeAgent.ExcelAddIn
             this.group2 = Factory.CreateRibbonGroup();
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
             this.projectDropDown = Factory.CreateRibbonDropDown();
+            this.initializeSheetButton = Factory.CreateRibbonButton();
             this.fullDownloadButton = Factory.CreateRibbonButton();
             this.partialDownloadButton = Factory.CreateRibbonButton();
             this.fullUploadButton = Factory.CreateRibbonButton();
             this.partialUploadButton = Factory.CreateRibbonButton();
-            this.incrementalUploadButton = Factory.CreateRibbonButton();
             this.loginButton = Factory.CreateRibbonButton();
             this.tab1.SuspendLayout();
             this.group1.SuspendLayout();
@@ -73,6 +73,7 @@ namespace OfficeAgent.ExcelAddIn
             // groupProject
             // 
             this.groupProject.Items.Add(this.projectDropDown);
+            this.groupProject.Items.Add(this.initializeSheetButton);
             this.groupProject.Label = "\u9879\u76EE";
             this.groupProject.Name = "groupProject";
             // 
@@ -81,6 +82,12 @@ namespace OfficeAgent.ExcelAddIn
             this.projectDropDown.Label = "\u5148\u9009\u62E9\u9879\u76EE";
             this.projectDropDown.Name = "projectDropDown";
             this.projectDropDown.SelectionChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_SelectionChanged);
+            // 
+            // initializeSheetButton
+            // 
+            this.initializeSheetButton.Label = "\u521D\u59CB\u5316\u5F53\u524D\u8868";
+            this.initializeSheetButton.Name = "initializeSheetButton";
+            this.initializeSheetButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.InitializeSheetButton_Click);
             // 
             // groupDownload
             // 
@@ -105,7 +112,6 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.groupUpload.Items.Add(this.fullUploadButton);
             this.groupUpload.Items.Add(this.partialUploadButton);
-            this.groupUpload.Items.Add(this.incrementalUploadButton);
             this.groupUpload.Label = "\u4E0A\u4F20";
             this.groupUpload.Name = "groupUpload";
             // 
@@ -120,12 +126,6 @@ namespace OfficeAgent.ExcelAddIn
             this.partialUploadButton.Label = "\u90E8\u5206\u4E0A\u4F20";
             this.partialUploadButton.Name = "partialUploadButton";
             this.partialUploadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.PartialUploadButton_Click);
-            // 
-            // incrementalUploadButton
-            // 
-            this.incrementalUploadButton.Label = "\u589E\u91CF\u4E0A\u4F20";
-            this.incrementalUploadButton.Name = "incrementalUploadButton";
-            this.incrementalUploadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.IncrementalUploadButton_Click);
             //
             // loginButton
             //
@@ -166,11 +166,11 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonDropDown projectDropDown;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton initializeSheetButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullDownloadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton partialDownloadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullUploadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton partialUploadButton;
-        internal Microsoft.Office.Tools.Ribbon.RibbonButton incrementalUploadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton loginButton;
     }
 

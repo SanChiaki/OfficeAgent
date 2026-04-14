@@ -13,15 +13,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
     public sealed class WorksheetMetadataStoreTests
     {
         [Fact]
-        public void SaveBindingCreatesVisibleMetadataWorksheetAndRoundTripsBinding()
+        public void SaveBindingRoundTripsLayoutConfiguration()
         {
             var (store, adapter) = CreateStore();
             var binding = new SheetBinding
             {
-                SheetName = "Sync-performance",
+                SheetName = "Sheet1",
                 SystemKey = "current-business-system",
                 ProjectId = "performance",
                 ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
             };
 
             InvokeSaveBinding(store, binding);
@@ -29,10 +32,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
             Assert.True(adapter.Visible);
 
-            var loaded = InvokeLoadBinding(store, "Sync-performance");
+            var loaded = InvokeLoadBinding(store, "Sheet1");
 
             Assert.Equal("performance", loaded.ProjectId);
             Assert.Equal("绩效项目", loaded.ProjectName);
+            Assert.Equal(3, loaded.HeaderStartRow);
+            Assert.Equal(2, loaded.HeaderRowCount);
+            Assert.Equal(6, loaded.DataStartRow);
         }
 
         [Fact]
@@ -41,7 +47,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Existing", "system-legacy", "legacy-project", "Legacy" },
+                new[] { "Existing", "system-legacy", "legacy-project", "Legacy", "1", "2", "3" },
             });
 
             var newBinding = new SheetBinding
@@ -62,36 +68,186 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void SaveSnapshotPreservesOtherSheetSnapshots()
+        public void SaveBindingRejectsBlankSheetName()
+        {
+            var (store, _) = CreateStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "  ",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+            };
+
+            var error = Assert.Throws<TargetInvocationException>(() => InvokeSaveBinding(store, binding));
+            Assert.IsType<ArgumentException>(error.InnerException);
+        }
+
+        [Fact]
+        public void SaveFieldMappingsPreservesOtherSheetsAndUsesDynamicHeaders()
         {
             var (store, adapter) = CreateStore();
-            adapter.SeedTable("SheetSnapshots", new[]
+            var definition = new FieldMappingTableDefinition
             {
-                new[] { "SheetA", "row-1", "field-a", "value-a" },
-                new[] { "SheetB", "row-1", "field-b", "value-b" },
-            });
-
-            var replacementCells = new[]
-            {
-                new WorksheetSnapshotCell
+                SystemKey = "current-business-system",
+                Columns = new[]
                 {
-                    RowId = "row-2",
-                    ApiFieldKey = "field-a",
-                    Value = "value-a-new",
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "HeaderId",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "CurrentSingleDisplayName",
+                        Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
+                    },
                 },
             };
 
-            InvokeSaveSnapshot(store, "SheetA", replacementCells);
+            adapter.SeedTable("SheetFieldMappings", new[]
+            {
+                new[] { "SheetA", "legacy_id", "旧列名" },
+                new[] { "Sheet1", "old_sheet1_id", "旧负责人" },
+            });
 
-            var sheetA = InvokeLoadSnapshot(store, "SheetA");
-            Assert.Single(sheetA);
-            Assert.Equal("row-2", sheetA[0].RowId);
-            Assert.Equal("value-a-new", sheetA[0].Value);
+            InvokeSaveFieldMappings(
+                store,
+                "Sheet1",
+                definition,
+                new[]
+                {
+                    new SheetFieldMappingRow
+                    {
+                        SheetName = "Sheet1",
+                        Values = new Dictionary<string, string>
+                        {
+                            ["HeaderId"] = "owner_name",
+                            ["CurrentSingleDisplayName"] = "项目负责人",
+                        },
+                    },
+                }
+            );
 
-            var sheetB = InvokeLoadSnapshot(store, "SheetB");
-            Assert.Single(sheetB);
-            Assert.Equal("field-b", sheetB[0].ApiFieldKey);
-            Assert.Equal("value-b", sheetB[0].Value);
+            Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
+            Assert.True(adapter.Visible);
+
+            var loaded = InvokeLoadFieldMappings(store, "Sheet1", definition);
+            var loadedRow = Assert.Single(loaded);
+            Assert.Equal("owner_name", loadedRow.Values["HeaderId"]);
+            Assert.Equal("项目负责人", loadedRow.Values["CurrentSingleDisplayName"]);
+
+            var headers = adapter.ReadSeededHeaders("SheetFieldMappings");
+            Assert.Equal(
+                new[] { "SheetName", "HeaderId", "CurrentSingleDisplayName" },
+                headers);
+
+            var rawRows = adapter.ReadSeededTable("SheetFieldMappings");
+            Assert.Contains(rawRows, row => row[0] == "SheetA" && row[1] == "legacy_id");
+            Assert.DoesNotContain(rawRows, row => row[0] == "Sheet1" && row[1] == "old_sheet1_id");
+        }
+
+        [Fact]
+        public void SaveFieldMappingsRejectsEmptyColumnNames()
+        {
+            var (store, _) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = " ",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                },
+            };
+
+            var error = Assert.Throws<TargetInvocationException>(() =>
+                InvokeSaveFieldMappings(store, "Sheet1", definition, Array.Empty<SheetFieldMappingRow>()));
+            Assert.IsType<ArgumentException>(error.InnerException);
+        }
+
+        [Fact]
+        public void LoadFieldMappingsRejectsEmptyColumnNames()
+        {
+            var (store, _) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                },
+            };
+
+            var error = Assert.Throws<TargetInvocationException>(() =>
+                InvokeLoadFieldMappings(store, "Sheet1", definition));
+            Assert.IsType<ArgumentException>(error.InnerException);
+        }
+
+        [Fact]
+        public void ClearFieldMappingsRemovesOnlyTargetSheetRowsAndPreservesHeaders()
+        {
+            var (store, adapter) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "HeaderId",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "CurrentSingleDisplayName",
+                        Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
+                    },
+                },
+            };
+
+            adapter.SeedTable("SheetFieldMappings", new[]
+            {
+                new[] { "SheetA", "legacy_id", "旧列名" },
+                new[] { "Sheet1", "owner_name", "项目负责人" },
+            });
+
+            InvokeSaveFieldMappings(
+                store,
+                "Sheet1",
+                definition,
+                new[]
+                {
+                    new SheetFieldMappingRow
+                    {
+                        SheetName = "Sheet1",
+                        Values = new Dictionary<string, string>
+                        {
+                            ["HeaderId"] = "owner_name",
+                            ["CurrentSingleDisplayName"] = "项目负责人",
+                        },
+                    },
+                });
+
+            var headersBefore = adapter.ReadSeededHeaders("SheetFieldMappings");
+
+            InvokeClearFieldMappings(store, "Sheet1");
+
+            var rowsAfterClear = adapter.ReadSeededTable("SheetFieldMappings");
+            Assert.Single(rowsAfterClear);
+            Assert.Equal("SheetA", rowsAfterClear[0][0]);
+
+            var headersAfter = adapter.ReadSeededHeaders("SheetFieldMappings");
+            Assert.Equal(headersBefore, headersAfter);
+            Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
+            Assert.True(adapter.Visible);
         }
 
         private static (object Store, FakeWorksheetMetadataAdapter Adapter) CreateStore()
@@ -128,20 +284,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
             return (SheetBinding)method.Invoke(store, new object[] { sheetName });
         }
 
-        private static void InvokeSaveSnapshot(object store, string sheetName, WorksheetSnapshotCell[] cells)
+        private static void InvokeSaveFieldMappings(
+            object store,
+            string sheetName,
+            FieldMappingTableDefinition definition,
+            IReadOnlyList<SheetFieldMappingRow> rows)
         {
             var method = store.GetType().GetMethod(
-                "SaveSnapshot",
+                "SaveFieldMappings",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            method.Invoke(store, new object[] { sheetName, cells });
+            method.Invoke(store, new object[] { sheetName, definition, rows });
         }
 
-        private static WorksheetSnapshotCell[] InvokeLoadSnapshot(object store, string sheetName)
+        private static SheetFieldMappingRow[] InvokeLoadFieldMappings(
+            object store,
+            string sheetName,
+            FieldMappingTableDefinition definition)
         {
             var method = store.GetType().GetMethod(
-                "LoadSnapshot",
+                "LoadFieldMappings",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            return (WorksheetSnapshotCell[])method.Invoke(store, new object[] { sheetName });
+            return (SheetFieldMappingRow[])method.Invoke(store, new object[] { sheetName, definition });
+        }
+
+        private static void InvokeClearFieldMappings(object store, string sheetName)
+        {
+            var method = store.GetType().GetMethod(
+                "ClearFieldMappings",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            method.Invoke(store, new object[] { sheetName });
         }
 
         private static Type GetAddInType(Assembly assembly, string typeName)
@@ -170,6 +341,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             private readonly Dictionary<string, List<string[]>> tables =
                 new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, string[]> headers =
+                new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 
             public string WorksheetName { get; private set; }
             public bool Visible { get; private set; }
@@ -202,7 +375,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
             private IMessage HandleWriteTable(IMethodCallMessage call)
             {
                 var tableName = (string)call.InArgs[0];
+                var tableHeaders = (string[])call.InArgs[1];
                 var rows = (string[][])call.InArgs[2];
+                headers[tableName] = tableHeaders?.ToArray() ?? Array.Empty<string>();
                 if (rows == null)
                 {
                     tables.Remove(tableName);
@@ -226,6 +401,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public void SeedTable(string tableName, string[][] rows)
             {
                 tables[tableName] = rows.Select(row => row?.ToArray() ?? Array.Empty<string>()).ToList();
+            }
+
+            public string[][] ReadSeededTable(string tableName)
+            {
+                return tables.TryGetValue(tableName, out var rows)
+                    ? rows.Select(row => row.ToArray()).ToArray()
+                    : Array.Empty<string[]>();
+            }
+
+            public string[] ReadSeededHeaders(string tableName)
+            {
+                return headers.TryGetValue(tableName, out var tableHeaders)
+                    ? tableHeaders.ToArray()
+                    : Array.Empty<string>();
             }
 
             public new object GetTransparentProxy()

@@ -24,16 +24,14 @@ const performances = [
 const uploadedProjects = {};
 
 const connectorRows = [
-  { id: "row-1", name: "项目 A", start_12345678: "2026-01-02", end_12345678: "2026-01-05" },
-  { id: "row-2", name: "项目 B", start_12345678: "2026-01-10", end_12345678: "2026-01-15" },
+  { row_id: "row-1", owner_name: "张三", start_12345678: "2026-01-02", end_12345678: "2026-01-05" },
+  { row_id: "row-2", owner_name: "李四", start_12345678: "2026-01-10", end_12345678: "2026-01-15" },
 ];
 
 const connectorHeadList = [
-  { fieldKey: "id", headerText: "行 ID", headType: "single", isId: true },
-  { fieldKey: "name", headerText: "名称", headType: "single" },
+  { fieldKey: "row_id", headerText: "ID", headType: "single", isId: true },
+  { fieldKey: "owner_name", headerText: "负责人", headType: "single" },
   {
-    fieldKey: "start_12345678",
-    headerText: "开始时间",
     headType: "activity",
     activityId: "12345678",
     activityName: "测试活动111",
@@ -167,20 +165,20 @@ apiApp.post("/find", requireAuth, function (req, res) {
 
   if (ids.length > 0) {
     result = result.filter(function (row) {
-      return ids.indexOf(row.id) >= 0;
+      return ids.indexOf(row.row_id) >= 0;
     });
   }
 
   if (fieldKeys.length > 0) {
     result = result.map(function (row) {
-      var filtered = { id: row.id };
+      var filtered = { row_id: row.row_id };
       fieldKeys.forEach(function (key) {
         if (Object.prototype.hasOwnProperty.call(row, key)) {
           filtered[key] = row[key];
         }
       });
-      if (!Object.prototype.hasOwnProperty.call(filtered, "id")) {
-        filtered.id = row.id;
+      if (!Object.prototype.hasOwnProperty.call(filtered, "row_id")) {
+        filtered.row_id = row.row_id;
       }
       return filtered;
     });
@@ -206,7 +204,7 @@ apiApp.post("/batchSave", requireAuth, function (req, res) {
       return;
     }
 
-    var target = connectorRows.find(function (row) { return row.id === rowId; });
+    var target = connectorRows.find(function (row) { return row.row_id === rowId; });
     if (target) {
       target[fieldKey] = value != null ? value : "";
     }

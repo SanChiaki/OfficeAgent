@@ -90,6 +90,24 @@ Ribbon 保持三个功能区，但调整为：
 
 不创建 `SheetSnapshots`。
 
+元数据展示方式采用“同一个 sheet 内上下两个标准表格区域”：
+
+- 第一块区域是 `SheetBindings`
+- 第二块区域是 `SheetFieldMappings`
+- 每个区域都采用：
+  - 一行区域标题
+  - 一行表头
+  - 多行数据
+- 两个区域之间固定留空行
+
+这次明确以“更适合人调试和手工维护”为优先，不再沿用旧的机器压平格式。
+
+同时，本次不兼容旧格式：
+
+- 不做旧格式解析
+- 不做旧格式迁移
+- 首次发生 metadata 写入时，直接按新布局重建整个 `_OfficeAgentMetadata`
+
 ### 5.1 SheetBindings
 
 `SheetBindings` 同时承担：
@@ -97,11 +115,19 @@ Ribbon 保持三个功能区，但调整为：
 - 当前 sheet 的项目绑定
 - 当前 sheet 的布局配置
 
-建议结构：
+展示结构：
 
 | SheetName | SystemKey | ProjectId | ProjectName | HeaderStartRow | HeaderRowCount | DataStartRow |
 | --- | --- | --- | --- | --- | --- | --- |
 | Sheet1 | current-business-system | project-1 | 绩效项目 | 3 | 2 | 6 |
+
+区域布局示意：
+
+```text
+SheetBindings
+SheetName | SystemKey | ProjectId | ProjectName | HeaderStartRow | HeaderRowCount | DataStartRow
+Sheet1    | ...       | ...       | ...         | 3              | 2              | 6
+```
 
 规则：
 
@@ -135,6 +161,7 @@ Ribbon 保持三个功能区，但调整为：
 - `SheetName` 是插件内部固定作用域列
 - 除 `SheetName` 外，其余业务列不在插件内部写死
 - 这些业务列由 `systemKey` 对应连接器提供列定义和语义角色定义
+- 在 `_OfficeAgentMetadata` 中以标准表头 + 数据区展示，而不是按“首列表名 + 行记录”压平存储
 
 当前业务系统的示例形态如下：
 
@@ -145,6 +172,15 @@ Ribbon 保持三个功能区，但调整为：
 | Sheet1 | progress_status | single | progress_status | false | 进展状态 | 进展状态 |  |  |  |  |  |  |
 | Sheet1 | start_12345678 | activityProperty | start_12345678 | false |  |  | 测试活动111 | 测试活动111 | 开始时间 | 开始时间 | 12345678 | start |
 | Sheet1 | end_12345678 | activityProperty | end_12345678 | false |  |  | 测试活动111 | 测试活动111 | 结束时间 | 结束时间 | 12345678 | end |
+
+区域布局示意：
+
+```text
+SheetFieldMappings
+SheetName | HeaderId | HeaderType | ApiFieldKey | IsIdColumn | ...
+Sheet1    | row_id   | single     | row_id      | true       | ...
+Sheet1    | owner... | single     | owner...    | false      | ...
+```
 
 插件内部只认以下语义角色，不认固定列名：
 
@@ -284,6 +320,7 @@ Ribbon 保持三个功能区，但调整为：
 
 - 弹框说明此操作会重建当前 sheet 的字段映射配置
 - 默认只改 `_OfficeAgentMetadata`
+- 若 `_OfficeAgentMetadata` 已存在旧布局或脏布局，直接整张 sheet 按新布局重建
 - 不直接改用户当前业务 sheet 的表头或数据
 
 初始化动作适用场景：
@@ -474,6 +511,9 @@ Ribbon 保持三个功能区，但调整为：
 
 - `SheetBindings` 结构重做
 - 新增 `SheetFieldMappings` 的读写
+- `_OfficeAgentMetadata` 改为同 sheet 上下两个标准表格区域
+- 读取逻辑按“区域标题 + 表头行 + 数据区”解析
+- 写入逻辑整块重写对应区域，不再使用旧的压平行格式
 - 布局与识别逻辑改为读取可配置行号
 - 运行时去掉固定列号依赖
 
@@ -524,6 +564,8 @@ Ribbon 保持三个功能区，但调整为：
 - `_OfficeAgentMetadata` 只维护 `SheetBindings` 和 `SheetFieldMappings`
 - `SheetBindings` 同时承载项目绑定和行号配置
 - `SheetFieldMappings` 是当前 sheet 的字段映射工作副本
+- `_OfficeAgentMetadata` 采用更适合人调试的上下双区域表格布局
+- 不兼容旧 metadata 压平格式，首次写入直接按新布局重建
 - 运行时不记录列位置，每次按表头文本重新识别
 - 自动尝试接管已有 Excel，失败后由显式初始化兜底
 - 当前系统先落地，内部继续按 `systemKey + 语义角色` 保持可扩展

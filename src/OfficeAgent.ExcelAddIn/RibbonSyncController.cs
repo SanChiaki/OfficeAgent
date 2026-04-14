@@ -17,13 +17,20 @@ namespace OfficeAgent.ExcelAddIn
         private readonly WorksheetSyncService worksheetSyncService;
         private readonly Func<string> activeSheetNameProvider;
         private readonly WorksheetSyncExecutionService executionService;
+        private readonly IRibbonSyncDialogService dialogService;
 
         public RibbonSyncController(
             ISystemConnector connector,
             IWorksheetMetadataStore metadataStore,
             WorksheetSyncService worksheetSyncService,
             Func<string> activeSheetNameProvider)
-            : this(connector, metadataStore, worksheetSyncService, activeSheetNameProvider, executionService: null)
+            : this(
+                connector,
+                metadataStore,
+                worksheetSyncService,
+                activeSheetNameProvider,
+                executionService: null,
+                new RibbonSyncDialogService())
         {
         }
 
@@ -33,12 +40,30 @@ namespace OfficeAgent.ExcelAddIn
             WorksheetSyncService worksheetSyncService,
             Func<string> activeSheetNameProvider,
             WorksheetSyncExecutionService executionService)
+            : this(
+                connector,
+                metadataStore,
+                worksheetSyncService,
+                activeSheetNameProvider,
+                executionService,
+                new RibbonSyncDialogService())
+        {
+        }
+
+        internal RibbonSyncController(
+            ISystemConnector connector,
+            IWorksheetMetadataStore metadataStore,
+            WorksheetSyncService worksheetSyncService,
+            Func<string> activeSheetNameProvider,
+            WorksheetSyncExecutionService executionService,
+            IRibbonSyncDialogService dialogService)
         {
             this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
             this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
             this.activeSheetNameProvider = activeSheetNameProvider ?? throw new ArgumentNullException(nameof(activeSheetNameProvider));
             this.executionService = executionService;
+            this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
             ActiveProjectDisplayName = DefaultProjectDisplayName;
             ActiveProjectId = string.Empty;
@@ -71,16 +96,11 @@ namespace OfficeAgent.ExcelAddIn
                 throw new InvalidOperationException("Active worksheet is not available.");
             }
 
-            var binding = new SheetBinding
-            {
-                SheetName = sheetName,
-                SystemKey = project.SystemKey ?? string.Empty,
-                ProjectId = project.ProjectId ?? string.Empty,
-                ProjectName = project.DisplayName ?? string.Empty,
-            };
+            var binding = BuildBindingForSelection(sheetName, project);
 
             metadataStore.SaveBinding(binding);
             ApplyBindingState(binding);
+            TryAutoInitializeCurrentSheet(sheetName, project);
         }
 
         public void RefreshActiveProjectFromSheetMetadata()
@@ -123,9 +143,28 @@ namespace OfficeAgent.ExcelAddIn
             ExecuteUpload(service => service.PreparePartialUpload(GetRequiredSheetName()));
         }
 
-        public void ExecuteIncrementalUpload()
+        public void ExecuteInitializeCurrentSheet()
         {
-            ExecuteUpload(service => service.PrepareIncrementalUpload(GetRequiredSheetName()));
+            if (!EnsureProjectSelected())
+            {
+                return;
+            }
+
+            try
+            {
+                var sheetName = GetRequiredSheetName();
+                EnsureExecutionService().InitializeCurrentSheet(sheetName, new ProjectOption
+                {
+                    SystemKey = ActiveSystemKey,
+                    ProjectId = ActiveProjectId,
+                    DisplayName = ActiveProjectDisplayName,
+                });
+                dialogService.ShowInfo("初始化当前表完成。");
+            }
+            catch (Exception ex)
+            {
+                dialogService.ShowError(ex.Message);
+            }
         }
 
         private void ExecuteDownload(Func<WorksheetSyncExecutionService, WorksheetDownloadPlan> preparePlan)
@@ -138,7 +177,7 @@ namespace OfficeAgent.ExcelAddIn
             try
             {
                 var plan = preparePlan(EnsureExecutionService());
-                if (!DownloadConfirmDialog.Confirm(
+                if (!dialogService.ConfirmDownload(
                         plan.OperationName,
                         ActiveProjectDisplayName,
                         plan.Rows?.Count ?? 0,
@@ -149,12 +188,12 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 executionService.ExecuteDownload(plan);
-                OperationResultDialog.ShowInfo(
+                dialogService.ShowInfo(
                     $"{plan.OperationName}完成。\r\n记录数：{plan.Rows?.Count ?? 0}\r\n字段数：{CountDownloadFields(plan)}");
             }
             catch (Exception ex)
             {
-                OperationResultDialog.ShowError(ex.Message);
+                dialogService.ShowError(ex.Message);
             }
         }
 
@@ -171,21 +210,21 @@ namespace OfficeAgent.ExcelAddIn
                 var preview = plan.Preview ?? new SyncOperationPreview();
                 if (preview.Changes.Length == 0)
                 {
-                    OperationResultDialog.ShowInfo($"{plan.OperationName}没有可提交的单元格。");
+                    dialogService.ShowInfo($"{plan.OperationName}没有可提交的单元格。");
                     return;
                 }
 
-                if (!UploadConfirmDialog.Confirm(plan.OperationName, ActiveProjectDisplayName, preview))
+                if (!dialogService.ConfirmUpload(plan.OperationName, ActiveProjectDisplayName, preview))
                 {
                     return;
                 }
 
                 executionService.ExecuteUpload(plan);
-                OperationResultDialog.ShowInfo($"{plan.OperationName}完成。\r\n提交单元格数：{preview.Changes.Length}");
+                dialogService.ShowInfo($"{plan.OperationName}完成。\r\n提交单元格数：{preview.Changes.Length}");
             }
             catch (Exception ex)
             {
-                OperationResultDialog.ShowError(ex.Message);
+                dialogService.ShowError(ex.Message);
             }
         }
 
@@ -196,7 +235,7 @@ namespace OfficeAgent.ExcelAddIn
                 return true;
             }
 
-            OperationResultDialog.ShowWarning("请先选择项目。");
+            dialogService.ShowWarning("请先选择项目。");
             return false;
         }
 
@@ -242,6 +281,47 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             return sheetName;
+        }
+
+        private SheetBinding BuildBindingForSelection(string sheetName, ProjectOption project)
+        {
+            var seed = connector.CreateBindingSeed(sheetName, project);
+
+            try
+            {
+                var existing = metadataStore.LoadBinding(sheetName);
+                return new SheetBinding
+                {
+                    SheetName = sheetName,
+                    SystemKey = seed.SystemKey,
+                    ProjectId = seed.ProjectId,
+                    ProjectName = seed.ProjectName,
+                    HeaderStartRow = existing.HeaderStartRow > 0 ? existing.HeaderStartRow : seed.HeaderStartRow,
+                    HeaderRowCount = existing.HeaderRowCount > 0 ? existing.HeaderRowCount : seed.HeaderRowCount,
+                    DataStartRow = existing.DataStartRow > 0 ? existing.DataStartRow : seed.DataStartRow,
+                };
+            }
+            catch (InvalidOperationException)
+            {
+                return seed;
+            }
+        }
+
+        private void TryAutoInitializeCurrentSheet(string sheetName, ProjectOption project)
+        {
+            if (executionService == null)
+            {
+                return;
+            }
+
+            try
+            {
+                executionService.TryAutoInitializeCurrentSheet(sheetName, project);
+            }
+            catch (Exception ex)
+            {
+                dialogService.ShowWarning($"自动初始化未完成，请使用“初始化当前表”并检查 _OfficeAgentMetadata。\r\n{ex.Message}");
+            }
         }
 
         private static int CountDownloadFields(WorksheetDownloadPlan plan)

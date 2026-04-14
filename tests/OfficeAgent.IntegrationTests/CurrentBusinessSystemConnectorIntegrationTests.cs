@@ -23,7 +23,7 @@ namespace OfficeAgent.IntegrationTests
         public async Task FindAndBatchSaveRoundTripAgainstMockServer()
         {
             var connector = await CreateConnectorAsync();
-            var rows = connector.Find("performance", new[] { "row-1" }, new[] { "name", "start_12345678" });
+            var rows = connector.Find("performance", new[] { "row-1" }, new[] { "owner_name", "start_12345678" });
             Assert.Single(rows);
 
             connector.BatchSave("performance", new[]
@@ -31,14 +31,47 @@ namespace OfficeAgent.IntegrationTests
                 new CellChange
                 {
                     RowId = "row-1",
-                    ApiFieldKey = "name",
+                    ApiFieldKey = "owner_name",
                     NewValue = "Updated",
                 },
             });
 
-            var updatedRows = connector.Find("performance", new[] { "row-1" }, new[] { "name" });
+            var updatedRows = connector.Find("performance", new[] { "row-1" }, new[] { "owner_name" });
             Assert.Single(updatedRows);
-            Assert.Equal("Updated", updatedRows[0]["name"]?.ToString());
+            Assert.Equal("Updated", updatedRows[0]["owner_name"]?.ToString());
+        }
+
+        [Fact]
+        public async Task BuildFieldMappingSeedAndBatchSaveRoundTripAgainstMockServer()
+        {
+            var connector = await CreateConnectorAsync();
+
+            var mappings = connector.BuildFieldMappingSeed("Sheet1", "performance");
+
+            Assert.Contains(
+                mappings,
+                row => string.Equals(row.Values[CurrentBusinessFieldMappingColumns.ApiFieldKey], "start_12345678", StringComparison.Ordinal));
+            Assert.Contains(
+                mappings,
+                row => string.Equals(row.Values[CurrentBusinessFieldMappingColumns.ApiFieldKey], "owner_name", StringComparison.Ordinal));
+
+            var rows = connector.Find("performance", Array.Empty<string>(), new[] { "owner_name" });
+            var row = Assert.Single(rows, item => string.Equals(item["row_id"]?.ToString(), "row-1", StringComparison.Ordinal));
+
+            connector.BatchSave(
+                "performance",
+                new[]
+                {
+                    new CellChange
+                    {
+                        RowId = row["row_id"]?.ToString(),
+                        ApiFieldKey = "owner_name",
+                        NewValue = "李四",
+                    },
+                });
+
+            var afterSave = connector.Find("performance", new[] { "row-1" }, new[] { "owner_name" });
+            Assert.Equal("李四", afterSave.Single()["owner_name"]?.ToString());
         }
 
         [Fact]
@@ -49,7 +82,8 @@ namespace OfficeAgent.IntegrationTests
 
             Assert.NotNull(schema);
             var columns = schema.Columns;
-            Assert.Contains(columns, column => column.ApiFieldKey == "name" && column.ColumnKind == WorksheetColumnKind.Single);
+            Assert.Contains(columns, column => column.ApiFieldKey == "row_id" && column.IsIdColumn);
+            Assert.Contains(columns, column => column.ApiFieldKey == "owner_name" && column.ColumnKind == WorksheetColumnKind.Single);
             Assert.Contains(columns, column => column.ApiFieldKey == "start_12345678" && column.ColumnKind == WorksheetColumnKind.ActivityProperty);
             Assert.Contains(columns, column => column.ApiFieldKey == "end_12345678" && column.ColumnKind == WorksheetColumnKind.ActivityProperty);
             var activityColumn = columns.First(column => column.ApiFieldKey == "start_12345678");

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 
@@ -10,48 +9,99 @@ namespace OfficeAgent.Core.Sync
     {
         private readonly ISystemConnector connector;
         private readonly IWorksheetMetadataStore metadataStore;
-        private readonly WorksheetChangeTracker changeTracker;
-        private readonly SyncOperationPreviewFactory previewFactory;
+
+        public WorksheetSyncService(
+            ISystemConnector connector,
+            IWorksheetMetadataStore metadataStore)
+        {
+            this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
+            this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
+        }
 
         public WorksheetSyncService(
             ISystemConnector connector,
             IWorksheetMetadataStore metadataStore,
             WorksheetChangeTracker changeTracker,
             SyncOperationPreviewFactory previewFactory)
+            : this(connector, metadataStore)
         {
-            this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
-            this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
-            this.changeTracker = changeTracker ?? throw new ArgumentNullException(nameof(changeTracker));
-            this.previewFactory = previewFactory ?? throw new ArgumentNullException(nameof(previewFactory));
         }
 
-        public SyncOperationPreview PrepareIncrementalUpload(string sheetName, IReadOnlyList<CellChange> currentCells)
+        public void InitializeSheet(string sheetName, ProjectOption project)
         {
-            var snapshot = metadataStore.LoadSnapshot(sheetName) ?? Array.Empty<WorksheetSnapshotCell>();
-            var dirtyCells = changeTracker
-                .GetDirtyCells(sheetName, snapshot, currentCells ?? Array.Empty<CellChange>())
-                .Where(item => !string.IsNullOrWhiteSpace(item.RowId))
-                .ToArray();
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
 
-            return previewFactory.CreateUploadPreview("增量上传", dirtyCells);
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            var bindingSeed = connector.CreateBindingSeed(sheetName, project);
+            var binding = MergeExistingLayout(bindingSeed);
+            var definition = connector.GetFieldMappingDefinition(project.ProjectId);
+            var seedRows = connector.BuildFieldMappingSeed(sheetName, project.ProjectId);
+
+            metadataStore.SaveBinding(binding);
+            metadataStore.SaveFieldMappings(sheetName, definition, seedRows);
         }
 
-        public WorksheetSchema LoadSchemaForSheet(string sheetName)
+        public SheetBinding LoadBinding(string sheetName)
         {
-            var binding = metadataStore.LoadBinding(sheetName);
-            return connector.GetSchema(binding.ProjectId);
+            return metadataStore.LoadBinding(sheetName);
         }
 
-        public IReadOnlyList<IDictionary<string, object>> ExecutePartialDownload(string sheetName, ResolvedSelection selection)
+        public FieldMappingTableDefinition LoadFieldMappingDefinition(string projectId)
         {
-            var binding = metadataStore.LoadBinding(sheetName);
-            return connector.Find(binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
+            return connector.GetFieldMappingDefinition(projectId);
         }
 
-        public void ExecutePartialUpload(string sheetName, IReadOnlyList<CellChange> changes)
+        public SheetFieldMappingRow[] LoadFieldMappings(string sheetName, string projectId)
         {
-            var binding = metadataStore.LoadBinding(sheetName);
-            connector.BatchSave(binding.ProjectId, changes);
+            var definition = connector.GetFieldMappingDefinition(projectId);
+            return metadataStore.LoadFieldMappings(sheetName, definition);
+        }
+
+        public IReadOnlyList<IDictionary<string, object>> Download(
+            string projectId,
+            IReadOnlyList<string> rowIds,
+            IReadOnlyList<string> fieldKeys)
+        {
+            return connector.Find(projectId, rowIds, fieldKeys);
+        }
+
+        public void Upload(string projectId, IReadOnlyList<CellChange> changes)
+        {
+            connector.BatchSave(projectId, changes);
+        }
+
+        private SheetBinding MergeExistingLayout(SheetBinding bindingSeed)
+        {
+            if (bindingSeed == null)
+            {
+                throw new ArgumentNullException(nameof(bindingSeed));
+            }
+
+            try
+            {
+                var existing = metadataStore.LoadBinding(bindingSeed.SheetName);
+                return new SheetBinding
+                {
+                    SheetName = bindingSeed.SheetName,
+                    SystemKey = bindingSeed.SystemKey,
+                    ProjectId = bindingSeed.ProjectId,
+                    ProjectName = bindingSeed.ProjectName,
+                    HeaderStartRow = existing.HeaderStartRow > 0 ? existing.HeaderStartRow : bindingSeed.HeaderStartRow,
+                    HeaderRowCount = existing.HeaderRowCount > 0 ? existing.HeaderRowCount : bindingSeed.HeaderRowCount,
+                    DataStartRow = existing.DataStartRow > 0 ? existing.DataStartRow : bindingSeed.DataStartRow,
+                };
+            }
+            catch (InvalidOperationException)
+            {
+                return bindingSeed;
+            }
         }
     }
 }

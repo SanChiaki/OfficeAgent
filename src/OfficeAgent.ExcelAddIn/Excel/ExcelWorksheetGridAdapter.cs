@@ -26,25 +26,25 @@ namespace OfficeAgent.ExcelAddIn.Excel
             cell.Value2 = value ?? string.Empty;
         }
 
-        public void ClearWorksheet(string sheetName)
+        public void ClearRange(string sheetName, int startRow, int endRow, int startColumn, int endColumn)
         {
-            var worksheet = GetWorksheet(sheetName);
-            var usedRange = worksheet.UsedRange;
-            if (usedRange == null)
+            if (endRow < startRow || endColumn < startColumn)
             {
                 return;
             }
 
-            try
-            {
-                usedRange.UnMerge();
-            }
-            catch
-            {
-                // Ignore when the range has no merged cells.
-            }
+            var worksheet = GetWorksheet(sheetName);
+            var range = worksheet.Range[
+                worksheet.Cells[startRow, startColumn],
+                worksheet.Cells[endRow, endColumn]] as ExcelInterop.Range;
+            ClearRange(range);
+        }
 
-            usedRange.Clear();
+        public void ClearWorksheet(string sheetName)
+        {
+            var worksheet = GetWorksheet(sheetName);
+            var usedRange = worksheet.UsedRange;
+            ClearRange(usedRange);
         }
 
         public void MergeCells(string sheetName, int row, int column, int rowSpan, int columnSpan)
@@ -71,6 +71,37 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return usedRange.Row + usedRange.Rows.Count - 1;
+        }
+
+        public int GetLastUsedColumn(string sheetName)
+        {
+            var worksheet = GetWorksheet(sheetName);
+            var usedRange = worksheet.UsedRange;
+            if (usedRange == null || usedRange.Columns == null || usedRange.Columns.Count == 0)
+            {
+                return 0;
+            }
+
+            return usedRange.Column + usedRange.Columns.Count - 1;
+        }
+
+        private static void ClearRange(ExcelInterop.Range range)
+        {
+            if (range == null)
+            {
+                return;
+            }
+
+            try
+            {
+                range.UnMerge();
+            }
+            catch
+            {
+                // Ignore when the range has no merged cells.
+            }
+
+            range.Clear();
         }
 
         private ExcelInterop.Worksheet GetWorksheet(string sheetName)
