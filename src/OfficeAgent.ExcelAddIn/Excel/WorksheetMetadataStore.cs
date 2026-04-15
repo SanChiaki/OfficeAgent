@@ -82,7 +82,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
-            adapter.EnsureWorksheet(MetadataSheetName, visible: true);
             var rows = adapter.ReadTable(BindingsTableName) ?? Array.Empty<string[]>();
 
             foreach (var row in rows)
@@ -168,7 +167,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentNullException(nameof(definition));
             }
 
-            adapter.EnsureWorksheet(MetadataSheetName, visible: true);
             var columns = GetValidatedColumns(definition);
             var rows = adapter.ReadTable(FieldMappingsTableName) ?? Array.Empty<string[]>();
 
@@ -204,7 +202,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
-            adapter.EnsureWorksheet(MetadataSheetName, visible: true);
             var rows = adapter.ReadTable(FieldMappingsTableName)?.ToList() ?? new List<string[]>();
             var removed = rows.RemoveAll(row =>
                 row.Length > 0 &&

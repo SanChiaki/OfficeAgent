@@ -84,6 +84,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LoadBindingDoesNotCreateSettingsWorksheetWhenMetadataIsMissing()
+        {
+            var (store, adapter) = CreateStore();
+
+            var error = Assert.Throws<TargetInvocationException>(() => InvokeLoadBinding(store, "Sheet1"));
+
+            Assert.IsType<InvalidOperationException>(error.InnerException);
+            Assert.Equal(0, adapter.EnsureWorksheetCallCount);
+            Assert.Null(adapter.WorksheetName);
+        }
+
+        [Fact]
         public void SaveFieldMappingsPreservesOtherSheetsAndUsesDynamicHeaders()
         {
             var (store, adapter) = CreateStore();
@@ -192,6 +204,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LoadFieldMappingsDoesNotCreateSettingsWorksheetWhenMetadataIsMissing()
+        {
+            var (store, adapter) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "HeaderId",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                },
+            };
+
+            var rows = InvokeLoadFieldMappings(store, "Sheet1", definition);
+
+            Assert.Empty(rows);
+            Assert.Equal(0, adapter.EnsureWorksheetCallCount);
+            Assert.Null(adapter.WorksheetName);
+        }
+
+        [Fact]
         public void ClearFieldMappingsRemovesOnlyTargetSheetRowsAndPreservesHeaders()
         {
             var (store, adapter) = CreateStore();
@@ -248,6 +284,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(headersBefore, headersAfter);
             Assert.Equal("_Settings", adapter.WorksheetName);
             Assert.True(adapter.Visible);
+        }
+
+        [Fact]
+        public void ClearFieldMappingsDoesNotCreateSettingsWorksheetWhenMetadataIsMissing()
+        {
+            var (store, adapter) = CreateStore();
+
+            InvokeClearFieldMappings(store, "Sheet1");
+
+            Assert.Equal(0, adapter.EnsureWorksheetCallCount);
+            Assert.Null(adapter.WorksheetName);
         }
 
         private static (object Store, FakeWorksheetMetadataAdapter Adapter) CreateStore()
@@ -346,6 +393,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public string WorksheetName { get; private set; }
             public bool Visible { get; private set; }
+            public int EnsureWorksheetCallCount { get; private set; }
 
             public FakeWorksheetMetadataAdapter(Type adapterInterface)
                 : base(adapterInterface)
@@ -367,6 +415,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             private IMessage HandleEnsureWorksheet(IMethodCallMessage call)
             {
+                EnsureWorksheetCallCount++;
                 WorksheetName = (string)call.InArgs[0];
                 Visible = (bool)call.InArgs[1];
                 return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
