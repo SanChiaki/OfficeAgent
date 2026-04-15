@@ -12,7 +12,6 @@ namespace OfficeAgent.ExcelAddIn
     {
         private const string DefaultProjectDisplayName = "先选择项目";
 
-        private readonly ISystemConnector connector;
         private readonly IWorksheetMetadataStore metadataStore;
         private readonly WorksheetSyncService worksheetSyncService;
         private readonly Func<string> activeSheetNameProvider;
@@ -20,12 +19,10 @@ namespace OfficeAgent.ExcelAddIn
         private readonly IRibbonSyncDialogService dialogService;
 
         public RibbonSyncController(
-            ISystemConnector connector,
             IWorksheetMetadataStore metadataStore,
             WorksheetSyncService worksheetSyncService,
             Func<string> activeSheetNameProvider)
             : this(
-                connector,
                 metadataStore,
                 worksheetSyncService,
                 activeSheetNameProvider,
@@ -35,13 +32,11 @@ namespace OfficeAgent.ExcelAddIn
         }
 
         internal RibbonSyncController(
-            ISystemConnector connector,
             IWorksheetMetadataStore metadataStore,
             WorksheetSyncService worksheetSyncService,
             Func<string> activeSheetNameProvider,
             WorksheetSyncExecutionService executionService)
             : this(
-                connector,
                 metadataStore,
                 worksheetSyncService,
                 activeSheetNameProvider,
@@ -51,14 +46,12 @@ namespace OfficeAgent.ExcelAddIn
         }
 
         internal RibbonSyncController(
-            ISystemConnector connector,
             IWorksheetMetadataStore metadataStore,
             WorksheetSyncService worksheetSyncService,
             Func<string> activeSheetNameProvider,
             WorksheetSyncExecutionService executionService,
             IRibbonSyncDialogService dialogService)
         {
-            this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
             this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
             this.activeSheetNameProvider = activeSheetNameProvider ?? throw new ArgumentNullException(nameof(activeSheetNameProvider));
@@ -80,7 +73,7 @@ namespace OfficeAgent.ExcelAddIn
 
         public IReadOnlyList<ProjectOption> GetProjects()
         {
-            return connector.GetProjects() ?? Array.Empty<ProjectOption>();
+            return worksheetSyncService.GetProjects() ?? Array.Empty<ProjectOption>();
         }
 
         public void SelectProject(ProjectOption project)
@@ -285,7 +278,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private SheetBinding BuildBindingForSelection(string sheetName, ProjectOption project)
         {
-            var seed = connector.CreateBindingSeed(sheetName, project);
+            var seed = worksheetSyncService.CreateBindingSeed(sheetName, project);
 
             try
             {
@@ -320,7 +313,7 @@ namespace OfficeAgent.ExcelAddIn
             }
             catch (Exception ex)
             {
-                dialogService.ShowWarning($"自动初始化未完成，请使用“初始化当前表”并检查 _OfficeAgentMetadata。\r\n{ex.Message}");
+                dialogService.ShowWarning($"自动初始化未完成，请使用“初始化当前表”并检查 _Settings。\r\n{ex.Message}");
             }
         }
 

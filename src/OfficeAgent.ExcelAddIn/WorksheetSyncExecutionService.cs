@@ -25,6 +25,7 @@ namespace OfficeAgent.ExcelAddIn
     {
         public string OperationName { get; set; } = string.Empty;
         public string SheetName { get; set; } = string.Empty;
+        public string SystemKey { get; set; } = string.Empty;
         public string ProjectId { get; set; } = string.Empty;
         public SyncOperationPreview Preview { get; set; } = new SyncOperationPreview();
     }
@@ -78,14 +79,15 @@ namespace OfficeAgent.ExcelAddIn
             try
             {
                 var binding = worksheetSyncService.LoadBinding(sheetName);
-                if (!string.Equals(binding.ProjectId, project.ProjectId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(binding.SystemKey, project.SystemKey, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(binding.ProjectId, project.ProjectId, StringComparison.OrdinalIgnoreCase))
                 {
                     InitializeCurrentSheet(sheetName, project);
                     return;
                 }
 
-                var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
-                var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId);
+                var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.SystemKey, binding.ProjectId);
+                var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.SystemKey, binding.ProjectId);
                 if (!HasUsableMappings(definition, mappings))
                 {
                     InitializeCurrentSheet(sheetName, project);
@@ -101,6 +103,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             var context = ResolveFullDownloadContext(sheetName);
             var rows = worksheetSyncService.Download(
+                context.Binding.SystemKey,
                 context.Binding.ProjectId,
                 Array.Empty<string>(),
                 GetRequestedFieldKeys(context.RuntimeColumns));
@@ -124,7 +127,7 @@ namespace OfficeAgent.ExcelAddIn
             var selection = ResolveCurrentSelection(sheetName, context.Schema);
             var rows = selection.RowIds.Length == 0
                 ? Array.Empty<IDictionary<string, object>>()
-                : worksheetSyncService.Download(context.Binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
+                : worksheetSyncService.Download(context.Binding.SystemKey, context.Binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
 
             return new WorksheetDownloadPlan
             {
@@ -166,6 +169,7 @@ namespace OfficeAgent.ExcelAddIn
                 OperationName = "全量上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
+                SystemKey = context.Binding.SystemKey,
                 Preview = BuildUploadPreview("全量上传", changes),
             };
         }
@@ -181,6 +185,7 @@ namespace OfficeAgent.ExcelAddIn
                 OperationName = "部分上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
+                SystemKey = context.Binding.SystemKey,
                 Preview = BuildUploadPreview("部分上传", changes),
             };
         }
@@ -198,7 +203,7 @@ namespace OfficeAgent.ExcelAddIn
                 return;
             }
 
-            worksheetSyncService.Upload(plan.ProjectId, changes);
+            worksheetSyncService.Upload(plan.SystemKey, plan.ProjectId, changes);
         }
 
         private SheetExecutionContext ResolveFullDownloadContext(string sheetName)
@@ -254,14 +259,14 @@ namespace OfficeAgent.ExcelAddIn
         {
             var binding = worksheetSyncService.LoadBinding(sheetName);
             ValidateBinding(binding);
-            var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
-            var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
+            var definition = worksheetSyncService.LoadFieldMappingDefinition(binding.SystemKey, binding.ProjectId);
+            var mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.SystemKey, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
 
             if (!HasUsableMappings(definition, mappings))
             {
                 worksheetSyncService.InitializeSheet(sheetName, CreateProjectOption(binding));
-                definition = worksheetSyncService.LoadFieldMappingDefinition(binding.ProjectId);
-                mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
+                definition = worksheetSyncService.LoadFieldMappingDefinition(binding.SystemKey, binding.ProjectId);
+                mappings = worksheetSyncService.LoadFieldMappings(sheetName, binding.SystemKey, binding.ProjectId) ?? Array.Empty<SheetFieldMappingRow>();
             }
 
             return new SheetExecutionContext
@@ -641,7 +646,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private static InvalidOperationException CreateHeaderMatchException()
         {
-            return new InvalidOperationException("当前表头无法与映射表匹配，请先修正 _OfficeAgentMetadata。");
+            return new InvalidOperationException("当前表头无法与映射表匹配，请先修正 _Settings。");
         }
 
         private static void ValidateBinding(SheetBinding binding)

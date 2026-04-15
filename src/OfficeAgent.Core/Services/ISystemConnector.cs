@@ -5,6 +5,8 @@ namespace OfficeAgent.Core.Services
 {
     public interface ISystemConnector
     {
+        string SystemKey { get; }
+
         IReadOnlyList<ProjectOption> GetProjects();
 
         SheetBinding CreateBindingSeed(string sheetName, ProjectOption project);

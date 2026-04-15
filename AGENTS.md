@@ -38,6 +38,8 @@ Current recommended flow:
 2. Jump to the target module's current behavior snapshot under `docs/modules/`
 3. Only after reading the snapshot, continue into design docs, plans, test checklists, or integration guides as needed
 
+For Ribbon Sync connector changes, also keep [docs/ribbon-sync-real-system-integration-guide.md](docs/ribbon-sync-real-system-integration-guide.md) aligned with the actual registration and routing model.
+
 For Ribbon Sync specifically, start with:
 
 - [docs/modules/ribbon-sync-current-behavior.md](docs/modules/ribbon-sync-current-behavior.md)

@@ -7,7 +7,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 {
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
-        private const string MetadataSheetName = "_OfficeAgentMetadata";
+        private const string MetadataSheetName = "_Settings";
         private static readonly string[] OrderedTables =
         {
             "SheetBindings",

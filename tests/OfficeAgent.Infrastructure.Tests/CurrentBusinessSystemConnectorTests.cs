@@ -22,7 +22,12 @@ namespace OfficeAgent.Infrastructure.Tests
                 () => new AppSettings { BusinessBaseUrl = "https://business.internal.example" },
                 new HttpClient(new RecordingHandler()));
 
-            var project = Assert.Single(connector.GetProjects());
+            var project = new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            };
             var binding = connector.CreateBindingSeed("Sheet1", project);
 
             Assert.Equal("Sheet1", binding.SheetName);
@@ -32,6 +37,33 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(1, binding.HeaderStartRow);
             Assert.Equal(2, binding.HeaderRowCount);
             Assert.Equal(3, binding.DataStartRow);
+        }
+
+        [Fact]
+        public void GetProjectsCallsProjectsEndpoint()
+        {
+            var handler = new RecordingHandler();
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+
+            var projects = connector.GetProjects();
+
+            Assert.Equal("/projects", handler.LastPath);
+            Assert.Equal("https://api.internal.example/projects", handler.LastUri);
+            Assert.Single(projects);
+            Assert.Equal("current-business-system", projects[0].SystemKey);
+            Assert.Equal("performance", projects[0].ProjectId);
+        }
+
+        [Fact]
+        public void GetProjectsPromptsLoginWhenProjectsEndpointReturnsUnauthorized()
+        {
+            var connector = CurrentBusinessSystemConnector.ForTests(
+                "https://api.internal.example",
+                new UnauthorizedProjectsHandler());
+
+            var error = Assert.Throws<InvalidOperationException>(() => connector.GetProjects());
+
+            Assert.Contains("请先登录", error.Message);
         }
 
         [Fact]
@@ -63,15 +95,15 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
-        public void GetFieldMappingDefinitionRejectsUnsupportedProjectId()
+        public void GetFieldMappingDefinitionAllowsDynamicProjectId()
         {
             var connector = new CurrentBusinessSystemConnector(
                 () => new AppSettings { BusinessBaseUrl = "https://business.internal.example" },
                 new HttpClient(new RecordingHandler()));
 
-            var error = Assert.Throws<InvalidOperationException>(() => connector.GetFieldMappingDefinition("other-project"));
+            var definition = connector.GetFieldMappingDefinition("other-project");
 
-            Assert.Contains("Unsupported project id", error.Message);
+            Assert.Equal("current-business-system", definition.SystemKey);
         }
 
         [Theory]
@@ -85,7 +117,7 @@ namespace OfficeAgent.Infrastructure.Tests
 
             var error = Assert.Throws<InvalidOperationException>(() => connector.GetFieldMappingDefinition(projectId));
 
-            Assert.Contains("Unsupported project id", error.Message);
+            Assert.Contains("Project id is required", error.Message);
         }
 
         [Theory]
@@ -98,7 +130,7 @@ namespace OfficeAgent.Infrastructure.Tests
 
             var error = Assert.Throws<InvalidOperationException>(() => connector.BuildFieldMappingSeed("Sheet1", projectId));
 
-            Assert.Contains("Unsupported project id", error.Message);
+            Assert.Contains("Project id is required", error.Message);
             Assert.Empty(handler.Requests);
         }
 
@@ -140,7 +172,7 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
-        public void GetProjectsDoesNotRequireBusinessBaseUrlDuringConstruction()
+        public void GetProjectsRequiresBusinessBaseUrlWhenInvoked()
         {
             var connector = new CurrentBusinessSystemConnector(
                 () => new AppSettings
@@ -149,10 +181,9 @@ namespace OfficeAgent.Infrastructure.Tests
                     BusinessBaseUrl = string.Empty,
                 });
 
-            var projects = connector.GetProjects();
+            var error = Assert.Throws<InvalidOperationException>(() => connector.GetProjects());
 
-            Assert.Single(projects);
-            Assert.Equal("performance", projects[0].ProjectId);
+            Assert.Contains("Business API Base URL", error.Message);
         }
 
         [Fact]
@@ -238,12 +269,32 @@ namespace OfficeAgent.Infrastructure.Tests
                     ItemCount = items.Count;
                 }
 
+                var responseBody = request.RequestUri?.AbsolutePath switch
+                {
+                    "/projects" => @"[{""projectId"":""performance"",""displayName"":""绩效项目""}]",
+                    _ => "[]",
+                };
+
                 var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
                 {
-                    Content = new StringContent("[]", Encoding.UTF8, "application/json"),
+                    Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 };
 
                 return Task.FromResult(response);
+            }
+        }
+
+        private sealed class UnauthorizedProjectsHandler : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                {
+                    Content = new StringContent(
+                        "{\"code\":\"unauthorized\",\"message\":\"未登录，请先通过 SSO 登录。\"}",
+                        Encoding.UTF8,
+                        "application/json"),
+                });
             }
         }
 

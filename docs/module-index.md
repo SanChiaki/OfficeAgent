@@ -14,7 +14,7 @@
 
 | 模块名 | 当前功能快照 | 相关设计 / 计划 | 相关测试 / 接入文档 |
 | --- | --- | --- | --- |
-| Ribbon Sync | [docs/modules/ribbon-sync-current-behavior.md](./modules/ribbon-sync-current-behavior.md) | [docs/superpowers/specs/2026-04-14-office-agent-ribbon-sync-configurability-design.md](./superpowers/specs/2026-04-14-office-agent-ribbon-sync-configurability-design.md)<br>[docs/superpowers/plans/2026-04-14-office-agent-metadata-layout-implementation-plan.md](./superpowers/plans/2026-04-14-office-agent-metadata-layout-implementation-plan.md) | [docs/vsto-manual-test-checklist.md](./vsto-manual-test-checklist.md)<br>[docs/ribbon-sync-real-system-integration-guide.md](./ribbon-sync-real-system-integration-guide.md)<br>[tests/mock-server/README.md](../tests/mock-server/README.md) |
+| Ribbon Sync | [docs/modules/ribbon-sync-current-behavior.md](./modules/ribbon-sync-current-behavior.md) | [docs/superpowers/specs/2026-04-14-office-agent-ribbon-sync-configurability-design.md](./superpowers/specs/2026-04-14-office-agent-ribbon-sync-configurability-design.md)<br>[docs/superpowers/plans/2026-04-14-office-agent-metadata-layout-implementation-plan.md](./superpowers/plans/2026-04-14-office-agent-metadata-layout-implementation-plan.md)<br>[docs/superpowers/plans/2026-04-14-ribbon-sync-multi-system-project-loading.md](./superpowers/plans/2026-04-14-ribbon-sync-multi-system-project-loading.md) | [docs/vsto-manual-test-checklist.md](./vsto-manual-test-checklist.md)<br>[docs/ribbon-sync-real-system-integration-guide.md](./ribbon-sync-real-system-integration-guide.md)<br>[tests/mock-server/README.md](../tests/mock-server/README.md) |
 
 ## 维护约定
 

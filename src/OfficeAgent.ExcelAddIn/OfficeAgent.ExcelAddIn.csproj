@@ -193,6 +193,7 @@
     <Compile Include="TaskPane\TaskPaneHostControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="ProjectSelectionKey.cs" />
     <Compile Include="WebBridge\WebMessageEnvelope.cs" />
     <Compile Include="WebBridge\WebMessageRouter.cs" />
     <Compile Include="WebBridge\WebViewBootstrapper.cs" />

@@ -43,6 +43,7 @@ node server.js
 
 - `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
 - `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
+- `Business Base URL` 也是 `/projects` 项目列表接口的基地址
 - 当前 mock 服务通过 SSO cookie 鉴权，不走 API Key
 - 业务接口在未登录时会返回 `401`
 
@@ -72,6 +73,23 @@ node server.js
   - 原有下载演示接口
 
 ### Ribbon Sync 相关接口
+
+#### `GET /projects`
+
+用于：
+
+- Ribbon 项目下拉框加载
+
+当前示例返回：
+
+```json
+[
+  {
+    "projectId": "performance",
+    "displayName": "绩效项目"
+  }
+]
+```
 
 #### `POST /head`
 
@@ -157,6 +175,8 @@ Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.w
   - `/find` 与 `/batchSave` 使用的数据行
 - `connectorHeadList`
   - `/head` 返回的字段头定义
+- `connectorProjects`
+  - `/projects` 返回的项目列表
 
 当前内置活动示例：
 

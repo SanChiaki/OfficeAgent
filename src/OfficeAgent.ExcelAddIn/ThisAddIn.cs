@@ -27,6 +27,7 @@ namespace OfficeAgent.ExcelAddIn
         internal SharedCookieContainer SharedCookies { get; private set; }
         internal FileCookieStore CookieStore { get; private set; }
         internal ISystemConnector CurrentBusinessConnector { get; private set; }
+        internal ISystemConnectorRegistry SystemConnectorRegistry { get; private set; }
         internal IWorksheetMetadataStore WorksheetMetadataStore { get; private set; }
         internal WorksheetSyncService WorksheetSyncService { get; private set; }
         internal WorksheetSyncExecutionService WorksheetSyncExecutionService { get; private set; }
@@ -82,9 +83,10 @@ namespace OfficeAgent.ExcelAddIn
                 fetchClient,
                 () => SettingsStore.Load());
             CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container);
+            SystemConnectorRegistry = new SystemConnectorRegistry(new[] { CurrentBusinessConnector });
             WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
             WorksheetSyncService = new WorksheetSyncService(
-                CurrentBusinessConnector,
+                SystemConnectorRegistry,
                 WorksheetMetadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
@@ -95,7 +97,6 @@ namespace OfficeAgent.ExcelAddIn
                 new ExcelWorksheetGridAdapter(Application),
                 new SyncOperationPreviewFactory());
             RibbonSyncController = new RibbonSyncController(
-                CurrentBusinessConnector,
                 WorksheetMetadataStore,
                 WorksheetSyncService,
                 GetActiveWorksheetName,

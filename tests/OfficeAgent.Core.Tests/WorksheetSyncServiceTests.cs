@@ -74,7 +74,7 @@ namespace OfficeAgent.Core.Tests
             metadataStore.FieldMappings["Sheet1"] = connector.FieldMappingSeedRows.ToArray();
             var service = CreateService(connector, metadataStore);
 
-            var rows = service.LoadFieldMappings("Sheet1", "performance");
+            var rows = service.LoadFieldMappings("Sheet1", "current-business-system", "performance");
 
             Assert.Equal("performance", connector.LastFieldMappingDefinitionProjectId);
             Assert.Same(connector.FieldMappingDefinition, metadataStore.LastLoadFieldMappingsDefinition);
@@ -90,7 +90,7 @@ namespace OfficeAgent.Core.Tests
             var rowIds = new[] { "row-1", "row-2" };
             var fieldKeys = new[] { "owner_name", "start_12345678" };
 
-            var rows = service.Download("performance", rowIds, fieldKeys);
+            var rows = service.Download("current-business-system", "performance", rowIds, fieldKeys);
 
             Assert.Same(connector.FindResult, rows);
             Assert.Equal("performance", connector.LastFindProjectId);
@@ -115,10 +115,36 @@ namespace OfficeAgent.Core.Tests
                 },
             };
 
-            service.Upload("performance", changes);
+            service.Upload("current-business-system", "performance", changes);
 
             Assert.Equal("performance", connector.LastBatchSaveProjectId);
             Assert.Same(changes, connector.LastBatchSaveChanges);
+        }
+
+        [Fact]
+        public void InitializeSheetUsesConnectorMatchingProjectSystemKey()
+        {
+            var connectorA = new FakeSystemConnector("system-a");
+            var connectorB = new FakeSystemConnector("system-b");
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = new WorksheetSyncService(
+                new SystemConnectorRegistry(new ISystemConnector[] { connectorA, connectorB }),
+                metadataStore,
+                new WorksheetChangeTracker(),
+                new SyncOperationPreviewFactory());
+
+            service.InitializeSheet(
+                "Sheet1",
+                new ProjectOption
+                {
+                    SystemKey = "system-b",
+                    ProjectId = "shared-project",
+                    DisplayName = "项目B",
+                });
+
+            Assert.Null(connectorA.LastCreateBindingSeedProject);
+            Assert.NotNull(connectorB.LastCreateBindingSeedProject);
+            Assert.Equal("system-b", metadataStore.LastSavedBinding.SystemKey);
         }
 
         private static WorksheetSyncService CreateService(
@@ -126,7 +152,7 @@ namespace OfficeAgent.Core.Tests
             FakeWorksheetMetadataStore metadataStore)
         {
             return new WorksheetSyncService(
-                connector,
+                new SystemConnectorRegistry(new[] { connector }),
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
@@ -134,11 +160,12 @@ namespace OfficeAgent.Core.Tests
 
         private sealed class FakeSystemConnector : ISystemConnector
         {
-            public FakeSystemConnector()
+            public FakeSystemConnector(string systemKey = "current-business-system")
             {
+                SystemKey = systemKey;
                 FieldMappingDefinition = new FieldMappingTableDefinition
                 {
-                    SystemKey = "current-business-system",
+                    SystemKey = systemKey,
                     Columns = new[]
                     {
                         new FieldMappingColumnDefinition { ColumnName = "ApiFieldKey", Role = FieldMappingSemanticRole.ApiFieldKey },
@@ -157,6 +184,8 @@ namespace OfficeAgent.Core.Tests
                     CreateMappingRow("Sheet1", "start_12345678", "activityProperty", false, currentParent: "测试活动111", currentChild: "开始时间"),
                 };
             }
+
+            public string SystemKey { get; }
 
             public SheetBinding BindingSeed { get; set; } = new SheetBinding
             {
@@ -211,7 +240,16 @@ namespace OfficeAgent.Core.Tests
             {
                 LastCreateBindingSeedSheetName = sheetName;
                 LastCreateBindingSeedProject = project;
-                return BindingSeed;
+                return new SheetBinding
+                {
+                    SheetName = sheetName,
+                    SystemKey = project?.SystemKey ?? SystemKey,
+                    ProjectId = project?.ProjectId ?? BindingSeed.ProjectId,
+                    ProjectName = project?.DisplayName ?? BindingSeed.ProjectName,
+                    HeaderStartRow = BindingSeed.HeaderStartRow,
+                    HeaderRowCount = BindingSeed.HeaderRowCount,
+                    DataStartRow = BindingSeed.DataStartRow,
+                };
             }
 
             public FieldMappingTableDefinition GetFieldMappingDefinition(string projectId)

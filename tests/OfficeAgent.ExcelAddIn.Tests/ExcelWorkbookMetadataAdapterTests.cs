@@ -28,11 +28,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
             var ensureWorksheet = adapterType.GetMethod("EnsureWorksheet", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-            ensureWorksheet.Invoke(adapter, new object[] { "_OfficeAgentMetadata", true });
+            ensureWorksheet.Invoke(adapter, new object[] { "_Settings", true });
 
             Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
             Assert.NotNull(application.MetadataSheet);
-            Assert.Equal("_OfficeAgentMetadata", application.MetadataSheet.Name);
+            Assert.Equal("_Settings", application.MetadataSheet.Name);
             Assert.Equal(1, application.BusinessSheet.ActivateCount);
         }
 
@@ -87,7 +87,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("_OfficeAgentMetadata");
+            application.CreateWorksheet("_Settings");
             application.MetadataSheet.SetCell(1, 1, "SheetBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "SystemKey");
@@ -163,7 +163,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public LayoutAwareFakeExcelWorksheet CreateWorksheet(string name)
             {
                 var worksheet = workbook.Worksheets.AddWorksheet(name);
-                if (string.Equals(name, "_OfficeAgentMetadata", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, "_Settings", StringComparison.OrdinalIgnoreCase))
                 {
                     MetadataSheet = worksheet;
                 }

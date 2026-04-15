@@ -14,19 +14,10 @@ namespace OfficeAgent.Infrastructure.Http
 {
     public sealed class CurrentBusinessSystemConnector : ISystemConnector
     {
+        private const string CurrentSystemKey = "current-business-system";
         private const int DefaultHeaderStartRow = 1;
         private const int DefaultHeaderRowCount = 2;
         private const int DefaultDataStartRow = 3;
-
-        private static readonly IReadOnlyList<ProjectOption> Projects = new[]
-        {
-            new ProjectOption
-            {
-                SystemKey = "current-business-system",
-                ProjectId = "performance",
-                DisplayName = "绩效项目",
-            },
-        };
 
         private static readonly IReadOnlyDictionary<string, string> PropertyLabels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -109,7 +100,21 @@ namespace OfficeAgent.Infrastructure.Http
                 cookieContainer: null);
         }
 
-        public IReadOnlyList<ProjectOption> GetProjects() => Projects;
+        public string SystemKey => CurrentSystemKey;
+
+        public IReadOnlyList<ProjectOption> GetProjects()
+        {
+            var projects = Get<List<ProjectOption>>("/projects") ?? new List<ProjectOption>();
+            return projects
+                .Where(project => project != null && !string.IsNullOrWhiteSpace(project.ProjectId))
+                .Select(project => new ProjectOption
+                {
+                    SystemKey = CurrentSystemKey,
+                    ProjectId = project.ProjectId ?? string.Empty,
+                    DisplayName = project.DisplayName ?? string.Empty,
+                })
+                .ToArray();
+        }
 
         public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
         {
@@ -121,7 +126,7 @@ namespace OfficeAgent.Infrastructure.Http
             return new SheetBinding
             {
                 SheetName = sheetName ?? string.Empty,
-                SystemKey = string.IsNullOrWhiteSpace(project.SystemKey) ? "current-business-system" : project.SystemKey,
+                SystemKey = string.IsNullOrWhiteSpace(project.SystemKey) ? CurrentSystemKey : project.SystemKey,
                 ProjectId = project.ProjectId ?? string.Empty,
                 ProjectName = project.DisplayName ?? string.Empty,
                 HeaderStartRow = DefaultHeaderStartRow,
@@ -132,11 +137,11 @@ namespace OfficeAgent.Infrastructure.Http
 
         public FieldMappingTableDefinition GetFieldMappingDefinition(string projectId)
         {
-            EnsureSupportedProject(projectId);
+            EnsureProjectId(projectId);
 
             return new FieldMappingTableDefinition
             {
-                SystemKey = "current-business-system",
+                SystemKey = CurrentSystemKey,
                 Columns = new[]
                 {
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingColumns.HeaderId, Role = FieldMappingSemanticRole.HeaderIdentity },
@@ -157,7 +162,7 @@ namespace OfficeAgent.Infrastructure.Http
 
         public IReadOnlyList<SheetFieldMappingRow> BuildFieldMappingSeed(string sheetName, string projectId)
         {
-            EnsureSupportedProject(projectId);
+            EnsureProjectId(projectId);
 
             var headWrapper = Post<SchemaHeadWrapper>("/head", new { projectId });
             var headList = headWrapper?.HeadList ?? Array.Empty<CurrentBusinessHeadDefinition>();
@@ -220,8 +225,21 @@ namespace OfficeAgent.Infrastructure.Http
         private T Post<T>(string path, object payload)
         {
             using var response = SendPost(path, payload);
-            response.EnsureSuccessStatusCode();
-            var content = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var content = ReadResponseContent(response);
+            EnsureSuccessStatusCode(response, content);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return default;
+            }
+
+            return JsonConvert.DeserializeObject<T>(content);
+        }
+
+        private T Get<T>(string path)
+        {
+            using var response = Send(HttpMethod.Get, path, payload: null);
+            var content = ReadResponseContent(response);
+            EnsureSuccessStatusCode(response, content);
             if (string.IsNullOrWhiteSpace(content))
             {
                 return default;
@@ -233,30 +251,37 @@ namespace OfficeAgent.Infrastructure.Http
         private void PostBatchSave(CurrentBusinessBatchSaveItem[] items)
         {
             using var response = SendPost("/batchSave", items);
+            var responseBody = ReadResponseContent(response);
             if (response.IsSuccessStatusCode)
             {
                 return;
             }
 
-            var responseBody = response.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
             if (ShouldRetryLegacyBatchSave(response.StatusCode, responseBody))
             {
                 OfficeAgentLog.Warn("business_api", "batch_save.legacy_retry", "Retrying batchSave with legacy items wrapper.", responseBody);
                 using var legacyResponse = SendPost("/batchSave", new { items });
-                legacyResponse.EnsureSuccessStatusCode();
+                var legacyResponseBody = ReadResponseContent(legacyResponse);
+                EnsureSuccessStatusCode(legacyResponse, legacyResponseBody);
                 return;
             }
 
-            response.EnsureSuccessStatusCode();
+            EnsureSuccessStatusCode(response, responseBody);
         }
 
         private HttpResponseMessage SendPost(string path, object payload)
         {
+            return Send(HttpMethod.Post, path, payload);
+        }
+
+        private HttpResponseMessage Send(HttpMethod method, string path, object payload)
+        {
             var baseUri = ResolveBaseUri();
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, path))
+            using var request = new HttpRequestMessage(method, new Uri(baseUri, path));
+            if (payload != null)
             {
-                Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json"),
-            };
+                request.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+            }
 
             return httpClient.SendAsync(request).GetAwaiter().GetResult();
         }
@@ -265,6 +290,29 @@ namespace OfficeAgent.Infrastructure.Http
         {
             return statusCode == HttpStatusCode.BadRequest
                 && responseBody.IndexOf("items", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string ReadResponseContent(HttpResponseMessage response)
+        {
+            return response.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+        }
+
+        private static void EnsureSuccessStatusCode(HttpResponseMessage response, string responseBody)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var message = string.IsNullOrWhiteSpace(responseBody)
+                    ? "业务系统未登录，请先登录后重试。"
+                    : "业务系统未登录，请先登录后重试。";
+                throw new InvalidOperationException(message);
+            }
+
+            response.EnsureSuccessStatusCode();
         }
 
         private Uri ResolveBaseUri()
@@ -279,13 +327,11 @@ namespace OfficeAgent.Infrastructure.Http
             return baseUri;
         }
 
-        private static void EnsureSupportedProject(string projectId)
+        private static void EnsureProjectId(string projectId)
         {
-            var supportedProjectId = Projects.Count > 0 ? Projects[0].ProjectId : string.Empty;
-            if (string.IsNullOrWhiteSpace(projectId) ||
-                !string.Equals(projectId, supportedProjectId, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(projectId))
             {
-                throw new InvalidOperationException("Unsupported project id for current business system.");
+                throw new InvalidOperationException("Project id is required for current business system.");
             }
         }
     }

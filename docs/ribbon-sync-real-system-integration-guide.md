@@ -11,13 +11,13 @@
 
 当前 Ribbon Sync 的核心思路已经从“固定列号 + 快照差异”切换为：
 
-- `_OfficeAgentMetadata` 是每个受管 sheet 的运行时事实来源
+- `_Settings` 是每个受管 sheet 的运行时事实来源
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
 - 当前只做全量下载、部分下载、全量上传、部分上传
 
-当前 `_OfficeAgentMetadata` 的具体形态也已经固定：
+当前 `_Settings` 的具体形态也已经固定：
 
 - 它是一个可见 worksheet，便于调试和人工维护
 - 它只承载两个 section：
@@ -31,7 +31,7 @@
 - `SheetFieldMappings` 永远在下
 - 两个 section 中间固定保留两行空白
 - 当前不再使用旧的“首列表名 + 每行一条压平记录”格式
-- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `_OfficeAgentMetadata`
+- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `_Settings`
 
 当前不做：
 
@@ -46,6 +46,8 @@
 ```csharp
 public interface ISystemConnector
 {
+    string SystemKey { get; }
+
     IReadOnlyList<ProjectOption> GetProjects();
 
     SheetBinding CreateBindingSeed(string sheetName, ProjectOption project);
@@ -65,8 +67,14 @@ public interface ISystemConnector
 }
 ```
 
+项目聚合和运行时路由在：
+
+- [src/OfficeAgent.Core/Services/ISystemConnectorRegistry.cs](../src/OfficeAgent.Core/Services/ISystemConnectorRegistry.cs)
+- [src/OfficeAgent.Core/Services/SystemConnectorRegistry.cs](../src/OfficeAgent.Core/Services/SystemConnectorRegistry.cs)
+
 其中真正参与当前主链路的能力是：
 
+- `SystemKey`
 - `GetProjects`
 - `CreateBindingSeed`
 - `GetFieldMappingDefinition`
@@ -83,11 +91,12 @@ Ribbon 点击链路：
 1. [src/OfficeAgent.ExcelAddIn/RibbonSyncController.cs](../src/OfficeAgent.ExcelAddIn/RibbonSyncController.cs)
 2. [src/OfficeAgent.ExcelAddIn/WorksheetSyncExecutionService.cs](../src/OfficeAgent.ExcelAddIn/WorksheetSyncExecutionService.cs)
 3. [src/OfficeAgent.Core/Sync/WorksheetSyncService.cs](../src/OfficeAgent.Core/Sync/WorksheetSyncService.cs)
-4. `ISystemConnector`
+4. `ISystemConnectorRegistry`
+5. `ISystemConnector`
 
 说明：
 
-- 如果只是替换业务接口，优先改连接器，不要先改 Excel 执行链路
+- 如果只是接入新的业务接口，优先新增或替换连接器，再把它注册到 `SystemConnectorRegistry`
 - 只有当真实系统的表头模型、选区解释规则或上传粒度不同，才需要继续改 Excel 层
 
 ## 4. 真实系统至少要提供什么
@@ -96,9 +105,28 @@ Ribbon 点击链路：
 
 项目下拉框需要：
 
-- `systemKey`
 - `projectId`
 - `displayName`
+
+其中：
+
+- `systemKey` 由连接器自身提供，不要求项目接口返回
+- 如果项目接口返回了 `systemKey`，当前注册表仍会以连接器自己的 `SystemKey` 为准
+- 项目列表统一由 `ISystemConnector.GetProjects()` 提供，Ribbon 本身不关心底层是真实接口、聚合接口还是静态配置
+
+当前 Ribbon 对项目列表的用户可见行为是：
+
+- 当前 sheet 没有绑定时，下拉框显示 `先选择项目`
+- 项目接口返回有效列表时，下拉框显示项目条目
+- 项目接口返回 `401 Unauthorized` 时，连接器应转成可读的“请先登录”错误，Ribbon 会显示 `请先登录`
+- 项目接口返回空数组时，Ribbon 会显示 `无可用项目`
+- 项目接口发生其他异常时，Ribbon 会显示 `项目加载失败`
+
+因此接入真实系统时，项目接口至少要明确：
+
+- 未登录时的返回状态码
+- 空项目列表是不是合法业务状态
+- 是否必须先经过 SSO 登录才能访问项目列表
 
 对应模型：
 
@@ -120,6 +148,11 @@ Ribbon 点击链路：
 
 如果你的真实系统有别的默认布局，可以在 `CreateBindingSeed` 里改。
 
+注意：
+
+- 这些默认值只在首次绑定或初始化时作为 seed 使用
+- 如果用户已经在 `_Settings` 中手工维护过 `HeaderStartRow`、`HeaderRowCount`、`DataStartRow`，重新选择项目时当前实现会优先保留现有值
+
 ### 4.3 字段映射定义
 
 连接器必须定义 `SheetFieldMappings` 的动态列结构，也就是：
@@ -130,7 +163,7 @@ Ribbon 点击链路：
 这里有两个实现约束：
 
 - Excel 层只固定 `SheetName` 是第一列作用域列
-- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `_OfficeAgentMetadata` 里的 `SheetFieldMappings` section 中
+- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `_Settings` 里的 `SheetFieldMappings` section 中
 
 当前系统的例子在：
 
@@ -191,11 +224,21 @@ Ribbon 点击链路：
 - Excel 表头和接口字段的映射通过接口拉取
 - 双层活动表头由活动头 + 属性字段组合出来
 
-## 6. 推荐改造路线
+另外，当前项目列表也已经完全接口化：
 
-### 路线 A：先接一个真实系统，保持当前架构
+- `GET /projects` 由连接器拉取
+- Ribbon 只消费 `GetProjects()` 的返回值
+- 如果真实系统后续改成别的项目聚合逻辑，只需要调整连接器，不需要改 Ribbon 控件层
 
-这是当前最推荐的做法。
+## 6. 当前推荐改造路线
+
+当前注册中心已经存在，所以接入真实系统时的推荐做法是：
+
+1. 新增一个实现 `ISystemConnector` 的真实连接器
+2. 在连接器内部封装项目列表、字段头、查询、更新的真实接口差异
+3. 在 `ThisAddIn` 里把该连接器注册到 `SystemConnectorRegistry`
+4. 如果要替换当前系统，就只注册新的连接器
+5. 如果要并存多个系统，就同时注册多个连接器
 
 建议新增：
 
@@ -203,28 +246,11 @@ Ribbon 点击链路：
 - `RealBusinessFieldMappingSeedBuilder`
 - 必要的 DTO / mapper
 
-做法：
+这条路线下：
 
-1. 参考 `CurrentBusinessSystemConnector` 新建真实连接器
-2. 把真实接口 payload / response 映射都封装在连接器层
-3. 在连接器层生成 `FieldMappingTableDefinition`
-4. 在连接器层生成 `SheetFieldMappings` 种子数据
-5. 保持 `RibbonSyncController` 和 `WorksheetSyncExecutionService` 不变
-
-### 路线 B：准备接多个系统时，再补注册中心
-
-如果后续要接第二个系统，再引入：
-
-- `ISystemConnectorRegistry`
-- `SystemConnectorRegistry`
-
-职责：
-
-- 根据 `systemKey` 取连接器
-- 聚合多个系统的项目列表
-- 根据 sheet 元数据里的 `systemKey` 找回正确连接器
-
-当前还不需要先做这一步。
+- Ribbon 项目下拉框会自动聚合所有已注册连接器的项目
+- 绑定到 sheet 上的是 `SystemKey + ProjectId`
+- 后续下载 / 上传会自动按 `SystemKey` 找回正确连接器
 
 ## 7. 对真实系统最重要的几个约束
 
@@ -249,7 +275,7 @@ Ribbon 点击链路：
 
 真实系统接入时不要把它们重新写死回默认值。
 
-同时要注意，用户现在也可能直接手工维护 `_OfficeAgentMetadata`：
+同时要注意，用户现在也可能直接手工维护 `_Settings`：
 
 - 修改 `SheetBindings` 的配置值
 - 修改 `SheetFieldMappings` 的当前显示名
@@ -287,7 +313,7 @@ Ribbon 点击链路：
 这意味着：
 
 - 不需要为真实系统接入额外设计“旧 metadata 迁移逻辑”
-- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `_OfficeAgentMetadata`
+- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `_Settings`
 - 如果你从别的历史分支带来旧格式数据，应先清理，再按当前版本重新初始化
 
 ## 8. 真实系统落地步骤
@@ -299,8 +325,8 @@ Ribbon 点击链路：
 3. 新建真实连接器和 DTO
 4. 新建真实系统的 `FieldMappingSeedBuilder`
 5. 让连接器先跑通 `GetProjects -> BuildFieldMappingSeed -> Find -> BatchSave`
-6. 再在 `ThisAddIn` 中切换连接器实例
-7. 在 Excel 中执行一次 `初始化当前表`，确认 `_OfficeAgentMetadata` 被按当前标准布局写出
+6. 再在 `ThisAddIn` 中注册或切换连接器实例
+7. 在 Excel 中执行一次 `初始化当前表`，确认 `_Settings` 被按当前标准布局写出
 8. 最后做 Excel 联调和手工回归
 
 当前注册位置：
@@ -363,8 +389,10 @@ Ribbon 点击链路：
 至少确认：
 
 - 选择项目后自动尝试初始化
+- 未登录时项目下拉框显示 `请先登录`，登录成功后能够自动重载项目列表
+- 项目接口返回空列表时，下拉框显示 `无可用项目`
 - 显式初始化不会破坏业务单元格
-- `_OfficeAgentMetadata` 会以单 sheet、上下两个 section 的可读布局写出
+- `_Settings` 会以单 sheet、上下两个 section 的可读布局写出
 - 全量下载能按配置行号落位
 - 已有表头场景下，全量下载不会重写已识别表头
 - 部分上传 / 部分下载在不包含 ID / 表头的选区里仍能正确定位
@@ -388,7 +416,7 @@ Ribbon 点击链路：
 1. 保持 `ISystemConnector` 的主边界不变
 2. 新建真实系统连接器和映射种子构建器
 3. 在连接器层消化真实接口差异
-4. 暂时继续在 `ThisAddIn` 里注册该连接器
-5. 等第二个系统确定要接时，再补注册中心
+4. 在 `ThisAddIn` 里把它注册进 `SystemConnectorRegistry`
+5. 如果只保留一个系统，就只注册这一个连接器
 
-这是当前成本最低、风险最小、又不会阻断后续扩展的路线。
+如果后续要并存多个系统，就继续新增连接器并一起注册，不需要重做 Ribbon Sync 主链路。

@@ -46,8 +46,6 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // tab1
             // 
-            this.tab1.ControlId.ControlIdType = Microsoft.Office.Tools.Ribbon.RibbonControlIdType.Office;
-            this.tab1.ControlId.OfficeId = "TabAddIns";
             this.tab1.Groups.Add(this.group1);
             this.tab1.Groups.Add(this.groupProject);
             this.tab1.Groups.Add(this.groupDownload);
@@ -60,14 +58,13 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.group1.Items.Add(this.toggleTaskPaneButton);
             this.group1.Label = "Resy AI";
-            this.group1.Name = "group1";
+            this.group1.Name = "groupAgent";
             // 
             // toggleTaskPaneButton
             // 
-            this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
-            this.toggleTaskPaneButton.Label = "Open";
-            this.toggleTaskPaneButton.Name = "toggleTaskPaneButton";
-            this.toggleTaskPaneButton.ShowImage = true;
+            this.toggleTaskPaneButton.Label = "Resy AI";
+            this.toggleTaskPaneButton.Name = "openTaskPaneButton";
+            this.toggleTaskPaneButton.ShowImage = false;
             this.toggleTaskPaneButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ToggleTaskPaneButton_Click);
             // 
             // groupProject
@@ -81,6 +78,8 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.projectDropDown.Label = "\u5148\u9009\u62E9\u9879\u76EE";
             this.projectDropDown.Name = "projectDropDown";
+            this.projectDropDown.ShowItemLabel = true;
+            this.projectDropDown.ShowLabel = false;
             this.projectDropDown.SelectionChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_SelectionChanged);
             // 
             // initializeSheetButton

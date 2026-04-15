@@ -38,6 +38,43 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void TryAutoInitializeCurrentSheetReinitializesWhenSystemKeyChangesButProjectIdMatches()
+        {
+            var connectorA = new FakeSystemConnector("system-a");
+            var connectorB = new FakeSystemConnector("system-b");
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "system-a",
+                ProjectId = "shared-project",
+                ProjectName = "旧项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+
+            var (service, _) = CreateService(
+                new[] { connectorA, connectorB },
+                metadataStore,
+                new FakeWorksheetSelectionReader());
+
+            InvokeTryAutoInitialize(service, "Sheet1", new ProjectOption
+            {
+                SystemKey = "system-b",
+                ProjectId = "shared-project",
+                DisplayName = "新项目",
+            });
+
+            Assert.Equal("system-b", metadataStore.LastSavedBinding.SystemKey);
+            Assert.Equal("shared-project", metadataStore.LastSavedBinding.ProjectId);
+            Assert.Equal("新项目", metadataStore.LastSavedBinding.ProjectName);
+            Assert.Null(connectorA.LastCreateBindingSeedProject);
+            Assert.NotNull(connectorB.LastCreateBindingSeedProject);
+        }
+
+        [Fact]
         public void ExecuteFullDownloadHonorsConfiguredHeaderAndDataRowsWhenSheetHeadersAreEmpty()
         {
             var connector = new FakeSystemConnector();
@@ -288,12 +325,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeWorksheetMetadataStore metadataStore,
             FakeWorksheetSelectionReader selectionReader)
         {
+            return CreateService(new[] { connector }, metadataStore, selectionReader);
+        }
+
+        private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
+            IReadOnlyList<FakeSystemConnector> connectors,
+            FakeWorksheetMetadataStore metadataStore,
+            FakeWorksheetSelectionReader selectionReader)
+        {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var serviceType = assembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
             var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
             var grid = new FakeWorksheetGridAdapter(gridInterface);
             var syncService = new WorksheetSyncService(
-                connector,
+                new SystemConnectorRegistry(connectors.Cast<ISystemConnector>().ToArray()),
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
@@ -365,6 +410,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
             if (method == null)
             {
                 throw new InvalidOperationException("InitializeCurrentSheet was not found.");
+            }
+
+            method.Invoke(service, new object[] { sheetName, project });
+        }
+
+        private static void InvokeTryAutoInitialize(object service, string sheetName, ProjectOption project)
+        {
+            var method = service.GetType().GetMethod(
+                "TryAutoInitializeCurrentSheet",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("TryAutoInitializeCurrentSheet was not found.");
             }
 
             method.Invoke(service, new object[] { sheetName, project });
@@ -542,12 +601,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private sealed class FakeSystemConnector : ISystemConnector
         {
-            public FakeSystemConnector()
+            public FakeSystemConnector(string systemKey = "current-business-system")
             {
+                SystemKey = systemKey;
                 BindingSeed = new SheetBinding
                 {
                     SheetName = "Sheet1",
-                    SystemKey = "current-business-system",
+                    SystemKey = systemKey,
                     ProjectId = "performance",
                     ProjectName = "绩效项目",
                     HeaderStartRow = 1,
@@ -558,6 +618,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 FieldMappingSeedRows = BuildDefaultMappings("Sheet1");
             }
 
+            public string SystemKey { get; }
+
             public SheetBinding BindingSeed { get; set; }
 
             public FieldMappingTableDefinition FieldMappingDefinition { get; set; }
@@ -565,6 +627,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public IReadOnlyList<SheetFieldMappingRow> FieldMappingSeedRows { get; set; }
 
             public IReadOnlyList<IDictionary<string, object>> FindResult { get; set; } = Array.Empty<IDictionary<string, object>>();
+
+            public ProjectOption LastCreateBindingSeedProject { get; private set; }
 
             public string LastFieldMappingDefinitionProjectId { get; private set; }
 
@@ -585,10 +649,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
             {
+                LastCreateBindingSeedProject = project;
                 return new SheetBinding
                 {
                     SheetName = sheetName,
-                    SystemKey = project?.SystemKey ?? string.Empty,
+                    SystemKey = project?.SystemKey ?? SystemKey,
                     ProjectId = project?.ProjectId ?? string.Empty,
                     ProjectName = project?.DisplayName ?? string.Empty,
                     HeaderStartRow = BindingSeed.HeaderStartRow,

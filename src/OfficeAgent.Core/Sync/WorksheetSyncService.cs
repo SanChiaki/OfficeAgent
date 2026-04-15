@@ -7,24 +7,29 @@ namespace OfficeAgent.Core.Sync
 {
     public sealed class WorksheetSyncService
     {
-        private readonly ISystemConnector connector;
+        private readonly ISystemConnectorRegistry connectorRegistry;
         private readonly IWorksheetMetadataStore metadataStore;
 
         public WorksheetSyncService(
-            ISystemConnector connector,
+            ISystemConnectorRegistry connectorRegistry,
             IWorksheetMetadataStore metadataStore)
         {
-            this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
+            this.connectorRegistry = connectorRegistry ?? throw new ArgumentNullException(nameof(connectorRegistry));
             this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
         }
 
         public WorksheetSyncService(
-            ISystemConnector connector,
+            ISystemConnectorRegistry connectorRegistry,
             IWorksheetMetadataStore metadataStore,
             WorksheetChangeTracker changeTracker,
             SyncOperationPreviewFactory previewFactory)
-            : this(connector, metadataStore)
+            : this(connectorRegistry, metadataStore)
         {
+        }
+
+        public IReadOnlyList<ProjectOption> GetProjects()
+        {
+            return connectorRegistry.GetProjects() ?? Array.Empty<ProjectOption>();
         }
 
         public void InitializeSheet(string sheetName, ProjectOption project)
@@ -39,6 +44,7 @@ namespace OfficeAgent.Core.Sync
                 throw new ArgumentNullException(nameof(project));
             }
 
+            var connector = GetRequiredConnector(project.SystemKey);
             var bindingSeed = connector.CreateBindingSeed(sheetName, project);
             var binding = MergeExistingLayout(bindingSeed);
             var definition = connector.GetFieldMappingDefinition(project.ProjectId);
@@ -48,33 +54,55 @@ namespace OfficeAgent.Core.Sync
             metadataStore.SaveFieldMappings(sheetName, definition, seedRows);
         }
 
+        public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            var connector = GetRequiredConnector(project.SystemKey);
+            return MergeExistingLayout(connector.CreateBindingSeed(sheetName, project));
+        }
+
         public SheetBinding LoadBinding(string sheetName)
         {
             return metadataStore.LoadBinding(sheetName);
         }
 
-        public FieldMappingTableDefinition LoadFieldMappingDefinition(string projectId)
+        public FieldMappingTableDefinition LoadFieldMappingDefinition(string systemKey, string projectId)
         {
-            return connector.GetFieldMappingDefinition(projectId);
+            return GetRequiredConnector(systemKey).GetFieldMappingDefinition(projectId);
         }
 
-        public SheetFieldMappingRow[] LoadFieldMappings(string sheetName, string projectId)
+        public SheetFieldMappingRow[] LoadFieldMappings(string sheetName, string systemKey, string projectId)
         {
-            var definition = connector.GetFieldMappingDefinition(projectId);
+            var definition = LoadFieldMappingDefinition(systemKey, projectId);
             return metadataStore.LoadFieldMappings(sheetName, definition);
         }
 
         public IReadOnlyList<IDictionary<string, object>> Download(
+            string systemKey,
             string projectId,
             IReadOnlyList<string> rowIds,
             IReadOnlyList<string> fieldKeys)
         {
-            return connector.Find(projectId, rowIds, fieldKeys);
+            return GetRequiredConnector(systemKey).Find(projectId, rowIds, fieldKeys);
         }
 
-        public void Upload(string projectId, IReadOnlyList<CellChange> changes)
+        public void Upload(string systemKey, string projectId, IReadOnlyList<CellChange> changes)
         {
-            connector.BatchSave(projectId, changes);
+            GetRequiredConnector(systemKey).BatchSave(projectId, changes);
+        }
+
+        private ISystemConnector GetRequiredConnector(string systemKey)
+        {
+            return connectorRegistry.GetRequiredConnector(systemKey);
         }
 
         private SheetBinding MergeExistingLayout(SheetBinding bindingSeed)

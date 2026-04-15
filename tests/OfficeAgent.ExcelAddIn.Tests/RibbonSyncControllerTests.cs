@@ -148,7 +148,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var executionService = CreateExecutionService(addInAssembly, connector, metadataStore);
             var dialogInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Dialogs.IRibbonSyncDialogService", throwOnError: true);
             var syncService = new WorksheetSyncService(
-                connector,
+                new SystemConnectorRegistry(new ISystemConnector[] { connector }),
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
@@ -158,7 +158,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 binder: null,
                 types: new[]
                 {
-                    typeof(ISystemConnector),
                     typeof(IWorksheetMetadataStore),
                     typeof(WorksheetSyncService),
                     typeof(Func<string>),
@@ -171,7 +170,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
             }
-            return ctor.Invoke(new object[] { connector, metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() });
+            return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() });
         }
 
         private static object CreateExecutionService(
@@ -183,7 +182,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var gridInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
             var grid = new FakeWorksheetGridAdapter(gridInterface);
             var syncService = new WorksheetSyncService(
-                connector,
+                new SystemConnectorRegistry(new ISystemConnector[] { connector }),
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
@@ -326,6 +325,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     },
                 };
             }
+
+            public string SystemKey => "current-business-system";
 
             public SheetBinding BindingSeed { get; set; }
 

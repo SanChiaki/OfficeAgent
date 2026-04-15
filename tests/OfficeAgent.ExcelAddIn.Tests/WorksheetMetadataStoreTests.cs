@@ -29,7 +29,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             InvokeSaveBinding(store, binding);
 
-            Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
+            Assert.Equal("_Settings", adapter.WorksheetName);
             Assert.True(adapter.Visible);
 
             var loaded = InvokeLoadBinding(store, "Sheet1");
@@ -129,7 +129,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 }
             );
 
-            Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
+            Assert.Equal("_Settings", adapter.WorksheetName);
             Assert.True(adapter.Visible);
 
             var loaded = InvokeLoadFieldMappings(store, "Sheet1", definition);
@@ -246,7 +246,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var headersAfter = adapter.ReadSeededHeaders("SheetFieldMappings");
             Assert.Equal(headersBefore, headersAfter);
-            Assert.Equal("_OfficeAgentMetadata", adapter.WorksheetName);
+            Assert.Equal("_Settings", adapter.WorksheetName);
             Assert.True(adapter.Visible);
         }
 

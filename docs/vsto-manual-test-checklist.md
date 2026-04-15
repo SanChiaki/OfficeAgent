@@ -53,15 +53,17 @@
 
 ## Ribbon Sync
 
-- Bind a blank worksheet through the Ribbon project dropdown and confirm `_OfficeAgentMetadata` stays visible and writes one `SheetBindings` row plus the current sheet's `SheetFieldMappings`.
-- Open `_OfficeAgentMetadata` and confirm it uses one worksheet with two readable sections: `SheetBindings` on top, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
+- Bind a blank worksheet through the Ribbon project dropdown and confirm `_Settings` stays visible and writes one `SheetBindings` row plus the current sheet's `SheetFieldMappings`.
+- Open `_Settings` and confirm it uses one worksheet with two readable sections: `SheetBindings` on top, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm there are two blank separator rows between `SheetBindings` and `SheetFieldMappings`, and that metadata is no longer stored as flattened `tableName + values` rows.
 - Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project instead of showing `先选择项目`.
 - Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
-- Click `初始化当前表` on a sheet that already contains business cells and confirm only `_OfficeAgentMetadata` changes; the business area should remain untouched.
+- Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows `请先登录`.
+- Configure the project API to return an empty array and confirm the project dropdown shows `无可用项目`.
+- Click `初始化当前表` on a sheet that already contains business cells and confirm only `_Settings` changes; the business area should remain untouched.
 - Click `全量下载`, `部分下载`, `全量上传`, and `部分上传` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
 - Confirm the `下载` and `上传` controls are rendered in separate Ribbon groups, and that there is no `增量上传` button.
-- Edit `_OfficeAgentMetadata` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run `全量下载` and confirm headers/data are written at the configured rows.
+- Edit `_Settings` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run `全量下载` and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run `全量下载` and confirm the plugin refreshes data cells without rewriting those existing headers.
 - Modify a current display name in `SheetFieldMappings`, update the matching Excel header text manually, then run `部分下载` or `部分上传` and confirm the column still resolves by current header text.
 - Verify the task pane button and login button still work after the Ribbon Sync controls are added.

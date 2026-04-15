@@ -38,6 +38,10 @@ const connectorHeadList = [
   },
 ];
 
+const connectorProjects = [
+  { projectId: "performance", displayName: "绩效项目" },
+];
+
 // ---------------------------------------------------------------------------
 // SSO Login Server :3100
 // ---------------------------------------------------------------------------
@@ -154,6 +158,10 @@ apiApp.post("/upload_data", requireAuth, function (req, res) {
   });
 });
 
+apiApp.get("/projects", requireAuth, function (_req, res) {
+  res.json(connectorProjects);
+});
+
 apiApp.post("/head", requireAuth, function (_req, res) {
   res.json({ headList: connectorHeadList });
 });
@@ -232,6 +240,7 @@ apiApp.listen(3200, function () {
   console.log("[Business] http://localhost:3200/api/performance");
   console.log("[Business] http://localhost:3200/api/download/:project");
   console.log("[Business] http://localhost:3200/upload_data");
+  console.log("[Business] http://localhost:3200/projects");
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
