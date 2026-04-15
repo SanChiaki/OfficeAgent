@@ -16,6 +16,7 @@ using DpapiSecretProtector = OfficeAgent.Infrastructure.Security.DpapiSecretProt
 
 namespace OfficeAgent.IntegrationTests
 {
+    [Collection(MockServerCollection.Name)]
     public sealed class BusinessApiIntegrationTests : IClassFixture<MockServerFixture>
     {
         private const string ProjectA = "\u9879\u76EEA";
@@ -114,6 +115,16 @@ namespace OfficeAgent.IntegrationTests
         }
     }
 
+    public static class MockServerCollection
+    {
+        public const string Name = "Mock server";
+    }
+
+    [CollectionDefinition(MockServerCollection.Name)]
+    public sealed class MockServerCollectionDefinition : ICollectionFixture<MockServerFixture>
+    {
+    }
+
     public sealed class MockServerFixture : IDisposable
     {
         public readonly int SsoPort = 3100;
@@ -122,6 +133,8 @@ namespace OfficeAgent.IntegrationTests
         public readonly string BusinessUrl = "http://localhost:3200";
 
         private readonly Process process;
+        private Task<string> standardOutputTask;
+        private Task<string> standardErrorTask;
 
         public MockServerFixture()
         {
@@ -145,20 +158,56 @@ namespace OfficeAgent.IntegrationTests
                 },
             };
             process.Start();
+            standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            standardErrorTask = process.StandardError.ReadToEndAsync();
 
             using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+            WaitForServerReady(client, SsoUrl + "/login");
+            WaitForServerReady(client, BusinessUrl + "/projects");
+        }
+
+        private void WaitForServerReady(HttpClient client, string url)
+        {
+            Exception lastError = null;
+
             for (int i = 0; i < 30; i++)
             {
                 Thread.Sleep(200);
+
                 try
                 {
-                    client.GetAsync(SsoUrl + "/login").GetAwaiter().GetResult().EnsureSuccessStatusCode();
+                    using var response = client.GetAsync(url).GetAwaiter().GetResult();
                     return;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                }
             }
 
-            throw new InvalidOperationException("Mock server did not start within the timeout.");
+            var message = process.HasExited
+                ? "Mock server exited before startup completed."
+                : "Mock server did not start within the timeout.";
+            var lastErrorText = lastError == null
+                ? string.Empty
+                : "Last readiness error: " + lastError.Message + "\r\n";
+
+            throw new InvalidOperationException(
+                message + "\r\n"
+                + lastErrorText
+                + ReadProcessOutput());
+        }
+
+        private string ReadProcessOutput()
+        {
+            if (!process.HasExited)
+            {
+                return "(mock server process is still running; output capture is not complete)";
+            }
+
+            var stdout = standardOutputTask?.GetAwaiter().GetResult() ?? string.Empty;
+            var stderr = standardErrorTask?.GetAwaiter().GetResult() ?? string.Empty;
+            return stdout + "\r\n" + stderr;
         }
 
         public void Dispose()
