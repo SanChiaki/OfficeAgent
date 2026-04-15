@@ -12,11 +12,12 @@ namespace OfficeAgent.ExcelAddIn
 {
     public partial class AgentRibbon
     {
-        private const string EmptyProjectTag = "__empty__";
-        private const string StatusProjectTag = "__status__";
-
         private readonly Dictionary<string, ProjectOption> projectOptionsByKey =
             new Dictionary<string, ProjectOption>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ProjectOption> projectOptionsByLabel =
+            new Dictionary<string, ProjectOption>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> projectLabelsByKey =
+            new Dictionary<string, string>(StringComparer.Ordinal);
 
         private bool isUpdatingProjectDropDown;
 
@@ -79,45 +80,35 @@ namespace OfficeAgent.ExcelAddIn
                 return;
             }
 
-            var targetTag = string.IsNullOrWhiteSpace(syncController.ActiveProjectId) ||
-                            string.IsNullOrWhiteSpace(syncController.ActiveSystemKey)
-                ? EmptyProjectTag
-                : ProjectSelectionKey.Build(syncController.ActiveSystemKey, syncController.ActiveProjectId);
-
             isUpdatingProjectDropDown = true;
             try
             {
-                var selected = projectDropDown.Items
-                    .OfType<RibbonDropDownItem>()
-                    .FirstOrDefault(item => string.Equals(item.Tag as string, targetTag, StringComparison.Ordinal));
-
-                if (selected == null && !string.IsNullOrWhiteSpace(syncController.ActiveProjectId))
-                {
-                    selected = CreateProjectDropDownItem(
-                        syncController.ActiveProjectDisplayName,
-                        ProjectSelectionKey.Build(syncController.ActiveSystemKey, syncController.ActiveProjectId));
-                    projectDropDown.Items.Add(selected);
-                }
-
-                if (selected == null && projectOptionsByKey.Count == 0)
+                if (projectOptionsByKey.Count == 0 && string.IsNullOrWhiteSpace(syncController.ActiveProjectId))
                 {
                     OfficeAgentLog.Warn("ribbon", "project_dropdown.refresh_preserved_status", "Skipped project dropdown refresh because no projects are currently available.");
                     return;
                 }
 
-                if (selected == null)
+                string text;
+                if (!string.IsNullOrWhiteSpace(syncController.ActiveProjectId) &&
+                    !string.IsNullOrWhiteSpace(syncController.ActiveSystemKey))
                 {
-                    selected = projectDropDown.Items
-                        .OfType<RibbonDropDownItem>()
-                        .FirstOrDefault(item => string.Equals(item.Tag as string, EmptyProjectTag, StringComparison.Ordinal));
+                    var targetKey = ProjectSelectionKey.Build(syncController.ActiveSystemKey, syncController.ActiveProjectId);
+                    if (!projectLabelsByKey.TryGetValue(targetKey, out text))
+                    {
+                        text = syncController.ActiveProjectDisplayName;
+                    }
+                }
+                else
+                {
+                    text = "先选择项目";
                 }
 
-                SelectProjectDropDownItem(selected);
-                projectDropDown.Label = syncController.ActiveProjectDisplayName;
+                SetProjectDropDownText(text);
                 OfficeAgentLog.Info(
                     "ribbon",
                     "project_dropdown.refresh_applied",
-                    $"Refreshed project dropdown. ItemCount={projectDropDown.Items.Count}; Selected={(projectDropDown.SelectedItem?.Label ?? "<null>")}; SelectedIndex={projectDropDown.SelectedItemIndex}");
+                    $"Refreshed project dropdown. ItemCount={projectDropDown.Items.Count}; Text={projectDropDown.Text ?? "<null>"}");
             }
             finally
             {
@@ -134,17 +125,18 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             projectOptionsByKey.Clear();
+            projectOptionsByLabel.Clear();
+            projectLabelsByKey.Clear();
 
             isUpdatingProjectDropDown = true;
             try
             {
                 projectDropDown.Items.Clear();
-                var placeholderItem = CreateProjectDropDownItem("先选择项目", EmptyProjectTag);
-                projectDropDown.Items.Add(placeholderItem);
-                SelectProjectDropDownItem(placeholderItem);
+                SetProjectDropDownText("先选择项目");
 
                 try
                 {
+                    var usedLabels = new HashSet<string>(StringComparer.Ordinal);
                     var projects = syncController.GetProjects() ?? Array.Empty<ProjectOption>();
                     foreach (var project in projects)
                     {
@@ -156,8 +148,11 @@ namespace OfficeAgent.ExcelAddIn
                         }
 
                         var projectKey = ProjectSelectionKey.Build(systemKey, projectId);
+                        var projectLabel = CreateProjectDropDownLabel(project, usedLabels);
                         projectOptionsByKey[projectKey] = project;
-                        projectDropDown.Items.Add(CreateProjectDropDownItem(project.DisplayName, projectKey));
+                        projectOptionsByLabel[projectLabel] = project;
+                        projectLabelsByKey[projectKey] = projectLabel;
+                        projectDropDown.Items.Add(CreateProjectDropDownItem(projectLabel, projectKey));
                     }
 
                     if (projectOptionsByKey.Count == 0)
@@ -174,7 +169,7 @@ namespace OfficeAgent.ExcelAddIn
                         OfficeAgentLog.Info(
                             "ribbon",
                             "project_dropdown.populate_applied",
-                            $"Populated project dropdown. ItemCount={projectDropDown.Items.Count}; Selected={(projectDropDown.SelectedItem?.Label ?? "<null>")}; SelectedIndex={projectDropDown.SelectedItemIndex}");
+                            $"Populated project dropdown. ItemCount={projectDropDown.Items.Count}; Text={projectDropDown.Text ?? "<null>"}");
                     }
                 }
                 catch (InvalidOperationException ex)
@@ -233,16 +228,13 @@ namespace OfficeAgent.ExcelAddIn
         private void SetProjectDropDownStatus(string label)
         {
             projectDropDown.Items.Clear();
-            var statusItem = CreateProjectDropDownItem(label, StatusProjectTag);
-            projectDropDown.Items.Add(statusItem);
-            SelectProjectDropDownItem(statusItem);
-            projectDropDown.Label = label ?? string.Empty;
+            SetProjectDropDownText(label);
         }
 
-        private void SelectProjectDropDownItem(RibbonDropDownItem item)
+        private void SetProjectDropDownText(string text)
         {
-            projectDropDown.SelectedItem = item;
-            projectDropDown.SelectedItemIndex = projectDropDown.Items.IndexOf(item);
+            projectDropDown.Text = text ?? string.Empty;
+            projectDropDown.Label = text ?? string.Empty;
         }
 
         private RibbonDropDownItem CreateProjectDropDownItem(string label, string tag)
@@ -253,21 +245,44 @@ namespace OfficeAgent.ExcelAddIn
             return item;
         }
 
-        private void ProjectDropDown_SelectionChanged(object sender, RibbonControlEventArgs e)
+        private string CreateProjectDropDownLabel(ProjectOption project, ISet<string> usedLabels)
+        {
+            var baseLabel = string.IsNullOrWhiteSpace(project?.DisplayName)
+                ? project?.ProjectId ?? string.Empty
+                : project.DisplayName;
+            var candidate = baseLabel;
+            if (usedLabels.Contains(candidate))
+            {
+                candidate = $"{baseLabel} [{project?.SystemKey ?? string.Empty}/{project?.ProjectId ?? string.Empty}]";
+            }
+
+            usedLabels.Add(candidate);
+            return candidate;
+        }
+
+        private void ProjectDropDown_ItemsLoading(object sender, RibbonControlEventArgs e)
+        {
+            PopulateProjectDropDown();
+            RefreshProjectDropDownFromController();
+        }
+
+        private void ProjectDropDown_TextChanged(object sender, RibbonControlEventArgs e)
         {
             if (isUpdatingProjectDropDown)
             {
                 return;
             }
 
-            var selectedTag = projectDropDown.SelectedItem?.Tag as string ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(selectedTag) || string.Equals(selectedTag, EmptyProjectTag, StringComparison.Ordinal))
+            var selectedText = projectDropDown.Text ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(selectedText))
             {
+                RefreshProjectDropDownFromController();
                 return;
             }
 
-            if (!projectOptionsByKey.TryGetValue(selectedTag, out var project))
+            if (!projectOptionsByLabel.TryGetValue(selectedText, out var project))
             {
+                RefreshProjectDropDownFromController();
                 return;
             }
 

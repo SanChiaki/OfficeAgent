@@ -135,19 +135,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("if (selected == null && projectOptionsByKey.Count == 0)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("if (projectOptionsByKey.Count == 0 && string.IsNullOrWhiteSpace(syncController.ActiveProjectId))", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
-        public void PopulateProjectDropDownSelectsPlaceholderItemBeforeAnyProjectIsChosen()
+        public void PopulateProjectDropDownSetsPlaceholderTextBeforeAnyProjectIsChosen()
         {
             var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("var placeholderItem = CreateProjectDropDownItem(\"先选择项目\", EmptyProjectTag);", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("SelectProjectDropDownItem(placeholderItem);", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownText(\"先选择项目\");", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -158,19 +157,49 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.Designer.cs"));
 
-            Assert.Contains("this.projectDropDown.ShowItemLabel = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.projectDropDown.ShowLabel = false;", designerText, StringComparison.Ordinal);
         }
 
         [Fact]
-        public void ProjectDropDownSelectionSetsSelectedItemIndexForOfficeHostCompatibility()
+        public void ProjectSelectorUsesTextValueForOfficeHostCompatibility()
         {
             var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("projectDropDown.SelectedItemIndex = projectDropDown.Items.IndexOf(item);", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("projectDropDown.Text = text ?? string.Empty;", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ProjectSelectorUsesComboBoxItemsLoadingToRefreshProjectsOnOpen()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains(
+                "this.projectDropDown = Factory.CreateRibbonComboBox();",
+                designerText,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "this.projectDropDown.ItemsLoading += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_ItemsLoading);",
+                designerText,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "this.projectDropDown.TextChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_TextChanged);",
+                designerText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("this.projectDropDown.ButtonClick +=", designerText, StringComparison.Ordinal);
+            Assert.Contains("private void ProjectDropDown_ItemsLoading(object sender, RibbonControlEventArgs e)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("private void ProjectDropDown_TextChanged(object sender, RibbonControlEventArgs e)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("PopulateProjectDropDown();", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("RefreshProjectDropDownFromController();", ribbonCodeText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

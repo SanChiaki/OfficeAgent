@@ -29,7 +29,7 @@ namespace OfficeAgent.ExcelAddIn
             this.groupUpload = Factory.CreateRibbonGroup();
             this.group2 = Factory.CreateRibbonGroup();
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
-            this.projectDropDown = Factory.CreateRibbonDropDown();
+            this.projectDropDown = Factory.CreateRibbonComboBox();
             this.initializeSheetButton = Factory.CreateRibbonButton();
             this.fullDownloadButton = Factory.CreateRibbonButton();
             this.partialDownloadButton = Factory.CreateRibbonButton();
@@ -78,9 +78,9 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.projectDropDown.Label = "\u5148\u9009\u62E9\u9879\u76EE";
             this.projectDropDown.Name = "projectDropDown";
-            this.projectDropDown.ShowItemLabel = true;
             this.projectDropDown.ShowLabel = false;
-            this.projectDropDown.SelectionChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_SelectionChanged);
+            this.projectDropDown.ItemsLoading += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_ItemsLoading);
+            this.projectDropDown.TextChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_TextChanged);
             // 
             // initializeSheetButton
             // 
@@ -164,7 +164,7 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupUpload;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
-        internal Microsoft.Office.Tools.Ribbon.RibbonDropDown projectDropDown;
+        internal Microsoft.Office.Tools.Ribbon.RibbonComboBox projectDropDown;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton initializeSheetButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullDownloadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton partialDownloadButton;
