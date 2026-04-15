@@ -56,7 +56,7 @@ jobs:
           powershell -ExecutionPolicy Bypass -File "installer/OfficeAgent.Setup/build.ps1"
 
       - name: Upload MSI artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: OfficeAgent-MSI-${{ github.sha }}
           path: artifacts/installer/*.msi

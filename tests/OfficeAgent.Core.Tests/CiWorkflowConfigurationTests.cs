@@ -19,6 +19,7 @@ namespace OfficeAgent.Core.Tests
             Assert.Contains("uses: actions/setup-node@v5", workflowText, StringComparison.Ordinal);
             Assert.Contains("uses: actions/setup-dotnet@v5", workflowText, StringComparison.Ordinal);
             Assert.Contains("uses: microsoft/setup-msbuild@v3", workflowText, StringComparison.Ordinal);
+            Assert.Contains("uses: actions/upload-artifact@v6", workflowText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)
