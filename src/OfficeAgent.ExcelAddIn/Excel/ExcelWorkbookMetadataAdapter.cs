@@ -68,7 +68,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             return ExecutePreservingActiveWorksheet(() =>
             {
-                var worksheet = EnsureWorksheetExists(MetadataSheetName);
+                var worksheet = FindWorksheet(MetadataSheetName);
+                if (worksheet == null)
+                {
+                    return Array.Empty<string[]>();
+                }
+
                 return serializer.ReadTable(tableName, ReadUsedRows(worksheet));
             });
         }
@@ -109,7 +114,25 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private ExcelInterop.Worksheet EnsureWorksheetExists(string name)
         {
             var workbook = GetWorkbook();
+            var existing = FindWorksheet(workbook, name);
+            if (existing != null)
+            {
+                return existing;
+            }
 
+            var lastSheet = workbook.Worksheets[workbook.Worksheets.Count] as ExcelInterop.Worksheet;
+            var worksheet = workbook.Worksheets.Add(After: lastSheet) as ExcelInterop.Worksheet;
+            worksheet.Name = name;
+            return worksheet;
+        }
+
+        private ExcelInterop.Worksheet FindWorksheet(string name)
+        {
+            return FindWorksheet(GetWorkbook(), name);
+        }
+
+        private static ExcelInterop.Worksheet FindWorksheet(ExcelInterop.Workbook workbook, string name)
+        {
             foreach (ExcelInterop.Worksheet sheet in workbook.Worksheets)
             {
                 if (string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))
@@ -118,10 +141,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 }
             }
 
-            var lastSheet = workbook.Worksheets[workbook.Worksheets.Count] as ExcelInterop.Worksheet;
-            var worksheet = workbook.Worksheets.Add(After: lastSheet) as ExcelInterop.Worksheet;
-            worksheet.Name = name;
-            return worksheet;
+            return null;
         }
 
         private ExcelInterop.Workbook GetWorkbook()

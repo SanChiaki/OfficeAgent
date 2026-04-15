@@ -103,6 +103,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(new[] { "Sheet1", "current-business-system" }, rows[0]);
         }
 
+        [Fact]
+        public void ReadTableDoesNotCreateSettingsWorksheetWhenMetadataSheetIsMissing()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            var rows = (string[][])adapterType.GetMethod("ReadTable").Invoke(adapter, new object[] { "SheetBindings" });
+
+            Assert.Empty(rows);
+            Assert.Null(application.MetadataSheet);
+            Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
+        }
+
         private static Assembly LoadExcelInteropAssembly()
         {
             try
