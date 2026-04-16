@@ -202,6 +202,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("RefreshProjectDropDownFromController();", ribbonCodeText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void RibbonLoadDoesNotPreloadProjectListBeforeUserOpensSelector()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            var methodStart = ribbonCodeText.IndexOf("private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)", StringComparison.Ordinal);
+            var nextMethodStart = ribbonCodeText.IndexOf("private void ToggleTaskPaneButton_Click", methodStart, StringComparison.Ordinal);
+
+            Assert.True(methodStart >= 0);
+            Assert.True(nextMethodStart > methodStart);
+
+            var loadMethodText = ribbonCodeText.Substring(methodStart, nextMethodStart - methodStart);
+            Assert.DoesNotContain("PopulateProjectDropDown();", loadMethodText, StringComparison.Ordinal);
+            Assert.Contains("syncController.RefreshActiveProjectFromSheetMetadata();", loadMethodText, StringComparison.Ordinal);
+            Assert.Contains("RefreshProjectDropDownFromController();", loadMethodText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]
