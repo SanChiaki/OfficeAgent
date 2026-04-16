@@ -30,7 +30,7 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             syncController.ActiveProjectChanged += SyncController_ActiveProjectChanged;
-            PopulateProjectDropDown();
+            SetProjectDropDownText("先选择项目");
             syncController.RefreshActiveProjectFromSheetMetadata();
             RefreshProjectDropDownFromController();
         }
