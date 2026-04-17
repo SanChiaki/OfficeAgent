@@ -18,6 +18,20 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 return Array.Empty<WorksheetColumnSegment>();
             }
 
+            var deduplicated = new List<WorksheetRuntimeColumn> { ordered[0] };
+            for (var index = 1; index < ordered.Length; index++)
+            {
+                var column = ordered[index];
+                if (column.ColumnIndex == deduplicated[deduplicated.Count - 1].ColumnIndex)
+                {
+                    continue;
+                }
+
+                deduplicated.Add(column);
+            }
+
+            ordered = deduplicated.ToArray();
+
             var segments = new List<WorksheetColumnSegment>();
             var currentColumns = new List<WorksheetRuntimeColumn> { ordered[0] };
             var currentStart = ordered[0].ColumnIndex;
