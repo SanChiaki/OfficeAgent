@@ -1,10 +1,20 @@
+using System;
+
 namespace OfficeAgent.ExcelAddIn.Excel
 {
     internal interface IWorksheetGridAdapter
     {
+        IDisposable BeginBulkOperation();
+
         string GetCellText(string sheetName, int row, int column);
 
         void SetCellText(string sheetName, int row, int column, string value);
+
+        void WriteRangeValues(string sheetName, int startRow, int startColumn, object[,] values);
+
+        object[,] ReadRangeValues(string sheetName, int startRow, int endRow, int startColumn, int endColumn);
+
+        string[,] ReadRangeNumberFormats(string sheetName, int startRow, int endRow, int startColumn, int endColumn);
 
         void ClearRange(string sheetName, int startRow, int endRow, int startColumn, int endColumn);
 

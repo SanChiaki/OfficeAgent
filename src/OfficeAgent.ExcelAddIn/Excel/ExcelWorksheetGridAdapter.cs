@@ -6,10 +6,16 @@ namespace OfficeAgent.ExcelAddIn.Excel
     internal sealed class ExcelWorksheetGridAdapter : IWorksheetGridAdapter
     {
         private readonly ExcelInterop.Application application;
+        private static readonly IDisposable NoOpBulkOperationScope = new NoOpScope();
 
         public ExcelWorksheetGridAdapter(ExcelInterop.Application application)
         {
             this.application = application ?? throw new ArgumentNullException(nameof(application));
+        }
+
+        public IDisposable BeginBulkOperation()
+        {
+            return NoOpBulkOperationScope;
         }
 
         public string GetCellText(string sheetName, int row, int column)
@@ -24,6 +30,69 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var worksheet = GetWorksheet(sheetName);
             var cell = worksheet.Cells[row, column] as ExcelInterop.Range;
             cell.Value2 = value ?? string.Empty;
+        }
+
+        public void WriteRangeValues(string sheetName, int startRow, int startColumn, object[,] values)
+        {
+            if (values == null)
+            {
+                throw new ArgumentNullException(nameof(values));
+            }
+
+            var rowCount = values.GetLength(0);
+            var columnCount = values.GetLength(1);
+            if (rowCount <= 0 || columnCount <= 0)
+            {
+                return;
+            }
+
+            var worksheet = GetWorksheet(sheetName);
+            var startCell = worksheet.Cells[startRow, startColumn] as ExcelInterop.Range;
+            var range = startCell?.Resize[rowCount, columnCount] as ExcelInterop.Range;
+            if (range == null)
+            {
+                return;
+            }
+
+            range.Value2 = values;
+        }
+
+        public object[,] ReadRangeValues(string sheetName, int startRow, int endRow, int startColumn, int endColumn)
+        {
+            if (endRow < startRow || endColumn < startColumn)
+            {
+                return new object[0, 0];
+            }
+
+            var worksheet = GetWorksheet(sheetName);
+            var range = worksheet.Range[
+                worksheet.Cells[startRow, startColumn],
+                worksheet.Cells[endRow, endColumn]] as ExcelInterop.Range;
+            if (range == null)
+            {
+                return new object[0, 0];
+            }
+
+            return NormalizeToObjectMatrix(range.Value2);
+        }
+
+        public string[,] ReadRangeNumberFormats(string sheetName, int startRow, int endRow, int startColumn, int endColumn)
+        {
+            if (endRow < startRow || endColumn < startColumn)
+            {
+                return new string[0, 0];
+            }
+
+            var worksheet = GetWorksheet(sheetName);
+            var range = worksheet.Range[
+                worksheet.Cells[startRow, startColumn],
+                worksheet.Cells[endRow, endColumn]] as ExcelInterop.Range;
+            if (range == null)
+            {
+                return new string[0, 0];
+            }
+
+            return NormalizeToStringMatrix(range.NumberFormat);
         }
 
         public void ClearRange(string sheetName, int startRow, int endRow, int startColumn, int endColumn)
@@ -104,6 +173,54 @@ namespace OfficeAgent.ExcelAddIn.Excel
             range.Clear();
         }
 
+        private static object[,] NormalizeToObjectMatrix(object value)
+        {
+            if (value is object[,] matrix)
+            {
+                var rowCount = matrix.GetLength(0);
+                var columnCount = matrix.GetLength(1);
+                var normalized = new object[rowCount, columnCount];
+                var rowLowerBound = matrix.GetLowerBound(0);
+                var columnLowerBound = matrix.GetLowerBound(1);
+
+                for (var row = 0; row < rowCount; row++)
+                {
+                    for (var column = 0; column < columnCount; column++)
+                    {
+                        normalized[row, column] = matrix[row + rowLowerBound, column + columnLowerBound];
+                    }
+                }
+
+                return normalized;
+            }
+
+            return new object[1, 1] { { value } };
+        }
+
+        private static string[,] NormalizeToStringMatrix(object value)
+        {
+            if (value is object[,] matrix)
+            {
+                var rowCount = matrix.GetLength(0);
+                var columnCount = matrix.GetLength(1);
+                var normalized = new string[rowCount, columnCount];
+                var rowLowerBound = matrix.GetLowerBound(0);
+                var columnLowerBound = matrix.GetLowerBound(1);
+
+                for (var row = 0; row < rowCount; row++)
+                {
+                    for (var column = 0; column < columnCount; column++)
+                    {
+                        normalized[row, column] = Convert.ToString(matrix[row + rowLowerBound, column + columnLowerBound]) ?? string.Empty;
+                    }
+                }
+
+                return normalized;
+            }
+
+            return new string[1, 1] { { Convert.ToString(value) ?? string.Empty } };
+        }
+
         private ExcelInterop.Worksheet GetWorksheet(string sheetName)
         {
             if (string.IsNullOrWhiteSpace(sheetName))
@@ -128,6 +245,13 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             throw new InvalidOperationException($"Worksheet '{sheetName}' was not found.");
+        }
+
+        private sealed class NoOpScope : IDisposable
+        {
+            public void Dispose()
+            {
+            }
         }
     }
 }

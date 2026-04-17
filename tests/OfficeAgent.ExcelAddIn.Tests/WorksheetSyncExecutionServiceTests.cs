@@ -197,6 +197,94 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteFullDownloadUsesBatchWriteForContiguousManagedColumns()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[]
+            {
+                CreateRow("row-1", "张三", "2026-01-02", "2026-01-05"),
+                CreateRow("row-2", "李四", "2026-02-03", "2026-02-06"),
+            };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+
+            var plan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            var write = Assert.Single(grid.WriteRangeCalls);
+            Assert.Equal("Sheet1", write.SheetName);
+            Assert.Equal(6, write.StartRow);
+            Assert.Equal(1, write.StartColumn);
+            Assert.Equal(2, write.Values.GetLength(0));
+            Assert.Equal(4, write.Values.GetLength(1));
+            Assert.Equal("row-1", Convert.ToString(write.Values[0, 0]));
+            Assert.Equal("张三", Convert.ToString(write.Values[0, 1]));
+            Assert.Equal("2026-02-03", Convert.ToString(write.Values[1, 2]));
+            Assert.Equal("2026-02-06", Convert.ToString(write.Values[1, 3]));
+            Assert.Equal(1, grid.BeginBulkOperationCount);
+            Assert.Equal(1, grid.EndBulkOperationCount);
+        }
+
+        [Fact]
+        public void ExecuteFullDownloadSplitsBatchWritesAcrossNonContiguousManagedColumns()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-01-02", "2026-01-05") };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+            grid.SetCell("Sheet1", 3, 3, "用户备注");
+            grid.SetCell("Sheet1", 3, 4, "测试活动111");
+            grid.SetCell("Sheet1", 4, 4, "开始时间");
+            grid.SetCell("Sheet1", 4, 5, "结束时间");
+            grid.SetCell("Sheet1", 6, 3, "保留的备注");
+
+            var plan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal(2, grid.WriteRangeCalls.Count);
+            Assert.Equal(1, grid.WriteRangeCalls[0].StartColumn);
+            Assert.Equal(2, grid.WriteRangeCalls[0].Values.GetLength(1));
+            Assert.Equal("row-1", Convert.ToString(grid.WriteRangeCalls[0].Values[0, 0]));
+            Assert.Equal("张三", Convert.ToString(grid.WriteRangeCalls[0].Values[0, 1]));
+            Assert.Equal(4, grid.WriteRangeCalls[1].StartColumn);
+            Assert.Equal(2, grid.WriteRangeCalls[1].Values.GetLength(1));
+            Assert.Equal("2026-01-02", Convert.ToString(grid.WriteRangeCalls[1].Values[0, 0]));
+            Assert.Equal("2026-01-05", Convert.ToString(grid.WriteRangeCalls[1].Values[0, 1]));
+            Assert.Equal("保留的备注", grid.GetCell("Sheet1", 6, 3));
+            Assert.Equal(1, grid.BeginBulkOperationCount);
+            Assert.Equal(1, grid.EndBulkOperationCount);
+        }
+
+        [Fact]
         public void ExecuteFullUploadUsesConfiguredDataStartRowAndRecognizedColumns()
         {
             var connector = new FakeSystemConnector();
@@ -805,6 +893,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<ClearRangeRecord> ClearedRanges { get; } = new List<ClearRangeRecord>();
 
+            public List<WriteRangeRecord> WriteRangeCalls { get; } = new List<WriteRangeRecord>();
+
+            public int BeginBulkOperationCount { get; private set; }
+
+            public int EndBulkOperationCount { get; private set; }
+
             public override IMessage Invoke(IMessage msg)
             {
                 var call = (IMethodCallMessage)msg;
@@ -848,6 +942,45 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         return new ReturnMessage(GetLastUsedRow((string)call.InArgs[0]), null, 0, call.LogicalCallContext, call);
                     case "GetLastUsedColumn":
                         return new ReturnMessage(GetLastUsedColumn((string)call.InArgs[0]), null, 0, call.LogicalCallContext, call);
+                    case "WriteRangeValues":
+                        WriteRangeValues(
+                            (string)call.InArgs[0],
+                            (int)call.InArgs[1],
+                            (int)call.InArgs[2],
+                            (object[,])call.InArgs[3]);
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ReadRangeValues":
+                        return new ReturnMessage(
+                            ReadRangeValues(
+                                (string)call.InArgs[0],
+                                (int)call.InArgs[1],
+                                (int)call.InArgs[2],
+                                (int)call.InArgs[3],
+                                (int)call.InArgs[4]),
+                            null,
+                            0,
+                            call.LogicalCallContext,
+                            call);
+                    case "ReadRangeNumberFormats":
+                        return new ReturnMessage(
+                            ReadRangeNumberFormats(
+                                (string)call.InArgs[0],
+                                (int)call.InArgs[1],
+                                (int)call.InArgs[2],
+                                (int)call.InArgs[3],
+                                (int)call.InArgs[4]),
+                            null,
+                            0,
+                            call.LogicalCallContext,
+                            call);
+                    case "BeginBulkOperation":
+                        BeginBulkOperationCount++;
+                        return new ReturnMessage(
+                            new DelegateDisposeScope(() => EndBulkOperationCount++),
+                            null,
+                            0,
+                            call.LogicalCallContext,
+                            call);
                     default:
                         throw new NotSupportedException(call.MethodName);
                 }
@@ -925,6 +1058,67 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 return columns.Length == 0 ? 0 : columns.Max();
             }
 
+            private void WriteRangeValues(string sheetName, int startRow, int startColumn, object[,] values)
+            {
+                WriteRangeCalls.Add(new WriteRangeRecord
+                {
+                    SheetName = sheetName,
+                    StartRow = startRow,
+                    StartColumn = startColumn,
+                    Values = values,
+                });
+
+                if (values == null)
+                {
+                    return;
+                }
+
+                for (var rowOffset = 0; rowOffset < values.GetLength(0); rowOffset++)
+                {
+                    for (var columnOffset = 0; columnOffset < values.GetLength(1); columnOffset++)
+                    {
+                        SetCell(
+                            sheetName,
+                            startRow + rowOffset,
+                            startColumn + columnOffset,
+                            Convert.ToString(values[rowOffset, columnOffset]) ?? string.Empty);
+                    }
+                }
+            }
+
+            private object[,] ReadRangeValues(
+                string sheetName,
+                int startRow,
+                int endRow,
+                int startColumn,
+                int endColumn)
+            {
+                var rowCount = Math.Max(0, endRow - startRow + 1);
+                var columnCount = Math.Max(0, endColumn - startColumn + 1);
+                var values = new object[rowCount, columnCount];
+                for (var rowOffset = 0; rowOffset < rowCount; rowOffset++)
+                {
+                    for (var columnOffset = 0; columnOffset < columnCount; columnOffset++)
+                    {
+                        values[rowOffset, columnOffset] = GetCell(sheetName, startRow + rowOffset, startColumn + columnOffset);
+                    }
+                }
+
+                return values;
+            }
+
+            private static string[,] ReadRangeNumberFormats(
+                string sheetName,
+                int startRow,
+                int endRow,
+                int startColumn,
+                int endColumn)
+            {
+                var rowCount = Math.Max(0, endRow - startRow + 1);
+                var columnCount = Math.Max(0, endColumn - startColumn + 1);
+                return new string[rowCount, columnCount];
+            }
+
             private static bool IsWithinRange(
                 string key,
                 string sheetName,
@@ -974,6 +1168,36 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public int EndRow { get; set; }
             public int StartColumn { get; set; }
             public int EndColumn { get; set; }
+        }
+
+        public sealed class WriteRangeRecord
+        {
+            public string SheetName { get; set; }
+            public int StartRow { get; set; }
+            public int StartColumn { get; set; }
+            public object[,] Values { get; set; }
+        }
+
+        private sealed class DelegateDisposeScope : IDisposable
+        {
+            private readonly Action onDispose;
+            private bool disposed;
+
+            public DelegateDisposeScope(Action onDispose)
+            {
+                this.onDispose = onDispose;
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                onDispose?.Invoke();
+            }
         }
     }
 }

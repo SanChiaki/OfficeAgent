@@ -37,6 +37,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly IWorksheetGridAdapter gridAdapter;
         private readonly WorksheetSelectionResolver selectionResolver;
         private readonly WorksheetSchemaLayoutService layoutService;
+        private readonly WorksheetColumnSegmentBuilder segmentBuilder;
         private readonly SyncOperationPreviewFactory previewFactory;
         private readonly WorksheetHeaderMatcher headerMatcher;
         private readonly FieldMappingValueAccessor valueAccessor;
@@ -55,6 +56,7 @@ namespace OfficeAgent.ExcelAddIn
             this.previewFactory = previewFactory ?? throw new ArgumentNullException(nameof(previewFactory));
             selectionResolver = new WorksheetSelectionResolver();
             layoutService = new WorksheetSchemaLayoutService();
+            segmentBuilder = new WorksheetColumnSegmentBuilder();
             valueAccessor = new FieldMappingValueAccessor();
             headerMatcher = new WorksheetHeaderMatcher(valueAccessor);
         }
@@ -390,26 +392,54 @@ namespace OfficeAgent.ExcelAddIn
             var columns = plan.RuntimeColumns ?? Array.Empty<WorksheetRuntimeColumn>();
             var clearEndRow = Math.Max(gridAdapter.GetLastUsedRow(plan.SheetName), binding.DataStartRow + (plan.Rows?.Count ?? 0) + 10);
 
-            ClearManagedArea(plan.SheetName, binding, columns, plan.UsesExistingLayout, clearEndRow);
-
-            if (!plan.UsesExistingLayout)
+            using (gridAdapter.BeginBulkOperation())
             {
-                var headerPlan = layoutService.BuildHeaderPlan(binding, columns);
-                foreach (var headerCell in headerPlan)
+                ClearManagedArea(plan.SheetName, binding, columns, plan.UsesExistingLayout, clearEndRow);
+
+                if (!plan.UsesExistingLayout)
                 {
-                    gridAdapter.SetCellText(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.Text);
-                    gridAdapter.MergeCells(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.RowSpan, headerCell.ColumnSpan);
+                    var headerPlan = layoutService.BuildHeaderPlan(binding, columns);
+                    foreach (var headerCell in headerPlan)
+                    {
+                        gridAdapter.SetCellText(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.Text);
+                        gridAdapter.MergeCells(plan.SheetName, headerCell.Row, headerCell.Column, headerCell.RowSpan, headerCell.ColumnSpan);
+                    }
                 }
+
+                WriteFullDataRows(plan.SheetName, binding.DataStartRow, columns, plan.Rows);
+            }
+        }
+
+        private void WriteFullDataRows(
+            string sheetName,
+            int startRow,
+            IReadOnlyList<WorksheetRuntimeColumn> columns,
+            IReadOnlyList<IDictionary<string, object>> rows)
+        {
+            var sourceRows = rows ?? Array.Empty<IDictionary<string, object>>();
+            if (sourceRows.Count == 0)
+            {
+                return;
             }
 
-            for (var rowIndex = 0; rowIndex < (plan.Rows?.Count ?? 0); rowIndex++)
+            foreach (var segment in segmentBuilder.Build(columns))
             {
-                var row = plan.Rows[rowIndex];
-                var targetRow = binding.DataStartRow + rowIndex;
-                foreach (var column in columns)
+                if (segment?.Columns == null || segment.Columns.Length == 0)
                 {
-                    gridAdapter.SetCellText(plan.SheetName, targetRow, column.ColumnIndex, GetRowValue(row, column.ApiFieldKey));
+                    continue;
                 }
+
+                var values = new object[sourceRows.Count, segment.Columns.Length];
+                for (var rowIndex = 0; rowIndex < sourceRows.Count; rowIndex++)
+                {
+                    var row = sourceRows[rowIndex];
+                    for (var columnOffset = 0; columnOffset < segment.Columns.Length; columnOffset++)
+                    {
+                        values[rowIndex, columnOffset] = GetRowValue(row, segment.Columns[columnOffset].ApiFieldKey);
+                    }
+                }
+
+                gridAdapter.WriteRangeValues(sheetName, startRow, segment.StartColumn, values);
             }
         }
 
