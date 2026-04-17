@@ -177,6 +177,7 @@
     <Compile Include="Excel\ExcelFocusCoordinator.cs" />
     <Compile Include="Excel\ExcelInteropAdapter.cs" />
     <Compile Include="Excel\ExcelSelectionContextService.cs" />
+    <Compile Include="Excel\ExcelUploadValueNormalizer.cs" />
     <Compile Include="Excel\ExcelVisibleSelectionReader.cs" />
     <Compile Include="Excel\ExcelWorksheetGridAdapter.cs" />
     <Compile Include="Excel\IWorksheetGridAdapter.cs" />
