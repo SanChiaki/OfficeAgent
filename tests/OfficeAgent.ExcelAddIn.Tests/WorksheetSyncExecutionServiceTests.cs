@@ -686,6 +686,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PrepareFullDownloadRequiresExplicitInitializationWhenFieldMappingsAreMissing()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "new-project",
+                ProjectName = "新项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+
+            var (service, _) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+
+            var exception = Assert.Throws<TargetInvocationException>(() => InvokePrepare(service, "PrepareFullDownload", "Sheet1"));
+            var inner = Assert.IsType<InvalidOperationException>(exception.InnerException);
+            Assert.Contains("当前 sheet 未初始化，请先执行初始化当前表。", inner.Message);
+        }
+
+        [Fact]
         public void ExecutePartialUploadUsesRecognizedHeadersAndIdLookupOutsideSelection()
         {
             var connector = new FakeSystemConnector();

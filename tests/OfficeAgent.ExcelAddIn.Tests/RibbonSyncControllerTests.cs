@@ -183,6 +183,61 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void SelectProjectClearsFieldMappingsWhenSwitchingToDifferentProject()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "new-project",
+                    ProjectName = "新项目",
+                    HeaderStartRow = 1,
+                    HeaderRowCount = 2,
+                    DataStartRow = 3,
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "old-project",
+                ProjectName = "旧项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 2,
+                DataStartRow = 3,
+            };
+            metadataStore.FieldMappings["Sheet1"] = new[]
+            {
+                new SheetFieldMappingRow
+                {
+                    SheetName = "Sheet1",
+                    Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["ApiFieldKey"] = "row_id",
+                    },
+                },
+            };
+
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+
+            InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "new-project",
+                DisplayName = "新项目",
+            });
+
+            Assert.False(metadataStore.FieldMappings.ContainsKey("Sheet1"));
+            Assert.NotNull(metadataStore.LastSavedBinding);
+            Assert.Equal("new-project", metadataStore.LastSavedBinding.ProjectId);
+            Assert.Equal("新项目", metadataStore.LastSavedBinding.ProjectName);
+        }
+
+        [Fact]
         public void ExecuteInitializeCurrentSheetPreservesSavedLayoutAndReportsSuccess()
         {
             var connector = new FakeSystemConnector();
