@@ -34,11 +34,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 seed,
                 dialog =>
                 {
-                    var textBoxes = dialog.Controls.OfType<TextBox>().ToArray();
-                    Assert.Equal(3, textBoxes.Length);
-                    textBoxes[0].Text = "4";
-                    textBoxes[1].Text = "1";
-                    textBoxes[2].Text = "5";
+                    GetRequiredTextBox(dialog, "HeaderStartRowTextBox").Text = "4";
+                    GetRequiredTextBox(dialog, "HeaderRowCountTextBox").Text = "1";
+                    GetRequiredTextBox(dialog, "DataStartRowTextBox").Text = "5";
 
                     var okButton = dialog.Controls
                         .OfType<Button>()
@@ -117,6 +115,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
 
             return returnValue;
+        }
+
+        private static TextBox GetRequiredTextBox(Form dialog, string controlName)
+        {
+            var matched = dialog.Controls.Find(controlName, searchAllChildren: true);
+            var textBox = Assert.Single(matched);
+            return Assert.IsType<TextBox>(textBox);
         }
 
         private static SheetBinding CreateSeedBinding()

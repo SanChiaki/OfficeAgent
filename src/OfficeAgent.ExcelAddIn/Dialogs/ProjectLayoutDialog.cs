@@ -46,7 +46,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Location = new Point(16, 95),
                 Text = "HeaderStartRow",
             };
-            headerStartRowTextBox = CreateValueTextBox(16, 116, suggestedBinding.HeaderStartRow);
+            headerStartRowTextBox = CreateValueTextBox("HeaderStartRowTextBox", 16, 116, suggestedBinding.HeaderStartRow);
 
             var headerRowCountLabel = new Label
             {
@@ -54,7 +54,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Location = new Point(184, 95),
                 Text = "HeaderRowCount",
             };
-            headerRowCountTextBox = CreateValueTextBox(184, 116, suggestedBinding.HeaderRowCount);
+            headerRowCountTextBox = CreateValueTextBox("HeaderRowCountTextBox", 184, 116, suggestedBinding.HeaderRowCount);
 
             var dataStartRowLabel = new Label
             {
@@ -62,7 +62,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Location = new Point(352, 95),
                 Text = "DataStartRow",
             };
-            dataStartRowTextBox = CreateValueTextBox(352, 116, suggestedBinding.DataStartRow);
+            dataStartRowTextBox = CreateValueTextBox("DataStartRowTextBox", 352, 116, suggestedBinding.DataStartRow);
 
             var okButton = new Button
             {
@@ -117,10 +117,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             Close();
         }
 
-        private static TextBox CreateValueTextBox(int left, int top, int value)
+        private static TextBox CreateValueTextBox(string name, int left, int top, int value)
         {
             return new TextBox
             {
+                Name = name,
                 Location = new Point(left, top),
                 Size = new Size(152, 23),
                 Text = value.ToString(),

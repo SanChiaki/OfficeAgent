@@ -39,6 +39,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void TryCreateBindingRejectsNonNumericHeaderRowCount()
+        {
+            var method = GetTryCreateBindingMethod();
+            var seed = CreateSeedBinding();
+            var args = new object[] { seed, "1", "abc", "3", null, null };
+
+            var success = (bool)method.Invoke(null, args);
+
+            Assert.False(success);
+            Assert.Null(args[4]);
+            Assert.Equal("HeaderRowCount 必须是正整数。", (string)args[5]);
+        }
+
+        [Fact]
+        public void TryCreateBindingRejectsNonNumericDataStartRow()
+        {
+            var method = GetTryCreateBindingMethod();
+            var seed = CreateSeedBinding();
+            var args = new object[] { seed, "1", "2", "abc", null, null };
+
+            var success = (bool)method.Invoke(null, args);
+
+            Assert.False(success);
+            Assert.Null(args[4]);
+            Assert.Equal("DataStartRow 必须是正整数。", (string)args[5]);
+        }
+
+        [Fact]
         public void TryCreateBindingReturnsEditedBindingForValidValues()
         {
             var method = GetTryCreateBindingMethod();
