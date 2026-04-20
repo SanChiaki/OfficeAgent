@@ -23,6 +23,10 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Infrastructure\OfficeAgent.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+
   <Target Name="BuildOfficeAddIn" BeforeTargets="Build">
     <Error Condition="'$(VisualStudioMSBuildPath)' == ''" Text="Visual Studio MSBuild.exe was not found. Build the VSTO add-in before running OfficeAgent.ExcelAddIn.Tests." />
     <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\eng\Build-VstoAddIn.ps1&quot; -ProjectPath &quot;$(MSBuildProjectDirectory)\..\..\src\OfficeAgent.ExcelAddIn\OfficeAgent.ExcelAddIn.csproj&quot; -Configuration Debug -VisualStudioMSBuildPath &quot;$(VisualStudioMSBuildPath)&quot;" />
