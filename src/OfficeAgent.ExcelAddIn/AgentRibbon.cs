@@ -276,13 +276,11 @@ namespace OfficeAgent.ExcelAddIn
             var selectedText = projectDropDown.Text ?? string.Empty;
             if (string.IsNullOrWhiteSpace(selectedText))
             {
-                RefreshProjectDropDownFromController();
                 return;
             }
 
             if (!projectOptionsByLabel.TryGetValue(selectedText, out var project))
             {
-                RefreshProjectDropDownFromController();
                 return;
             }
 

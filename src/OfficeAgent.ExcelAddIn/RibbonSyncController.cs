@@ -84,18 +84,28 @@ namespace OfficeAgent.ExcelAddIn
                 throw new ArgumentNullException(nameof(project));
             }
 
-            var sheetName = activeSheetNameProvider.Invoke() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(sheetName))
+            var sheetName = GetRequiredSheetName();
+            var existingBinding = TryLoadBinding(sheetName);
+
+            if (IsSameProject(existingBinding, project))
             {
-                throw new InvalidOperationException("Active worksheet is not available.");
+                lastRefreshedSheetName = sheetName;
+                ApplyBindingState(existingBinding);
+                return;
             }
 
-            var binding = BuildBindingForSelection(sheetName, project);
+            var suggestedBinding = worksheetSyncService.CreateBindingSeed(sheetName, project);
+            var confirmedBinding = dialogService.ShowProjectLayoutDialog(suggestedBinding);
 
-            metadataStore.SaveBinding(binding);
+            if (confirmedBinding == null)
+            {
+                RestoreBindingState(existingBinding, sheetName);
+                return;
+            }
+
+            metadataStore.SaveBinding(confirmedBinding);
             lastRefreshedSheetName = sheetName;
-            ApplyBindingState(binding);
-            TryAutoInitializeCurrentSheet(sheetName, project);
+            ApplyBindingState(confirmedBinding);
         }
 
         public void RefreshActiveProjectFromSheetMetadata()
@@ -251,9 +261,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             ActiveProjectId = binding?.ProjectId ?? string.Empty;
             ActiveSystemKey = binding?.SystemKey ?? string.Empty;
-            ActiveProjectDisplayName = string.IsNullOrWhiteSpace(binding?.ProjectName)
-                ? DefaultProjectDisplayName
-                : binding.ProjectName;
+            ActiveProjectDisplayName = binding?.ProjectName ?? string.Empty;
             OnActiveProjectChanged();
         }
 
@@ -291,45 +299,39 @@ namespace OfficeAgent.ExcelAddIn
             return sheetName;
         }
 
-        private SheetBinding BuildBindingForSelection(string sheetName, ProjectOption project)
+        private SheetBinding TryLoadBinding(string sheetName)
         {
-            var seed = worksheetSyncService.CreateBindingSeed(sheetName, project);
-
             try
             {
-                var existing = metadataStore.LoadBinding(sheetName);
-                return new SheetBinding
-                {
-                    SheetName = sheetName,
-                    SystemKey = seed.SystemKey,
-                    ProjectId = seed.ProjectId,
-                    ProjectName = seed.ProjectName,
-                    HeaderStartRow = existing.HeaderStartRow > 0 ? existing.HeaderStartRow : seed.HeaderStartRow,
-                    HeaderRowCount = existing.HeaderRowCount > 0 ? existing.HeaderRowCount : seed.HeaderRowCount,
-                    DataStartRow = existing.DataStartRow > 0 ? existing.DataStartRow : seed.DataStartRow,
-                };
+                return metadataStore.LoadBinding(sheetName);
             }
             catch (InvalidOperationException)
             {
-                return seed;
+                return null;
             }
         }
 
-        private void TryAutoInitializeCurrentSheet(string sheetName, ProjectOption project)
+        private static bool IsSameProject(SheetBinding existingBinding, ProjectOption project)
         {
-            if (executionService == null)
+            if (existingBinding == null || project == null)
             {
+                return false;
+            }
+
+            return string.Equals(existingBinding.SystemKey, project.SystemKey, StringComparison.Ordinal) &&
+                   string.Equals(existingBinding.ProjectId, project.ProjectId, StringComparison.Ordinal);
+        }
+
+        private void RestoreBindingState(SheetBinding binding, string sheetName)
+        {
+            lastRefreshedSheetName = sheetName;
+            if (binding == null)
+            {
+                ClearActiveProjectState();
                 return;
             }
 
-            try
-            {
-                executionService.TryAutoInitializeCurrentSheet(sheetName, project);
-            }
-            catch (Exception ex)
-            {
-                dialogService.ShowWarning($"自动初始化未完成，请使用“初始化当前表”并检查 _Settings。\r\n{ex.Message}");
-            }
+            ApplyBindingState(binding);
         }
 
         private static int CountDownloadFields(WorksheetDownloadPlan plan)
