@@ -11,13 +11,13 @@
 
 当前 Ribbon Sync 的核心思路已经从“固定列号 + 快照差异”切换为：
 
-- `_Settings` 是每个受管 sheet 的运行时事实来源
+- `AI_Setting` 是每个受管 sheet 的运行时事实来源
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
 - 当前只做全量下载、部分下载、全量上传、部分上传
 
-当前 `_Settings` 的具体形态也已经固定：
+当前 `AI_Setting` 的具体形态也已经固定：
 
 - 它是一个可见 worksheet，便于调试和人工维护
 - 它只承载两个 section：
@@ -31,7 +31,7 @@
 - `SheetFieldMappings` 永远在下
 - 两个 section 中间固定保留两行空白
 - 当前不再使用旧的“首列表名 + 每行一条压平记录”格式
-- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `_Settings`
+- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `AI_Setting`
 
 当前不做：
 
@@ -117,7 +117,7 @@ Ribbon 点击链路：
 当前 Ribbon 对项目列表的用户可见行为是：
 
 - 当前 sheet 没有绑定时，下拉框显示 `先选择项目`
-- 项目接口返回有效列表时，下拉框显示项目条目
+- 项目接口返回有效列表时，下拉框显示 `ProjectId-displayName` 形式的项目条目
 - 项目接口返回 `401 Unauthorized` 时，连接器应转成可读的“请先登录”错误，Ribbon 会显示 `请先登录`
 - 项目接口返回空数组时，Ribbon 会显示 `无可用项目`
 - 项目接口发生其他异常时，Ribbon 会显示 `项目加载失败`
@@ -134,7 +134,7 @@ Ribbon 点击链路：
 
 ### 4.2 绑定默认值
 
-连接器要为新绑定 sheet 提供默认布局配置：
+连接器要为新绑定 sheet 提供布局对话框默认值：
 
 - `HeaderStartRow`
 - `HeaderRowCount`
@@ -150,8 +150,10 @@ Ribbon 点击链路：
 
 注意：
 
-- 这些默认值只在首次绑定或初始化时作为 seed 使用
-- 如果用户已经在 `_Settings` 中手工维护过 `HeaderStartRow`、`HeaderRowCount`、`DataStartRow`，重新选择项目时当前实现会优先保留现有值
+- `CreateBindingSeed` 现在用于“项目切换时布局对话框的默认值”，不是无提示直接落盘的持久化值
+- 当前 sheet 首次绑定项目时，布局对话框会展示连接器 seed 值（例如 `1 / 2 / 3`）
+- 切换到其他项目时，布局对话框会优先使用当前 sheet 已保存的布局值；只有不存在时才回退到 `CreateBindingSeed`
+- 只有用户在布局对话框点击确认后，才会把最终值写入 `SheetBindings`
 
 ### 4.3 字段映射定义
 
@@ -163,7 +165,7 @@ Ribbon 点击链路：
 这里有两个实现约束：
 
 - Excel 层只固定 `SheetName` 是第一列作用域列
-- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `_Settings` 里的 `SheetFieldMappings` section 中
+- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `AI_Setting` 里的 `SheetFieldMappings` section 中
 
 当前系统的例子在：
 
@@ -275,7 +277,7 @@ Ribbon 点击链路：
 
 真实系统接入时不要把它们重新写死回默认值。
 
-同时要注意，用户现在也可能直接手工维护 `_Settings`：
+同时要注意，用户现在也可能直接手工维护 `AI_Setting`：
 
 - 修改 `SheetBindings` 的配置值
 - 修改 `SheetFieldMappings` 的当前显示名
@@ -313,7 +315,7 @@ Ribbon 点击链路：
 这意味着：
 
 - 不需要为真实系统接入额外设计“旧 metadata 迁移逻辑”
-- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `_Settings`
+- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `AI_Setting`
 - 如果你从别的历史分支带来旧格式数据，应先清理，再按当前版本重新初始化
 
 ## 8. 真实系统落地步骤
@@ -326,7 +328,7 @@ Ribbon 点击链路：
 4. 新建真实系统的 `FieldMappingSeedBuilder`
 5. 让连接器先跑通 `GetProjects -> BuildFieldMappingSeed -> Find -> BatchSave`
 6. 再在 `ThisAddIn` 中注册或切换连接器实例
-7. 在 Excel 中执行一次 `初始化当前表`，确认 `_Settings` 被按当前标准布局写出
+7. 在 Excel 中执行一次 `初始化当前表`，确认 `AI_Setting` 被按当前标准布局写出
 8. 最后做 Excel 联调和手工回归
 
 当前注册位置：
@@ -388,11 +390,11 @@ Ribbon 点击链路：
 
 至少确认：
 
-- 选择项目后自动尝试初始化
+- 选择项目后不会自动初始化；只有显式点击 `初始化当前表` 才会写入或刷新 `SheetFieldMappings`
 - 未登录时项目下拉框显示 `请先登录`，登录成功后能够自动重载项目列表
 - 项目接口返回空列表时，下拉框显示 `无可用项目`
 - 显式初始化不会破坏业务单元格
-- `_Settings` 会以单 sheet、上下两个 section 的可读布局写出
+- `AI_Setting` 会以单 sheet、上下两个 section 的可读布局写出
 - 全量下载能按配置行号落位
 - 已有表头场景下，全量下载不会重写已识别表头
 - 部分上传 / 部分下载在不包含 ID / 表头的选区里仍能正确定位
