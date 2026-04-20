@@ -61,6 +61,7 @@
 - Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing `先选择项目`.
 - Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
 - On a sheet that already has binding metadata, switch to another project and confirm the layout dialog defaults reuse the current sheet's saved layout values.
+- Reselect the already bound project (`same systemKey + projectId`) and confirm no layout dialog appears and `SheetBindings` is not rewritten.
 - Cancel the layout dialog while switching projects and confirm both `AI_Setting` binding data and Ribbon dropdown project stay unchanged.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows `请先登录`.
