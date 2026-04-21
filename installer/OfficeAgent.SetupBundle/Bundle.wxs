@@ -16,20 +16,66 @@
     </BootstrapperApplication>
 
     <util:RegistrySearch
-      Id="SearchVstoRuntime"
-      Variable="VstoRuntimeInstalled"
+      Id="SearchVstoRuntimeVersion64"
+      Variable="VstoRuntimeVersion64"
       Root="HKLM"
       Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4R"
       Value="Version"
-      Result="exists" />
+      Result="value"
+      Bitness="always64" />
 
     <util:RegistrySearch
-      Id="SearchWebView2Evergreen"
-      Variable="WebView2EvergreenInstalled"
+      Id="SearchVstoRuntimeVersion32"
+      Variable="VstoRuntimeVersion32"
       Root="HKLM"
-      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F1B5D7A5-8D1A-4F84-8F6A-8F92B9A6F9D0}"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4R"
+      Value="Version"
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeInstall64"
+      Variable="VstoRuntimeInstall64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4"
+      Value="Install"
+      Result="value"
+      Bitness="always64" />
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeInstall32"
+      Variable="VstoRuntimeInstall32"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4"
+      Value="Install"
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeMachine32"
+      Variable="WebView2RuntimeMachine32"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
       Value="pv"
-      Result="exists" />
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeMachine64"
+      Variable="WebView2RuntimeMachine64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+      Value="pv"
+      Result="value"
+      Bitness="always64" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeUser"
+      Variable="WebView2RuntimeUser"
+      Root="HKCU"
+      Key="Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+      Value="pv"
+      Result="value" />
 
     <Chain>
       <ExePackage
@@ -40,7 +86,7 @@
         Permanent="yes"
         Vital="yes"
         Compressed="yes"
-        InstallCondition="NOT VstoRuntimeInstalled"
+        DetectCondition="VstoRuntimeVersion64 OR VstoRuntimeVersion32 OR VstoRuntimeInstall64 = 1 OR VstoRuntimeInstall32 = 1"
         InstallArguments="/quiet /norestart" />
 
       <ExePackage
@@ -51,7 +97,8 @@
         Permanent="yes"
         Vital="yes"
         Compressed="yes"
-        InstallCondition="VersionNT64 = 0 AND NOT WebView2EvergreenInstalled"
+        InstallCondition="VersionNT64 = 0"
+        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
         InstallArguments="/silent /install" />
 
       <ExePackage
@@ -62,7 +109,8 @@
         Permanent="yes"
         Vital="yes"
         Compressed="yes"
-        InstallCondition="VersionNT64 AND NOT WebView2EvergreenInstalled"
+        InstallCondition="VersionNT64"
+        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
         InstallArguments="/silent /install" />
 
       <MsiPackage

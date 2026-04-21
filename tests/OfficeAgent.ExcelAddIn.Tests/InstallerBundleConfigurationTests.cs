@@ -35,6 +35,32 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("OfficeAgent.SetupBundle", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Bal.wixext", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Util.wixext", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("-ext", buildScriptText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void SetupBundleSearchesExpectedPrerequisiteRegistryLocations()
+        {
+            var bundleWxsText = ReadRepositoryFile(
+                "installer",
+                "OfficeAgent.SetupBundle",
+                "Bundle.wxs");
+
+            Assert.Contains("SearchVstoRuntimeVersion64", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchVstoRuntimeVersion32", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchVstoRuntimeInstall64", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchVstoRuntimeInstall32", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchWebView2RuntimeMachine32", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchWebView2RuntimeMachine64", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("SearchWebView2RuntimeUser", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains(
+                "SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                bundleWxsText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "{F1B5D7A5-8D1A-4F84-8F6A-8F92B9A6F9D0}",
+                bundleWxsText,
+                StringComparison.Ordinal);
         }
 
         [Fact]

@@ -81,7 +81,7 @@ function Assert-FileExists {
     )
 
     if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Missing $Description: $Path"
+        throw "Missing ${Description}: $Path"
     }
 }
 
@@ -116,6 +116,12 @@ Write-Host "Using MSBuild: $msbuild"
 Assert-FileExists -Path $toolsManifestPath -Description "dotnet tools manifest"
 $toolsManifest = Get-Content -Raw $toolsManifestPath | ConvertFrom-Json
 $wixToolVersion = $toolsManifest.tools.wix.version
+$wixBalExtension = "WixToolset.Bal.wixext"
+$wixUtilExtension = "WixToolset.Util.wixext"
+$wixExtensionCacheRoot = Join-Path $env:USERPROFILE ".wix\\extensions"
+$wixExtensionCacheFolderName = "wixext{0}" -f $wixToolVersion.Split('.')[0]
+$wixBalExtensionPath = Join-Path $wixExtensionCacheRoot "$wixBalExtension\\$wixToolVersion\\$wixExtensionCacheFolderName\\WixToolset.BootstrapperApplications.wixext.dll"
+$wixUtilExtensionPath = Join-Path $wixExtensionCacheRoot "$wixUtilExtension\\$wixToolVersion\\$wixExtensionCacheFolderName\\WixToolset.Util.wixext.dll"
 
 if ([string]::IsNullOrWhiteSpace($wixToolVersion)) {
     throw "Unable to determine WiX tool version from $toolsManifestPath"
@@ -158,8 +164,10 @@ finally {
 }
 
 Write-Host "Ensuring WiX bundle extensions are installed..."
-Ensure-WixExtension "WixToolset.Bal.wixext/$wixToolVersion"
-Ensure-WixExtension "WixToolset.Util.wixext/$wixToolVersion"
+Ensure-WixExtension "$wixBalExtension/$wixToolVersion"
+Ensure-WixExtension "$wixUtilExtension/$wixToolVersion"
+Assert-FileExists -Path $wixBalExtensionPath -Description "WiX bootstrapper extension"
+Assert-FileExists -Path $wixUtilExtensionPath -Description "WiX util extension"
 
 $commitCount = [int](git rev-list --count HEAD).Trim()
 $productVersion = "1.0.$commitCount"
@@ -232,7 +240,7 @@ if (Test-Path $offlineSetupWixPdbPath) {
 }
 
 Write-Host "Building offline setup bundle..."
-Invoke-NativeCommand "dotnet" "wix" "build" $bundleSource "-arch" "x86" "-bindpath" $bundleRoot "-bindpath" $outputRoot "-d" "ProductVersion=$productVersion" "-o" $offlineSetupPath
+Invoke-NativeCommand "dotnet" "wix" "build" $bundleSource "-arch" "x86" "-ext" $wixBalExtensionPath "-ext" $wixUtilExtensionPath "-bindpath" $bundleRoot "-bindpath" $outputRoot "-d" "ProductVersion=$productVersion" "-o" $offlineSetupPath
 
 Write-Host "Installer outputs created at:"
 $builtMsiPaths | ForEach-Object { Write-Host " - $_" }
