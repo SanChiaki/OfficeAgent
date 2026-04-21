@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Bundle
+    Name="OfficeAgent"
+    Manufacturer="OfficeAgent"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="A83D3E4A-FE0B-4A49-82A7-6528D0908AA5"
+    Compressed="yes">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        Theme="rtfLicense"
+        LicenseFile="BundleLicense.rtf" />
+    </BootstrapperApplication>
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntime"
+      Variable="VstoRuntimeInstalled"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4R"
+      Value="Version"
+      Result="exists" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2Evergreen"
+      Variable="WebView2EvergreenInstalled"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F1B5D7A5-8D1A-4F84-8F6A-8F92B9A6F9D0}"
+      Value="pv"
+      Result="exists" />
+
+    <Chain>
+      <ExePackage
+        Id="VstoRuntime"
+        DisplayName="Microsoft Visual Studio Tools for Office Runtime"
+        SourceFile="prereqs\vstor_redist.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="NOT VstoRuntimeInstalled"
+        InstallArguments="/quiet /norestart" />
+
+      <ExePackage
+        Id="WebView2RuntimeX86"
+        DisplayName="Microsoft Edge WebView2 Runtime (x86)"
+        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX86.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64 = 0 AND NOT WebView2EvergreenInstalled"
+        InstallArguments="/silent /install" />
+
+      <ExePackage
+        Id="WebView2RuntimeX64"
+        DisplayName="Microsoft Edge WebView2 Runtime (x64)"
+        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64 AND NOT WebView2EvergreenInstalled"
+        InstallArguments="/silent /install" />
+
+      <MsiPackage
+        Id="OfficeAgentMsiX86"
+        DisplayName="OfficeAgent (x86)"
+        SourceFile="OfficeAgent.Setup-x86.msi"
+        Visible="no"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64 = 0" />
+
+      <MsiPackage
+        Id="OfficeAgentMsiX64"
+        DisplayName="OfficeAgent (x64)"
+        SourceFile="OfficeAgent.Setup-x64.msi"
+        Visible="no"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64" />
+    </Chain>
+  </Bundle>
+</Wix>
