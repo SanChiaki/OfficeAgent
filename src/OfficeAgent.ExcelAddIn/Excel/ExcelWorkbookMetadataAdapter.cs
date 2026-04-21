@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using ExcelInterop = Microsoft.Office.Interop.Excel;
 
@@ -20,6 +21,27 @@ namespace OfficeAgent.ExcelAddIn.Excel
         public ExcelWorkbookMetadataAdapter(ExcelInterop.Application application)
         {
             this.application = application ?? throw new ArgumentNullException(nameof(application));
+        }
+
+        public string GetWorkbookScopeKey()
+        {
+            var workbook = application.ActiveWorkbook;
+            if (workbook == null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(workbook.FullName))
+            {
+                return workbook.FullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(workbook.Name))
+            {
+                return workbook.Name;
+            }
+
+            return workbook.GetHashCode().ToString(CultureInfo.InvariantCulture);
         }
 
         public void EnsureWorksheet(string name, bool visible)

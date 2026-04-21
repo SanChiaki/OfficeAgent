@@ -62,6 +62,7 @@
 - Save a workbook with `AI_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows `先选择项目` unless `SheetBindings` 里存在 `AI_Setting` 这条显式绑定记录。
 - Switch from a bound business sheet to `AI_Setting` and confirm the Ribbon dropdown clears back to `先选择项目` when `AI_Setting` itself has no binding.
 - Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
+- Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon dropdown plus download/upload behavior always follow the active workbook's own `AI_Setting` metadata.
 - On a sheet that already has binding metadata, switch to another project and confirm the layout dialog defaults reuse the current sheet's saved layout values.
 - Reselect the already bound project (`same systemKey + projectId`) and confirm no layout dialog appears and `SheetBindings` is not rewritten.
 - Cancel the layout dialog while switching projects and confirm both `AI_Setting` binding data and Ribbon dropdown project stay unchanged.

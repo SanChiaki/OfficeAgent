@@ -843,9 +843,70 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("王五", grid.GetCell("Sheet1", 7, 2));
         }
 
+        [Fact]
+        public void ExecuteFullDownloadUsesActiveWorkbookMetadataWhenDifferentWorkbooksShareSameSheetName()
+        {
+            var connector = new FakeSystemConnector();
+            var adapter = CreateScopedMetadataAdapter();
+            SeedWorkbookMetadata(
+                adapter,
+                "WorkbookA",
+                new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "project-a",
+                    ProjectName = "项目A",
+                    HeaderStartRow = 3,
+                    HeaderRowCount = 2,
+                    DataStartRow = 6,
+                },
+                BuildDefaultMappings("Sheet1"));
+            SeedWorkbookMetadata(
+                adapter,
+                "WorkbookB",
+                new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "project-b",
+                    ProjectName = "项目B",
+                    HeaderStartRow = 5,
+                    HeaderRowCount = 2,
+                    DataStartRow = 9,
+                },
+                BuildDefaultMappings("Sheet1"));
+
+            var metadataStore = CreateRealMetadataStore(adapter);
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+
+            adapter.SwitchWorkbook("WorkbookA");
+            connector.FindResult = new[] { CreateRow("row-a", "张三", "2026-01-02", "2026-01-05") };
+
+            var workbookAPlan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", workbookAPlan);
+
+            Assert.Equal("project-a", connector.LastFindProjectId);
+            Assert.Equal("row-a", grid.GetCell("Sheet1", 6, 1));
+
+            grid.ClearAllCells();
+            adapter.SwitchWorkbook("WorkbookB");
+            connector.FindResult = new[] { CreateRow("row-b", "李四", "2026-02-02", "2026-02-06") };
+
+            var workbookBPlan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", workbookBPlan);
+
+            Assert.Equal("project-b", connector.LastFindProjectId);
+            Assert.Equal("ID", grid.GetCell("Sheet1", 5, 1));
+            Assert.Equal("项目负责人", grid.GetCell("Sheet1", 5, 2));
+            Assert.Equal("row-b", grid.GetCell("Sheet1", 9, 1));
+            Assert.Equal("李四", grid.GetCell("Sheet1", 9, 2));
+            Assert.Equal(string.Empty, grid.GetCell("Sheet1", 6, 1));
+        }
+
         private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
             FakeSystemConnector connector,
-            FakeWorksheetMetadataStore metadataStore,
+            IWorksheetMetadataStore metadataStore,
             FakeWorksheetSelectionReader selectionReader)
         {
             return CreateService(new[] { connector }, metadataStore, selectionReader);
@@ -853,7 +914,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
             IReadOnlyList<FakeSystemConnector> connectors,
-            FakeWorksheetMetadataStore metadataStore,
+            IWorksheetMetadataStore metadataStore,
             FakeWorksheetSelectionReader selectionReader)
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
@@ -894,6 +955,74 @@ namespace OfficeAgent.ExcelAddIn.Tests
             });
 
             return (service, grid);
+        }
+
+        private static ScopedWorksheetMetadataAdapter CreateScopedMetadataAdapter()
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var adapterInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetMetadataAdapter", throwOnError: true);
+            return new ScopedWorksheetMetadataAdapter(adapterInterface);
+        }
+
+        private static IWorksheetMetadataStore CreateRealMetadataStore(ScopedWorksheetMetadataAdapter adapter)
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var storeType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetMetadataStore", throwOnError: true);
+            var adapterInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetMetadataAdapter", throwOnError: true);
+            var ctor = storeType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { adapterInterface },
+                modifiers: null);
+
+            if (ctor == null)
+            {
+                throw new InvalidOperationException("WorksheetMetadataStore constructor was not found.");
+            }
+
+            return (IWorksheetMetadataStore)ctor.Invoke(new[] { adapter.GetTransparentProxy() });
+        }
+
+        private static void SeedWorkbookMetadata(
+            ScopedWorksheetMetadataAdapter adapter,
+            string workbookScopeKey,
+            SheetBinding binding,
+            IReadOnlyList<SheetFieldMappingRow> mappings)
+        {
+            adapter.SwitchWorkbook(workbookScopeKey);
+            adapter.SeedTable("SheetBindings", new[]
+            {
+                new[]
+                {
+                    binding.SheetName ?? string.Empty,
+                    binding.SystemKey ?? string.Empty,
+                    binding.ProjectId ?? string.Empty,
+                    binding.ProjectName ?? string.Empty,
+                    binding.HeaderStartRow.ToString(),
+                    binding.HeaderRowCount.ToString(),
+                    binding.DataStartRow.ToString(),
+                },
+            });
+            adapter.SeedTable(
+                "SheetFieldMappings",
+                (mappings ?? Array.Empty<SheetFieldMappingRow>())
+                    .Select(row => new[]
+                    {
+                        row?.SheetName ?? string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("HeaderId", out var headerId) ? headerId ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("HeaderType", out var headerType) ? headerType ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("ApiFieldKey", out var apiFieldKey) ? apiFieldKey ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("IsIdColumn", out var isIdColumn) ? isIdColumn ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("DefaultSingleDisplayName", out var defaultSingle) ? defaultSingle ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("CurrentSingleDisplayName", out var currentSingle) ? currentSingle ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("DefaultParentDisplayName", out var defaultParent) ? defaultParent ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("CurrentParentDisplayName", out var currentParent) ? currentParent ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("DefaultChildDisplayName", out var defaultChild) ? defaultChild ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("CurrentChildDisplayName", out var currentChild) ? currentChild ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("ActivityId", out var activityId) ? activityId ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("PropertyId", out var propertyId) ? propertyId ?? string.Empty : string.Empty,
+                    })
+                    .ToArray());
         }
 
         private static void SeedRecognizedHeaders(FakeWorksheetGridAdapter grid, string sheetName, SheetBinding binding)
@@ -1496,6 +1625,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     : string.Empty;
             }
 
+            public void ClearAllCells()
+            {
+                cells.Clear();
+            }
+
             public int CountGetCellTextCalls(string sheetName, int row, int column)
             {
                 return GetCellTextCalls.Count(call =>
@@ -1691,6 +1825,83 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 public object RawValue { get; set; } = string.Empty;
 
                 public string NumberFormat { get; set; } = string.Empty;
+            }
+        }
+
+        private sealed class ScopedWorksheetMetadataAdapter : RealProxy
+        {
+            private readonly Dictionary<string, Dictionary<string, List<string[]>>> tablesByWorkbook =
+                new Dictionary<string, Dictionary<string, List<string[]>>>(StringComparer.OrdinalIgnoreCase);
+
+            public ScopedWorksheetMetadataAdapter(Type adapterInterface)
+                : base(adapterInterface)
+            {
+            }
+
+            public string WorkbookScopeKey { get; private set; } = "Workbook1";
+
+            public override IMessage Invoke(IMessage msg)
+            {
+                var call = (IMethodCallMessage)msg;
+
+                switch (call.MethodName)
+                {
+                    case "GetWorkbookScopeKey":
+                        return new ReturnMessage(WorkbookScopeKey, null, 0, call.LogicalCallContext, call);
+                    case "EnsureWorksheet":
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "WriteTable":
+                        {
+                            var tables = GetCurrentWorkbookTables();
+                            var tableName = (string)call.InArgs[0];
+                            var rows = (string[][])call.InArgs[2];
+                            tables[tableName] = (rows ?? Array.Empty<string[]>())
+                                .Select(row => row?.ToArray() ?? Array.Empty<string>())
+                                .ToList();
+                            return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                        }
+                    case "ReadTable":
+                        {
+                            var tables = GetCurrentWorkbookTables();
+                            var tableName = (string)call.InArgs[0];
+                            var rows = tables.TryGetValue(tableName, out var storedRows)
+                                ? storedRows.Select(row => row.ToArray()).ToArray()
+                                : Array.Empty<string[]>();
+                            return new ReturnMessage(rows, null, 0, call.LogicalCallContext, call);
+                        }
+                    default:
+                        throw new NotSupportedException(call.MethodName);
+                }
+            }
+
+            public void SwitchWorkbook(string workbookScopeKey)
+            {
+                WorkbookScopeKey = workbookScopeKey ?? string.Empty;
+                GetCurrentWorkbookTables();
+            }
+
+            public void SeedTable(string tableName, string[][] rows)
+            {
+                var tables = GetCurrentWorkbookTables();
+                tables[tableName] = (rows ?? Array.Empty<string[]>())
+                    .Select(row => row?.ToArray() ?? Array.Empty<string>())
+                    .ToList();
+            }
+
+            public new object GetTransparentProxy()
+            {
+                return base.GetTransparentProxy();
+            }
+
+            private Dictionary<string, List<string[]>> GetCurrentWorkbookTables()
+            {
+                if (!tablesByWorkbook.TryGetValue(WorkbookScopeKey, out var tables))
+                {
+                    tables = new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                    tablesByWorkbook[WorkbookScopeKey] = tables;
+                }
+
+                return tables;
             }
         }
 

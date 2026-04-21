@@ -154,6 +154,70 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LoadBindingReloadsRowsWhenWorkbookScopeChanges()
+        {
+            var (store, adapter) = CreateStore();
+            adapter.SwitchWorkbook("WorkbookA");
+            adapter.SeedTable("SheetBindings", new[]
+            {
+                new[] { "Sheet1", "current-business-system", "project-a", "项目A", "3", "2", "6" },
+            });
+
+            var first = InvokeLoadBinding(store, "Sheet1");
+
+            Assert.Equal("project-a", first.ProjectId);
+            Assert.Equal(1, adapter.ReadTableCallCount);
+
+            adapter.SwitchWorkbook("WorkbookB");
+            adapter.SeedTable("SheetBindings", new[]
+            {
+                new[] { "Sheet1", "current-business-system", "project-b", "项目B", "4", "1", "8" },
+            });
+
+            var second = InvokeLoadBinding(store, "Sheet1");
+
+            Assert.Equal("project-b", second.ProjectId);
+            Assert.Equal(2, adapter.ReadTableCallCount);
+        }
+
+        [Fact]
+        public void SaveBindingKeepsWorkbookRowsIsolatedWhenWorkbookScopeChanges()
+        {
+            var (store, adapter) = CreateStore();
+            adapter.SwitchWorkbook("WorkbookA");
+            adapter.SeedTable("SheetBindings", new[]
+            {
+                new[] { "SheetA", "current-business-system", "project-a", "项目A", "1", "2", "3" },
+            });
+
+            var original = InvokeLoadBinding(store, "SheetA");
+            Assert.Equal("project-a", original.ProjectId);
+
+            adapter.SwitchWorkbook("WorkbookB");
+            adapter.SeedTable("SheetBindings", new[]
+            {
+                new[] { "SheetB", "current-business-system", "project-b", "项目B", "2", "1", "4" },
+            });
+
+            InvokeSaveBinding(store, new SheetBinding
+            {
+                SheetName = "SheetC",
+                SystemKey = "current-business-system",
+                ProjectId = "project-c",
+                ProjectName = "项目C",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 8,
+            });
+
+            var workbookBRows = adapter.ReadSeededTable("SheetBindings");
+
+            Assert.Contains(workbookBRows, row => row[0] == "SheetB" && row[2] == "project-b");
+            Assert.Contains(workbookBRows, row => row[0] == "SheetC" && row[2] == "project-c");
+            Assert.DoesNotContain(workbookBRows, row => row[0] == "SheetA");
+        }
+
+        [Fact]
         public void SaveFieldMappingsPreservesOtherSheetsAndUsesDynamicHeaders()
         {
             var (store, adapter) = CreateStore();
@@ -388,6 +452,53 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LoadFieldMappingsReloadsRowsWhenWorkbookScopeChanges()
+        {
+            var (store, adapter) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "HeaderId",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "CurrentSingleDisplayName",
+                        Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
+                    },
+                },
+            };
+
+            adapter.SwitchWorkbook("WorkbookA");
+            adapter.SeedTable("SheetFieldMappings", new[]
+            {
+                new[] { "Sheet1", "owner_name", "项目负责人A" },
+            });
+
+            var first = InvokeLoadFieldMappings(store, "Sheet1", definition);
+
+            Assert.Single(first);
+            Assert.Equal("项目负责人A", first[0].Values["CurrentSingleDisplayName"]);
+            Assert.Equal(1, adapter.ReadTableCallCount);
+
+            adapter.SwitchWorkbook("WorkbookB");
+            adapter.SeedTable("SheetFieldMappings", new[]
+            {
+                new[] { "Sheet1", "row_id", "项目负责人B" },
+            });
+
+            var second = InvokeLoadFieldMappings(store, "Sheet1", definition);
+
+            Assert.Single(second);
+            Assert.Equal("项目负责人B", second[0].Values["CurrentSingleDisplayName"]);
+            Assert.Equal(2, adapter.ReadTableCallCount);
+        }
+
+        [Fact]
         public void ClearFieldMappingsRemovesOnlyTargetSheetRowsAndPreservesHeaders()
         {
             var (store, adapter) = CreateStore();
@@ -554,15 +665,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private sealed class FakeWorksheetMetadataAdapter : RealProxy
         {
-            private readonly Dictionary<string, List<string[]>> tables =
-                new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
-            private readonly Dictionary<string, string[]> headers =
-                new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, Dictionary<string, List<string[]>>> tablesByWorkbook =
+                new Dictionary<string, Dictionary<string, List<string[]>>>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, Dictionary<string, string[]>> headersByWorkbook =
+                new Dictionary<string, Dictionary<string, string[]>>(StringComparer.OrdinalIgnoreCase);
 
             public int ReadTableCallCount { get; private set; }
             public string WorksheetName { get; private set; }
             public bool Visible { get; private set; }
             public int EnsureWorksheetCallCount { get; private set; }
+            public string WorkbookScopeKey { get; private set; } = "Workbook1";
 
             public FakeWorksheetMetadataAdapter(Type adapterInterface)
                 : base(adapterInterface)
@@ -575,11 +687,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
                 return call.MethodName switch
                 {
+                    "GetWorkbookScopeKey" => HandleGetWorkbookScopeKey(call),
                     "EnsureWorksheet" => HandleEnsureWorksheet(call),
                     "WriteTable" => HandleWriteTable(call),
                     "ReadTable" => HandleReadTable(call),
                     _ => throw new NotSupportedException(call.MethodName),
                 };
+            }
+
+            private IMessage HandleGetWorkbookScopeKey(IMethodCallMessage call)
+            {
+                return new ReturnMessage(WorkbookScopeKey, null, 0, call.LogicalCallContext, call);
             }
 
             private IMessage HandleEnsureWorksheet(IMethodCallMessage call)
@@ -595,6 +713,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 var tableName = (string)call.InArgs[0];
                 var tableHeaders = (string[])call.InArgs[1];
                 var rows = (string[][])call.InArgs[2];
+                var headers = GetCurrentWorkbookHeaders();
+                var tables = GetCurrentWorkbookTables();
                 headers[tableName] = tableHeaders?.ToArray() ?? Array.Empty<string>();
                 if (rows == null)
                 {
@@ -612,6 +732,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 ReadTableCallCount++;
                 var tableName = (string)call.InArgs[0];
+                var tables = GetCurrentWorkbookTables();
                 tables.TryGetValue(tableName, out var rows);
                 var result = rows?.Select(row => row.ToArray()).ToArray() ?? Array.Empty<string[]>();
                 return new ReturnMessage(result, null, 0, call.LogicalCallContext, call);
@@ -619,11 +740,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public void SeedTable(string tableName, string[][] rows)
             {
+                var tables = GetCurrentWorkbookTables();
                 tables[tableName] = rows.Select(row => row?.ToArray() ?? Array.Empty<string>()).ToList();
             }
 
             public string[][] ReadSeededTable(string tableName)
             {
+                var tables = GetCurrentWorkbookTables();
                 return tables.TryGetValue(tableName, out var rows)
                     ? rows.Select(row => row.ToArray()).ToArray()
                     : Array.Empty<string[]>();
@@ -631,14 +754,44 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public string[] ReadSeededHeaders(string tableName)
             {
+                var headers = GetCurrentWorkbookHeaders();
                 return headers.TryGetValue(tableName, out var tableHeaders)
                     ? tableHeaders.ToArray()
                     : Array.Empty<string>();
             }
 
+            public void SwitchWorkbook(string workbookScopeKey)
+            {
+                WorkbookScopeKey = workbookScopeKey ?? string.Empty;
+                GetCurrentWorkbookTables();
+                GetCurrentWorkbookHeaders();
+            }
+
             public new object GetTransparentProxy()
             {
                 return base.GetTransparentProxy();
+            }
+
+            private Dictionary<string, List<string[]>> GetCurrentWorkbookTables()
+            {
+                if (!tablesByWorkbook.TryGetValue(WorkbookScopeKey, out var tables))
+                {
+                    tables = new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                    tablesByWorkbook[WorkbookScopeKey] = tables;
+                }
+
+                return tables;
+            }
+
+            private Dictionary<string, string[]> GetCurrentWorkbookHeaders()
+            {
+                if (!headersByWorkbook.TryGetValue(WorkbookScopeKey, out var headers))
+                {
+                    headers = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+                    headersByWorkbook[WorkbookScopeKey] = headers;
+                }
+
+                return headers;
             }
         }
     }

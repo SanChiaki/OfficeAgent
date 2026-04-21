@@ -31,6 +31,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private bool bindingRowsCacheLoaded;
         private string[][] fieldMappingRowsCache;
         private bool fieldMappingRowsCacheLoaded;
+        private string workbookScopeKey = string.Empty;
 
         public WorksheetMetadataStore(IWorksheetMetadataAdapter adapter)
         {
@@ -49,6 +50,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(binding));
             }
 
+            EnsureWorkbookScope();
             adapter.EnsureWorksheet(MetadataSheetName, visible: true);
             var normalizedSheetName = binding.SheetName;
             var rows = GetBindingRows().ToList();
@@ -88,6 +90,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
+            EnsureWorkbookScope();
             var binding = GetBindingRows()
                 .Select(ParseBindingRow)
                 .FirstOrDefault(candidate =>
@@ -114,6 +117,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentNullException(nameof(definition));
             }
 
+            EnsureWorkbookScope();
             adapter.EnsureWorksheet(MetadataSheetName, visible: true);
             var columns = GetValidatedColumns(definition);
             var headers = new[] { "SheetName" }
@@ -160,6 +164,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentNullException(nameof(definition));
             }
 
+            EnsureWorkbookScope();
             var columns = GetValidatedColumns(definition);
             var rows = GetFieldMappingRows();
 
@@ -195,6 +200,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
+            EnsureWorkbookScope();
             var rows = GetFieldMappingRows().ToList();
             var removed = rows.RemoveAll(row =>
                 row.Length > 0 &&
@@ -218,6 +224,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
+            EnsureWorkbookScope();
             return Array.Empty<WorksheetSnapshotCell>();
         }
 
@@ -232,6 +239,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             {
                 throw new ArgumentNullException(nameof(cells));
             }
+
+            EnsureWorkbookScope();
         }
 
         internal void InvalidateCache()
@@ -240,6 +249,19 @@ namespace OfficeAgent.ExcelAddIn.Excel
             bindingRowsCacheLoaded = false;
             fieldMappingRowsCache = null;
             fieldMappingRowsCacheLoaded = false;
+            fieldMappingHeaders = DefaultFieldMappingHeaders.ToArray();
+        }
+
+        private void EnsureWorkbookScope()
+        {
+            var currentWorkbookScopeKey = adapter.GetWorkbookScopeKey() ?? string.Empty;
+            if (string.Equals(workbookScopeKey, currentWorkbookScopeKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            InvalidateCache();
+            workbookScopeKey = currentWorkbookScopeKey;
         }
 
         private static int ParseIntOrDefault(IReadOnlyList<string> row, int index, int defaultValue)
