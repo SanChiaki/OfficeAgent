@@ -108,6 +108,36 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void TemplateGroupAppearsAfterProjectGroupAndBeforeDownloadGroup()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            var projectGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupProject);", StringComparison.Ordinal);
+            var templateGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupTemplate);", StringComparison.Ordinal);
+            var downloadGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupDownload);", StringComparison.Ordinal);
+
+            Assert.True(projectGroupIndex >= 0);
+            Assert.True(templateGroupIndex > projectGroupIndex);
+            Assert.True(downloadGroupIndex > templateGroupIndex);
+        }
+
+        [Fact]
+        public void TemplateGroupContainsApplySaveAndSaveAsButtons()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.groupTemplate.Items.Add(this.applyTemplateButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupTemplate.Items.Add(this.saveTemplateButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupTemplate.Items.Add(this.saveAsTemplateButton);", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void LoginRefreshesProjectListAfterPopupCloses()
         {
             var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
@@ -432,9 +462,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var loadMethodText = ribbonCodeText.Substring(methodStart, nextMethodStart - methodStart);
             Assert.DoesNotContain("PopulateProjectDropDown();", loadMethodText, StringComparison.Ordinal);
-            Assert.Contains("if (!TryBindToSyncController())", loadMethodText, StringComparison.Ordinal);
-            Assert.Contains("syncController.RefreshActiveProjectFromSheetMetadata();", loadMethodText, StringComparison.Ordinal);
-            Assert.Contains("RefreshProjectDropDownFromController();", loadMethodText, StringComparison.Ordinal);
+            Assert.Contains("BindToControllersAndRefresh();", loadMethodText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -447,6 +475,22 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("private bool TryBindToSyncController()", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("syncController.ActiveProjectChanged += SyncController_ActiveProjectChanged;", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonBindsToTemplateControllerAndRefreshesTemplateButtons()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("BindToControllersAndRefresh()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("TryBindToTemplateController()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("RefreshTemplateButtonsFromController();", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ApplyTemplateButton_Click", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SaveTemplateButton_Click", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SaveAsTemplateButton_Click", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -517,7 +561,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "ThisAddIn.cs"));
 
             Assert.Contains("Globals.Ribbons", addInCodeText, StringComparison.Ordinal);
-            Assert.Contains("BindToSyncControllerAndRefresh()", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("BindToControllersAndRefresh()", addInCodeText, StringComparison.Ordinal);
         }
 
         [Fact]

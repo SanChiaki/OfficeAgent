@@ -56,9 +56,9 @@
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `AI_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` is clicked.
-- Open `AI_Setting` and confirm it uses one worksheet with two readable sections: `SheetBindings` on top, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
+- Open `AI_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
-- Confirm there are two blank separator rows between `SheetBindings` and `SheetFieldMappings`, and that metadata is no longer stored as flattened `tableName + values` rows.
+- Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.
 - Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing `先选择项目`.
 - Save a workbook with `AI_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows `先选择项目` unless `SheetBindings` 里存在 `AI_Setting` 这条显式绑定记录。
 - Switch from a bound business sheet to `AI_Setting` and confirm the Ribbon dropdown clears back to `先选择项目` when `AI_Setting` itself has no binding.
@@ -73,7 +73,14 @@
 - Configure the project API to return an empty array and confirm the project dropdown shows `无可用项目`.
 - Click `初始化当前表` on a sheet that already contains business cells and confirm only `AI_Setting` changes; the business area should remain untouched.
 - Click `部分下载` and `部分上传` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
+- Confirm the Ribbon includes a dedicated `模板` group with `应用模板`, `保存模板`, and `另存模板`.
 - Confirm the `下载` and `上传` controls are rendered in separate Ribbon groups, that the download group only shows `部分下载`, the upload group only shows `部分上传`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
+- In the same project, save two different local templates and confirm `应用模板` can list both.
+- Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
+- Manually edit `AI_Setting` field mapping text after applying a template, click `保存模板`, then reapply that template and confirm the edited mapping is preserved.
+- With a sheet already bound to a template, use `另存模板`, confirm the new template name appears in the local template list, and confirm the current sheet's `TemplateBindings.TemplateId` switches to the new template.
+- Force a template revision conflict by editing the same template outside the workbook, then click `保存模板` and confirm the dialog offers overwrite, save-as, and cancel.
+- Open an older workbook that has no `TemplateBindings` section and confirm download, upload, and initialize still work.
 - Edit `AI_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run `全量下载` and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run `全量下载` and confirm the plugin refreshes data cells without rewriting those existing headers.
 - Modify `Excel L1` or `Excel L2` in `SheetFieldMappings`, update the matching Excel header text manually, then run `部分下载` or `部分上传` and confirm the column still resolves by current header text.

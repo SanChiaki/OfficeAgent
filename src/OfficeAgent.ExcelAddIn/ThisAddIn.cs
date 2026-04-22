@@ -5,6 +5,7 @@ using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Skills;
 using OfficeAgent.Core.Sync;
+using OfficeAgent.Core.Templates;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.TaskPane;
 using OfficeAgent.Infrastructure.Diagnostics;
@@ -32,6 +33,9 @@ namespace OfficeAgent.ExcelAddIn
         internal WorksheetSyncService WorksheetSyncService { get; private set; }
         internal WorksheetSyncExecutionService WorksheetSyncExecutionService { get; private set; }
         internal RibbonSyncController RibbonSyncController { get; private set; }
+        internal ITemplateStore TemplateStore { get; private set; }
+        internal ITemplateCatalog TemplateCatalog { get; private set; }
+        internal RibbonTemplateController RibbonTemplateController { get; private set; }
 
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
@@ -102,8 +106,18 @@ namespace OfficeAgent.ExcelAddIn
                 WorksheetSyncService,
                 GetActiveWorksheetName,
                 WorksheetSyncExecutionService);
+            TemplateStore = new LocalJsonTemplateStore(Path.Combine(appDataDirectory, "templates"));
+            TemplateCatalog = new WorksheetTemplateCatalog(
+                SystemConnectorRegistry,
+                WorksheetMetadataStore,
+                (IWorksheetTemplateBindingStore)WorksheetMetadataStore,
+                TemplateStore);
+            RibbonTemplateController = new RibbonTemplateController(
+                TemplateCatalog,
+                GetActiveWorksheetName);
             RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
-            Globals.Ribbons.AgentRibbon?.BindToSyncControllerAndRefresh();
+            RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
+            Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
             TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore);
             Application.WorkbookActivate += Application_WorkbookActivate;
@@ -143,6 +157,7 @@ namespace OfficeAgent.ExcelAddIn
             if (!string.Equals(lastProjectRefreshSheetName, sheetName, StringComparison.OrdinalIgnoreCase))
             {
                 RibbonSyncController?.RefreshProjectFromSheetMetadata(sheetName);
+                RibbonTemplateController?.RefreshTemplateState(sheetName);
                 lastProjectRefreshSheetName = sheetName;
             }
 
@@ -154,13 +169,16 @@ namespace OfficeAgent.ExcelAddIn
         {
             var sheetName = GetWorksheetName(sh);
             RibbonSyncController?.RefreshProjectFromSheetMetadata(sheetName);
+            RibbonTemplateController?.RefreshTemplateState(sheetName);
             lastProjectRefreshSheetName = sheetName;
         }
 
         private void Application_WorkbookActivate(ExcelInterop.Workbook wb)
         {
             RibbonSyncController?.InvalidateRefreshState();
+            RibbonTemplateController?.InvalidateRefreshState();
             RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
+            RibbonTemplateController?.RefreshActiveTemplateStateFromSheetMetadata();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
         }
 
@@ -175,6 +193,7 @@ namespace OfficeAgent.ExcelAddIn
             var metadataStore = WorksheetMetadataStore as OfficeAgent.ExcelAddIn.Excel.WorksheetMetadataStore;
             metadataStore.InvalidateCache();
             RibbonSyncController?.InvalidateRefreshState();
+            RibbonTemplateController?.InvalidateRefreshState();
             lastProjectRefreshSheetName = string.Empty;
         }
 

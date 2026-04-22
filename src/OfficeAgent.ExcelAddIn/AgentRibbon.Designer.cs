@@ -25,12 +25,16 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1 = Factory.CreateRibbonTab();
             this.group1 = Factory.CreateRibbonGroup();
             this.groupProject = Factory.CreateRibbonGroup();
+            this.groupTemplate = Factory.CreateRibbonGroup();
             this.groupDownload = Factory.CreateRibbonGroup();
             this.groupUpload = Factory.CreateRibbonGroup();
             this.group2 = Factory.CreateRibbonGroup();
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
             this.projectDropDown = Factory.CreateRibbonDropDown();
             this.initializeSheetButton = Factory.CreateRibbonButton();
+            this.applyTemplateButton = Factory.CreateRibbonButton();
+            this.saveTemplateButton = Factory.CreateRibbonButton();
+            this.saveAsTemplateButton = Factory.CreateRibbonButton();
             this.fullDownloadButton = Factory.CreateRibbonButton();
             this.partialDownloadButton = Factory.CreateRibbonButton();
             this.fullUploadButton = Factory.CreateRibbonButton();
@@ -39,6 +43,7 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.SuspendLayout();
             this.group1.SuspendLayout();
             this.groupProject.SuspendLayout();
+            this.groupTemplate.SuspendLayout();
             this.groupDownload.SuspendLayout();
             this.groupUpload.SuspendLayout();
             this.group2.SuspendLayout();
@@ -48,6 +53,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.tab1.Groups.Add(this.group1);
             this.tab1.Groups.Add(this.groupProject);
+            this.tab1.Groups.Add(this.groupTemplate);
             this.tab1.Groups.Add(this.groupDownload);
             this.tab1.Groups.Add(this.groupUpload);
             this.tab1.Groups.Add(this.group2);
@@ -89,6 +95,32 @@ namespace OfficeAgent.ExcelAddIn
             this.initializeSheetButton.Label = "\u521D\u59CB\u5316\u5F53\u524D\u8868";
             this.initializeSheetButton.Name = "initializeSheetButton";
             this.initializeSheetButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.InitializeSheetButton_Click);
+            // 
+            // groupTemplate
+            // 
+            this.groupTemplate.Items.Add(this.applyTemplateButton);
+            this.groupTemplate.Items.Add(this.saveTemplateButton);
+            this.groupTemplate.Items.Add(this.saveAsTemplateButton);
+            this.groupTemplate.Label = "\u6A21\u677F";
+            this.groupTemplate.Name = "groupTemplate";
+            // 
+            // applyTemplateButton
+            // 
+            this.applyTemplateButton.Label = "\u5E94\u7528\u6A21\u677F";
+            this.applyTemplateButton.Name = "applyTemplateButton";
+            this.applyTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ApplyTemplateButton_Click);
+            // 
+            // saveTemplateButton
+            // 
+            this.saveTemplateButton.Label = "\u4FDD\u5B58\u6A21\u677F";
+            this.saveTemplateButton.Name = "saveTemplateButton";
+            this.saveTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveTemplateButton_Click);
+            // 
+            // saveAsTemplateButton
+            // 
+            this.saveAsTemplateButton.Label = "\u53E6\u5B58\u6A21\u677F";
+            this.saveAsTemplateButton.Name = "saveAsTemplateButton";
+            this.saveAsTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveAsTemplateButton_Click);
             // 
             // groupDownload
             // 
@@ -148,6 +180,8 @@ namespace OfficeAgent.ExcelAddIn
             this.group1.PerformLayout();
             this.groupProject.ResumeLayout(false);
             this.groupProject.PerformLayout();
+            this.groupTemplate.ResumeLayout(false);
+            this.groupTemplate.PerformLayout();
             this.groupDownload.ResumeLayout(false);
             this.groupDownload.PerformLayout();
             this.groupUpload.ResumeLayout(false);
@@ -160,12 +194,16 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonTab tab1;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group1;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupProject;
+        internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupTemplate;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupDownload;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupUpload;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonDropDown projectDropDown;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton initializeSheetButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton applyTemplateButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton saveTemplateButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton saveAsTemplateButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullDownloadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton partialDownloadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullUploadButton;

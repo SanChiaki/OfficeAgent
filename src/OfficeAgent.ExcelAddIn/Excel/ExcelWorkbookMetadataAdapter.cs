@@ -9,11 +9,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
         private const string MetadataSheetName = "AI_Setting";
-        private static readonly string[] OrderedTables =
-        {
-            "SheetBindings",
-            "SheetFieldMappings",
-        };
 
         private readonly ExcelInterop.Application application;
         private readonly MetadataSheetLayoutSerializer serializer = new MetadataSheetLayoutSerializer();
@@ -182,7 +177,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var sheetRows = ReadUsedRows(worksheet);
             var sections = new Dictionary<string, MetadataSectionDocument>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var tableName in OrderedTables)
+            foreach (var tableName in MetadataSheetLayoutSerializer.OrderedSectionNames)
             {
                 var section = serializer.ReadSection(tableName, sheetRows);
                 if (section == null || section.Headers.Length == 0)

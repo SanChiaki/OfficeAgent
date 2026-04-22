@@ -32,24 +32,14 @@ namespace OfficeAgent.ExcelAddIn
 
         private bool isUpdatingProjectDropDown;
         private bool isBoundToSyncController;
+        private bool isBoundToTemplateController;
         private string lastControllerOwnedProjectDropDownText = "先选择项目";
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
             SetProjectDropDownText("先选择项目");
-            if (!TryBindToSyncController())
-            {
-                return;
-            }
-
-            var syncController = Globals.ThisAddIn.RibbonSyncController;
-            if (syncController == null)
-            {
-                return;
-            }
-
-            syncController.RefreshActiveProjectFromSheetMetadata();
-            RefreshProjectDropDownFromController();
+            RefreshTemplateButtonsFromController();
+            BindToControllersAndRefresh();
         }
 
         private void ToggleTaskPaneButton_Click(object sender, RibbonControlEventArgs e)
@@ -420,19 +410,23 @@ namespace OfficeAgent.ExcelAddIn
 
         internal void BindToSyncControllerAndRefresh()
         {
-            if (!TryBindToSyncController())
+            BindToControllersAndRefresh();
+        }
+
+        internal void BindToControllersAndRefresh()
+        {
+            if (TryBindToSyncController())
             {
-                return;
+                Globals.ThisAddIn.RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
+                RefreshProjectDropDownFromController();
             }
 
-            var syncController = Globals.ThisAddIn.RibbonSyncController;
-            if (syncController == null)
+            if (TryBindToTemplateController())
             {
-                return;
+                Globals.ThisAddIn.RibbonTemplateController?.RefreshActiveTemplateStateFromSheetMetadata();
             }
 
-            syncController.RefreshActiveProjectFromSheetMetadata();
-            RefreshProjectDropDownFromController();
+            RefreshTemplateButtonsFromController();
         }
 
         private bool TryBindToSyncController()
@@ -453,6 +447,32 @@ namespace OfficeAgent.ExcelAddIn
             return true;
         }
 
+        private bool TryBindToTemplateController()
+        {
+            if (isBoundToTemplateController)
+            {
+                return true;
+            }
+
+            var controller = Globals.ThisAddIn.RibbonTemplateController;
+            if (controller == null)
+            {
+                return false;
+            }
+
+            controller.TemplateStateChanged += TemplateController_TemplateStateChanged;
+            isBoundToTemplateController = true;
+            return true;
+        }
+
+        internal void RefreshTemplateButtonsFromController()
+        {
+            var controller = Globals.ThisAddIn.RibbonTemplateController;
+            applyTemplateButton.Enabled = controller?.CanApplyTemplate == true;
+            saveTemplateButton.Enabled = controller?.CanSaveTemplate == true;
+            saveAsTemplateButton.Enabled = controller?.CanSaveAsTemplate == true;
+        }
+
         private string GetProjectDropDownDisplayText()
         {
             return projectDropDown.SelectedItem?.Label ?? projectDropDown.Label;
@@ -461,6 +481,21 @@ namespace OfficeAgent.ExcelAddIn
         private void InitializeSheetButton_Click(object sender, RibbonControlEventArgs e)
         {
             Globals.ThisAddIn.RibbonSyncController?.ExecuteInitializeCurrentSheet();
+        }
+
+        private void ApplyTemplateButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn.RibbonTemplateController?.ExecuteApplyTemplate();
+        }
+
+        private void SaveTemplateButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn.RibbonTemplateController?.ExecuteSaveTemplate();
+        }
+
+        private void SaveAsTemplateButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn.RibbonTemplateController?.ExecuteSaveAsTemplate();
         }
 
         private void SyncController_ActiveProjectChanged(object sender, EventArgs e)
@@ -475,7 +510,15 @@ namespace OfficeAgent.ExcelAddIn
                 RebuildProjectDropDownItemsFromCurrentState();
             }
 
+            Globals.ThisAddIn.RibbonTemplateController?.InvalidateRefreshState();
+            Globals.ThisAddIn.RibbonTemplateController?.RefreshActiveTemplateStateFromSheetMetadata();
             RefreshProjectDropDownFromController();
+            RefreshTemplateButtonsFromController();
+        }
+
+        private void TemplateController_TemplateStateChanged(object sender, EventArgs e)
+        {
+            RefreshTemplateButtonsFromController();
         }
 
         private void RestoreProjectDropDownFromController()

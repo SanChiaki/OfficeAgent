@@ -140,6 +140,12 @@
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
     <Compile Include="Dialogs\ProjectLayoutDialog.cs" />
+    <Compile Include="Dialogs\TemplateDialogService.cs" />
+    <Compile Include="Dialogs\TemplateNameDialog.cs" />
+    <Compile Include="Dialogs\TemplateOverwriteConfirmDialog.cs" />
+    <Compile Include="Dialogs\TemplatePickerDialog.cs" />
+    <Compile Include="Dialogs\TemplatePromptDialog.cs" />
+    <Compile Include="Dialogs\TemplateRevisionConflictDialog.cs" />
     <Compile Include="Dialogs\UploadConfirmDialog.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
@@ -188,6 +194,7 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="ProjectSelectionKey.cs" />
+    <Compile Include="RibbonTemplateController.cs" />
     <Compile Include="WebBridge\WebMessageEnvelope.cs" />
     <Compile Include="WebBridge\WebMessageRouter.cs" />
     <Compile Include="WebBridge\WebViewBootstrapper.cs" />

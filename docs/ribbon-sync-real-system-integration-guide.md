@@ -12,25 +12,29 @@
 当前 Ribbon Sync 的核心思路已经从“固定列号 + 快照差异”切换为：
 
 - `AI_Setting` 是每个受管 sheet 的运行时事实来源
+- `AI_Setting.TemplateBindings` 记录当前 sheet 与本机模板库的关系
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
+- 本机模板资产保存在 `%LocalAppData%\OfficeAgent\templates\...`，不直接替代运行时 metadata
 - 当前 Ribbon 入口只做部分下载、部分上传
 - `全量下载` 和 `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
 
 当前 `AI_Setting` 的具体形态也已经固定：
 
 - 它是一个可见 worksheet，便于调试和人工维护
-- 它只承载两个 section：
+- 它当前承载三个 section：
+  - `TemplateBindings`
   - `SheetBindings`
   - `SheetFieldMappings`
-- 两个 section 都采用同样的可读布局：
+- 三个 section 都采用同样的可读布局：
   - 一行标题
   - 一行表头
   - 多行数据
-- `SheetBindings` 永远在上
-- `SheetFieldMappings` 永远在下
-- 两个 section 中间固定保留两行空白
+- `TemplateBindings` 永远在最上
+- `SheetBindings` 永远在中间
+- `SheetFieldMappings` 永远在最下
+- 相邻 section 中间固定保留两行空白
 - 当前不再使用旧的“首列表名 + 每行一条压平记录”格式
 - 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `AI_Setting`
 
@@ -360,6 +364,20 @@ Ribbon 点击链路：
 - 不需要为真实系统接入额外设计“旧 metadata 迁移逻辑”
 - 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `AI_Setting`
 - 如果你从别的历史分支带来旧格式数据，应先清理，再按当前版本重新初始化
+
+### 7.6 本机模板库与运行时 metadata 的边界
+
+当前 Ribbon Sync 新增了一层本机模板资产：
+
+- 模板资产保存在 `%LocalAppData%\OfficeAgent\templates\...`
+- `AI_Setting.TemplateBindings` 只记录“当前 sheet 绑定到哪个模板”
+- 真正参与下载、上传、初始化执行的，仍然是 `AI_Setting` 中展开后的 `SheetBindings + SheetFieldMappings`
+
+因此接入真实系统时要注意：
+
+- 不能把本机模板库当成运行时执行的唯一事实来源
+- 不能跳过 `AI_Setting`，直接让下载上传只依赖模板引用
+- 如果真实系统要扩展模板能力，应优先保证模板应用结果最终仍然回写到 `AI_Setting`
 
 ## 8. 真实系统落地步骤
 
