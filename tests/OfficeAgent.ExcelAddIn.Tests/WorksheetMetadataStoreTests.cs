@@ -40,6 +40,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(3, loaded.HeaderStartRow);
             Assert.Equal(2, loaded.HeaderRowCount);
             Assert.Equal(6, loaded.DataStartRow);
+
+            var headers = adapter.ReadSeededHeaders("SheetBindings");
+            Assert.Equal(
+                new[]
+                {
+                    "SheetName",
+                    "ProjectId",
+                    "ProjectName",
+                    "HeaderStartRow",
+                    "HeaderRowCount",
+                    "DataStartRow",
+                    "SystemKey",
+                },
+                headers);
+
+            var rawRow = Assert.Single(adapter.ReadSeededTable("SheetBindings"));
+            Assert.Equal("performance", rawRow[1]);
+            Assert.Equal("绩效项目", rawRow[2]);
+            Assert.Equal("current-business-system", rawRow[6]);
         }
 
         [Fact]
@@ -86,6 +105,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(appliedAt, loaded.TemplateLastAppliedAt);
             Assert.Equal("template-base", loaded.DerivedFromTemplateId);
             Assert.Equal(2, loaded.DerivedFromTemplateRevision);
+
+            var headers = adapter.ReadSeededHeaders("TemplateBindings");
+            Assert.Equal(
+                new[]
+                {
+                    "SheetName",
+                    "TemplateName",
+                    "TemplateRevision",
+                    "TemplateOrigin",
+                    "TemplateId",
+                    "AppliedFingerprint",
+                    "TemplateLastAppliedAt",
+                    "DerivedFromTemplateId",
+                    "DerivedFromTemplateRevision",
+                },
+                headers);
+
+            var rawRow = Assert.Single(adapter.ReadSeededTable("TemplateBindings"));
+            Assert.Equal("Quarterly Report", rawRow[1]);
+            Assert.Equal("5", rawRow[2]);
+            Assert.Equal("local", rawRow[3]);
+            Assert.Equal("template-001", rawRow[4]);
         }
 
         [Fact]
@@ -94,8 +135,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("TemplateBindings", new[]
             {
-                new[] { "SheetA", "template-a", "Template A", "1", "local", "fp-a", "2026-04-22T10:00:00.0000000Z", "base-a", "1" },
-                new[] { "SheetB", "template-b", "Template B", "2", "local", "fp-b", "2026-04-22T11:00:00.0000000Z", "base-b", "2" },
+                new[] { "SheetA", "Template A", "1", "local", "template-a", "fp-a", "2026-04-22T10:00:00.0000000Z", "base-a", "1" },
+                new[] { "SheetB", "Template B", "2", "local", "template-b", "fp-b", "2026-04-22T11:00:00.0000000Z", "base-b", "2" },
             });
 
             InvokeClearTemplateBinding(store, "SheetA");
@@ -103,7 +144,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rowsAfterClear = adapter.ReadSeededTable("TemplateBindings");
             var remaining = Assert.Single(rowsAfterClear);
             Assert.Equal("SheetB", remaining[0]);
-            Assert.Equal("template-b", remaining[1]);
+            Assert.Equal("Template B", remaining[1]);
+            Assert.Equal("template-b", remaining[4]);
         }
 
         [Fact]
@@ -112,7 +154,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("TemplateBindings", new[]
             {
-                new[] { "Sheet1", "template-a", "Template A", "1", "local", "fp-a", "2026-04-22T10:00:00.0000000Z", string.Empty, string.Empty },
+                new[] { "Sheet1", "Template A", "1", "local", "template-a", "fp-a", "2026-04-22T10:00:00.0000000Z", string.Empty, string.Empty },
             });
 
             var first = InvokeLoadTemplateBinding(store, "Sheet1");
@@ -121,7 +163,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             adapter.SeedTable("TemplateBindings", new[]
             {
-                new[] { "Sheet1", "template-b", "Template B", "3", "local", "fp-b", "2026-04-22T11:00:00.0000000Z", string.Empty, string.Empty },
+                new[] { "Sheet1", "Template B", "3", "local", "template-b", "fp-b", "2026-04-22T11:00:00.0000000Z", string.Empty, string.Empty },
             });
 
             InvokeInvalidateCache(store);
@@ -137,7 +179,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Existing", "system-legacy", "legacy-project", "Legacy", "1", "2", "3" },
+                new[] { "Existing", "legacy-project", "Legacy", "1", "2", "3", "system-legacy" },
             });
 
             var newBinding = new SheetBinding
@@ -191,7 +233,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Sheet1", "current-business-system", "performance", "绩效项目", "3", "2", "6" },
+                new[] { "Sheet1", "performance", "绩效项目", "3", "2", "6", "current-business-system" },
             });
 
             var first = InvokeLoadBinding(store, "Sheet1");
@@ -224,7 +266,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var (store, adapter) = CreateStore();
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Sheet1", "current-business-system", "performance", "绩效项目", "3", "2", "6" },
+                new[] { "Sheet1", "performance", "绩效项目", "3", "2", "6", "current-business-system" },
             });
 
             var first = InvokeLoadBinding(store, "Sheet1");
@@ -233,7 +275,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Sheet1", "current-business-system", "updated-project", "新项目", "4", "1", "8" },
+                new[] { "Sheet1", "updated-project", "新项目", "4", "1", "8", "current-business-system" },
             });
 
             InvokeInvalidateCache(store);
@@ -250,7 +292,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             adapter.SwitchWorkbook("WorkbookA");
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Sheet1", "current-business-system", "project-a", "项目A", "3", "2", "6" },
+                new[] { "Sheet1", "project-a", "项目A", "3", "2", "6", "current-business-system" },
             });
 
             var first = InvokeLoadBinding(store, "Sheet1");
@@ -261,7 +303,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             adapter.SwitchWorkbook("WorkbookB");
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "Sheet1", "current-business-system", "project-b", "项目B", "4", "1", "8" },
+                new[] { "Sheet1", "project-b", "项目B", "4", "1", "8", "current-business-system" },
             });
 
             var second = InvokeLoadBinding(store, "Sheet1");
@@ -277,7 +319,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             adapter.SwitchWorkbook("WorkbookA");
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "SheetA", "current-business-system", "project-a", "项目A", "1", "2", "3" },
+                new[] { "SheetA", "project-a", "项目A", "1", "2", "3", "current-business-system" },
             });
 
             var original = InvokeLoadBinding(store, "SheetA");
@@ -286,7 +328,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             adapter.SwitchWorkbook("WorkbookB");
             adapter.SeedTable("SheetBindings", new[]
             {
-                new[] { "SheetB", "current-business-system", "project-b", "项目B", "2", "1", "4" },
+                new[] { "SheetB", "project-b", "项目B", "2", "1", "4", "current-business-system" },
             });
 
             InvokeSaveBinding(store, new SheetBinding
@@ -302,8 +344,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var workbookBRows = adapter.ReadSeededTable("SheetBindings");
 
-            Assert.Contains(workbookBRows, row => row[0] == "SheetB" && row[2] == "project-b");
-            Assert.Contains(workbookBRows, row => row[0] == "SheetC" && row[2] == "project-c");
+            Assert.Contains(workbookBRows, row => row[0] == "SheetB" && row[1] == "project-b");
+            Assert.Contains(workbookBRows, row => row[0] == "SheetC" && row[1] == "project-c");
             Assert.DoesNotContain(workbookBRows, row => row[0] == "SheetA");
         }
 

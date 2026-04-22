@@ -18,10 +18,10 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private static readonly string[] TemplateBindingHeaders =
         {
             "SheetName",
-            "TemplateId",
             "TemplateName",
             "TemplateRevision",
             "TemplateOrigin",
+            "TemplateId",
             "AppliedFingerprint",
             "TemplateLastAppliedAt",
             "DerivedFromTemplateId",
@@ -31,12 +31,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private static readonly string[] BindingHeaders =
         {
             "SheetName",
-            "SystemKey",
             "ProjectId",
             "ProjectName",
             "HeaderStartRow",
             "HeaderRowCount",
             "DataStartRow",
+            "SystemKey",
         };
 
         private readonly IWorksheetMetadataAdapter adapter;
@@ -73,12 +73,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var newRow = new[]
             {
                 normalizedSheetName,
-                binding.SystemKey ?? string.Empty,
                 binding.ProjectId ?? string.Empty,
                 binding.ProjectName ?? string.Empty,
                 binding.HeaderStartRow.ToString(CultureInfo.InvariantCulture),
                 binding.HeaderRowCount.ToString(CultureInfo.InvariantCulture),
                 binding.DataStartRow.ToString(CultureInfo.InvariantCulture),
+                binding.SystemKey ?? string.Empty,
             };
 
             var existingRowIndex = rows.FindIndex(
@@ -118,10 +118,10 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var newRow = new[]
             {
                 normalizedSheetName,
-                binding.TemplateId ?? string.Empty,
                 binding.TemplateName ?? string.Empty,
                 binding.TemplateRevision?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                 binding.TemplateOrigin ?? string.Empty,
+                binding.TemplateId ?? string.Empty,
                 binding.AppliedFingerprint ?? string.Empty,
                 binding.TemplateLastAppliedAt?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty,
                 binding.DerivedFromTemplateId ?? string.Empty,
@@ -424,10 +424,10 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return new SheetTemplateBinding
             {
                 SheetName = row[0],
-                TemplateId = row.Count > 1 ? row[1] : string.Empty,
-                TemplateName = row.Count > 2 ? row[2] : string.Empty,
-                TemplateRevision = ParseNullableInt(row, 3),
-                TemplateOrigin = row.Count > 4 ? row[4] : string.Empty,
+                TemplateName = row.Count > 1 ? row[1] : string.Empty,
+                TemplateRevision = ParseNullableInt(row, 2),
+                TemplateOrigin = row.Count > 3 ? row[3] : string.Empty,
+                TemplateId = row.Count > 4 ? row[4] : string.Empty,
                 AppliedFingerprint = row.Count > 5 ? row[5] : string.Empty,
                 TemplateLastAppliedAt = ParseNullableDateTime(row, 6),
                 DerivedFromTemplateId = row.Count > 7 ? row[7] : string.Empty,
@@ -445,12 +445,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return new SheetBinding
             {
                 SheetName = row[0],
-                SystemKey = row[1],
-                ProjectId = row[2],
-                ProjectName = row[3],
-                HeaderStartRow = ParseIntOrDefault(row, 4, defaultValue: 1),
-                HeaderRowCount = ParseIntOrDefault(row, 5, defaultValue: 2),
-                DataStartRow = ParseIntOrDefault(row, 6, defaultValue: 3),
+                ProjectId = row[1],
+                ProjectName = row[2],
+                HeaderStartRow = ParseIntOrDefault(row, 3, defaultValue: 1),
+                HeaderRowCount = ParseIntOrDefault(row, 4, defaultValue: 2),
+                DataStartRow = ParseIntOrDefault(row, 5, defaultValue: 3),
+                SystemKey = row.Count > 6 ? row[6] : string.Empty,
             };
         }
 
