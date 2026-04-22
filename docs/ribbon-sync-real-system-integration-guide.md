@@ -15,8 +15,8 @@
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
-- 当前 Ribbon 入口只做全量下载、部分下载、部分上传
-- `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
+- 当前 Ribbon 入口只做部分下载、部分上传
+- `全量下载` 和 `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
 
 当前 `AI_Setting` 的具体形态也已经固定：
 
@@ -170,6 +170,28 @@ Ribbon 点击链路：
 - Excel 层只固定 `SheetName` 是第一列作用域列
 - 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `AI_Setting` 里的 `SheetFieldMappings` section 中
 
+当前 `current-business-system` 的展示列顺序是：
+
+- `HeaderType`
+- `ISDP L1`
+- `Excel L1`
+- `ISDP L2`
+- `Excel L2`
+- `HeaderId`
+- `ApiFieldKey`
+- `IsIdColumn`
+- `ActivityId`
+- `PropertyId`
+
+当前显示语义是：
+
+- `L1` 表示单层表头文本，或双层表头的父文本
+- `L2` 表示双层表头的子文本
+- `ISDP` 表示默认值
+- `Excel` 表示当前 Excel 中希望匹配 / 展示的值
+
+如果你的真实系统也希望把“显示字段”和“标识字段”分区展示，建议沿用这种顺序，把所有 ID / 接口字段相关列放在显示列之后。
+
 当前系统的例子在：
 
 - [src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs](../src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs)
@@ -266,7 +288,13 @@ Ribbon 点击链路：
 当前上传 / 下载都依赖：
 
 - 当前 sheet 上的表头文本
-- `SheetFieldMappings` 里的当前显示名
+- `SheetFieldMappings` 里的 `Excel L1 / Excel L2`
+
+这里要特别区分“识别 metadata”和“默认生成布局”：
+
+- `single + Excel L2` 只表示这个字段在运行时要按 grouped single 的双层文本参与识别
+- 它不是一个“空表头时默认生成 grouped single 布局”的信号
+- 如果用户只改了 Excel 可见表头，没有同步改 `SheetFieldMappings.Excel L1 / Excel L2`，插件不会自动识别这是同一列，也不会自动回写 metadata
 
 所以如果用户改了 Excel 列名，就要同步维护 `SheetFieldMappings`；插件不会自动探测和回写这种改动。
 
@@ -283,8 +311,15 @@ Ribbon 点击链路：
 同时要注意，用户现在也可能直接手工维护 `AI_Setting`：
 
 - 修改 `SheetBindings` 的配置值
-- 修改 `SheetFieldMappings` 的当前显示名
+- 修改 `SheetFieldMappings` 的 `Excel L1 / Excel L2`
 - 补充或修正映射行
+
+对于 grouped single，真实系统要把下面两部分一起维护：
+
+- 可见工作表上的 grouped header 文本
+- `SheetFieldMappings` 里的 `Excel L1 / Excel L2`
+
+只改 Excel 可见表头、不改 metadata，不会被自动识别成同一列。
 
 因此真实系统接入时，不要假设 metadata 一定只会由程序生成；连接器生成的是初始化种子，不是运行时唯一写入来源。
 
@@ -308,6 +343,11 @@ Ribbon 点击链路：
 - `HeaderRowCount = 2`
   - 单层列上下合并
   - 活动列第一行显示活动名，第二行显示属性名
+
+对于 `single + Excel L2` 还要补充两点：
+
+- 它是“按 grouped single 识别现有 Excel”的 metadata，不是“空表时自动生成 grouped single”的布局指令
+- 所以空表头场景下，`全量下载` 仍会生成扁平单层表头，而不是自动补父表头
 
 如果真实系统的表头层级更多，当前 Excel 布局服务还需要继续扩展。
 
