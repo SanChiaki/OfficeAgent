@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
 using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
@@ -39,6 +40,95 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(3, loaded.HeaderStartRow);
             Assert.Equal(2, loaded.HeaderRowCount);
             Assert.Equal(6, loaded.DataStartRow);
+        }
+
+        [Fact]
+        public void ImplementsWorksheetTemplateBindingStoreInterface()
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var storeType = GetAddInType(assembly, "OfficeAgent.ExcelAddIn.Excel.WorksheetMetadataStore");
+
+            Assert.Contains(
+                typeof(IWorksheetTemplateBindingStore),
+                storeType.GetInterfaces());
+        }
+
+        [Fact]
+        public void SaveTemplateBindingRoundTripsAllTemplateColumns()
+        {
+            var (store, adapter) = CreateStore();
+            var appliedAt = new DateTime(2026, 4, 22, 9, 30, 15, DateTimeKind.Utc);
+            var binding = new SheetTemplateBinding
+            {
+                SheetName = "Sheet1",
+                TemplateId = "template-001",
+                TemplateName = "Quarterly Report",
+                TemplateRevision = 5,
+                TemplateOrigin = "local",
+                AppliedFingerprint = "fingerprint-123",
+                TemplateLastAppliedAt = appliedAt,
+                DerivedFromTemplateId = "template-base",
+                DerivedFromTemplateRevision = 2,
+            };
+
+            InvokeSaveTemplateBinding(store, binding);
+
+            Assert.Equal("AI_Setting", adapter.WorksheetName);
+            Assert.True(adapter.Visible);
+
+            var loaded = InvokeLoadTemplateBinding(store, "Sheet1");
+
+            Assert.Equal("template-001", loaded.TemplateId);
+            Assert.Equal("Quarterly Report", loaded.TemplateName);
+            Assert.Equal(5, loaded.TemplateRevision);
+            Assert.Equal("local", loaded.TemplateOrigin);
+            Assert.Equal("fingerprint-123", loaded.AppliedFingerprint);
+            Assert.Equal(appliedAt, loaded.TemplateLastAppliedAt);
+            Assert.Equal("template-base", loaded.DerivedFromTemplateId);
+            Assert.Equal(2, loaded.DerivedFromTemplateRevision);
+        }
+
+        [Fact]
+        public void ClearTemplateBindingRemovesOnlyTargetSheetRows()
+        {
+            var (store, adapter) = CreateStore();
+            adapter.SeedTable("TemplateBindings", new[]
+            {
+                new[] { "SheetA", "template-a", "Template A", "1", "local", "fp-a", "2026-04-22T10:00:00.0000000Z", "base-a", "1" },
+                new[] { "SheetB", "template-b", "Template B", "2", "local", "fp-b", "2026-04-22T11:00:00.0000000Z", "base-b", "2" },
+            });
+
+            InvokeClearTemplateBinding(store, "SheetA");
+
+            var rowsAfterClear = adapter.ReadSeededTable("TemplateBindings");
+            var remaining = Assert.Single(rowsAfterClear);
+            Assert.Equal("SheetB", remaining[0]);
+            Assert.Equal("template-b", remaining[1]);
+        }
+
+        [Fact]
+        public void InvalidateCacheForcesTemplateBindingsToReloadFromAdapter()
+        {
+            var (store, adapter) = CreateStore();
+            adapter.SeedTable("TemplateBindings", new[]
+            {
+                new[] { "Sheet1", "template-a", "Template A", "1", "local", "fp-a", "2026-04-22T10:00:00.0000000Z", string.Empty, string.Empty },
+            });
+
+            var first = InvokeLoadTemplateBinding(store, "Sheet1");
+            Assert.Equal("template-a", first.TemplateId);
+            Assert.Equal(1, adapter.ReadTableCallCount);
+
+            adapter.SeedTable("TemplateBindings", new[]
+            {
+                new[] { "Sheet1", "template-b", "Template B", "3", "local", "fp-b", "2026-04-22T11:00:00.0000000Z", string.Empty, string.Empty },
+            });
+
+            InvokeInvalidateCache(store);
+            var refreshed = InvokeLoadTemplateBinding(store, "Sheet1");
+
+            Assert.Equal("template-b", refreshed.TemplateId);
+            Assert.Equal(2, adapter.ReadTableCallCount);
         }
 
         [Fact]
@@ -636,12 +726,36 @@ namespace OfficeAgent.ExcelAddIn.Tests
             method.Invoke(store, new object[] { binding });
         }
 
+        private static void InvokeSaveTemplateBinding(object store, SheetTemplateBinding binding)
+        {
+            var method = store.GetType().GetMethod(
+                "SaveTemplateBinding",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            method.Invoke(store, new object[] { binding });
+        }
+
         private static SheetBinding InvokeLoadBinding(object store, string sheetName)
         {
             var method = store.GetType().GetMethod(
                 "LoadBinding",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             return (SheetBinding)method.Invoke(store, new object[] { sheetName });
+        }
+
+        private static SheetTemplateBinding InvokeLoadTemplateBinding(object store, string sheetName)
+        {
+            var method = store.GetType().GetMethod(
+                "LoadTemplateBinding",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return (SheetTemplateBinding)method.Invoke(store, new object[] { sheetName });
+        }
+
+        private static void InvokeClearTemplateBinding(object store, string sheetName)
+        {
+            var method = store.GetType().GetMethod(
+                "ClearTemplateBinding",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            method.Invoke(store, new object[] { sheetName });
         }
 
         private static void InvokeSaveFieldMappings(

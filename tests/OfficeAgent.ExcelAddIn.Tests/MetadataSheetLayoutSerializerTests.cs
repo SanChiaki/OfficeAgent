@@ -10,13 +10,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
     public sealed class MetadataSheetLayoutSerializerTests
     {
         [Fact]
-        public void RenderPlacesBindingsAboveFieldMappingsUsingReadableSections()
+        public void RenderPlacesTemplateBindingsAboveBindingsAndFieldMappingsUsingReadableSections()
         {
             var serializer = CreateSerializer();
             var rendered = InvokeRender(
                 serializer,
                 new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                 {
+                    ["TemplateBindings"] = CreateSection(
+                        "TemplateBindings",
+                        new[] { "SheetName", "TemplateId", "TemplateName" },
+                        new[] { new[] { "Sheet1", "tmpl-001", "Quarterly Report" } }),
                     ["SheetBindings"] = CreateSection(
                         "SheetBindings",
                         new[] { "SheetName", "SystemKey" },
@@ -27,14 +31,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         new[] { new[] { "Sheet1", "row_id", "row_id" } }),
                 });
 
-            Assert.Equal("SheetBindings", rendered[0][0]);
-            Assert.Equal(new[] { "SheetName", "SystemKey" }, rendered[1]);
-            Assert.Equal(new[] { "Sheet1", "current-business-system" }, rendered[2]);
+            Assert.Equal("TemplateBindings", rendered[0][0]);
+            Assert.Equal(new[] { "SheetName", "TemplateId", "TemplateName" }, rendered[1]);
+            Assert.Equal(new[] { "Sheet1", "tmpl-001", "Quarterly Report" }, rendered[2]);
             Assert.True(rendered[3].All(string.IsNullOrEmpty));
             Assert.True(rendered[4].All(string.IsNullOrEmpty));
-            Assert.Equal("SheetFieldMappings", rendered[5][0]);
-            Assert.Equal(new[] { "SheetName", "HeaderId", "ApiFieldKey" }, rendered[6]);
-            Assert.Equal(new[] { "Sheet1", "row_id", "row_id" }, rendered[7]);
+            Assert.Equal("SheetBindings", rendered[5][0]);
+            Assert.Equal(new[] { "SheetName", "SystemKey" }, rendered[6]);
+            Assert.Equal(new[] { "Sheet1", "current-business-system" }, rendered[7]);
+            Assert.True(rendered[8].All(string.IsNullOrEmpty));
+            Assert.True(rendered[9].All(string.IsNullOrEmpty));
+            Assert.Equal("SheetFieldMappings", rendered[10][0]);
+            Assert.Equal(new[] { "SheetName", "HeaderId", "ApiFieldKey" }, rendered[11]);
+            Assert.Equal(new[] { "Sheet1", "row_id", "row_id" }, rendered[12]);
         }
 
         [Fact]

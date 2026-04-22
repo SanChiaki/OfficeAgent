@@ -7,12 +7,26 @@ using OfficeAgent.Core.Services;
 
 namespace OfficeAgent.ExcelAddIn.Excel
 {
-    internal sealed class WorksheetMetadataStore : IWorksheetMetadataStore
+    internal sealed class WorksheetMetadataStore : IWorksheetMetadataStore, IWorksheetTemplateBindingStore
     {
         private const string MetadataSheetName = "AI_Setting";
+        private const string TemplateBindingsTableName = "TemplateBindings";
         private const string BindingsTableName = "SheetBindings";
         private const string FieldMappingsTableName = "SheetFieldMappings";
         private static readonly string[] DefaultFieldMappingHeaders = { "SheetName" };
+
+        private static readonly string[] TemplateBindingHeaders =
+        {
+            "SheetName",
+            "TemplateId",
+            "TemplateName",
+            "TemplateRevision",
+            "TemplateOrigin",
+            "AppliedFingerprint",
+            "TemplateLastAppliedAt",
+            "DerivedFromTemplateId",
+            "DerivedFromTemplateRevision",
+        };
 
         private static readonly string[] BindingHeaders =
         {
@@ -27,6 +41,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         private readonly IWorksheetMetadataAdapter adapter;
         private string[] fieldMappingHeaders = DefaultFieldMappingHeaders.ToArray();
+        private string[][] templateBindingRowsCache;
+        private bool templateBindingRowsCacheLoaded;
         private string[][] bindingRowsCache;
         private bool bindingRowsCacheLoaded;
         private string[][] fieldMappingRowsCache;
@@ -83,6 +99,53 @@ namespace OfficeAgent.ExcelAddIn.Excel
             bindingRowsCacheLoaded = true;
         }
 
+        public void SaveTemplateBinding(SheetTemplateBinding binding)
+        {
+            if (binding == null)
+            {
+                throw new ArgumentNullException(nameof(binding));
+            }
+
+            if (string.IsNullOrWhiteSpace(binding.SheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(binding));
+            }
+
+            EnsureWorkbookScope();
+            adapter.EnsureWorksheet(MetadataSheetName, visible: true);
+            var normalizedSheetName = binding.SheetName;
+            var rows = GetTemplateBindingRows().ToList();
+            var newRow = new[]
+            {
+                normalizedSheetName,
+                binding.TemplateId ?? string.Empty,
+                binding.TemplateName ?? string.Empty,
+                binding.TemplateRevision?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                binding.TemplateOrigin ?? string.Empty,
+                binding.AppliedFingerprint ?? string.Empty,
+                binding.TemplateLastAppliedAt?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty,
+                binding.DerivedFromTemplateId ?? string.Empty,
+                binding.DerivedFromTemplateRevision?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            };
+
+            var existingRowIndex = rows.FindIndex(
+                row => row.Length > 0 &&
+                       string.Equals(row[0], normalizedSheetName, StringComparison.OrdinalIgnoreCase));
+
+            if (existingRowIndex >= 0)
+            {
+                rows[existingRowIndex] = newRow;
+            }
+            else
+            {
+                rows.Add(newRow);
+            }
+
+            adapter.WriteTable(TemplateBindingsTableName, TemplateBindingHeaders, rows.ToArray());
+            templateBindingRowsCache = CloneRows(rows);
+            templateBindingRowsCacheLoaded = true;
+        }
+
         public SheetBinding LoadBinding(string sheetName)
         {
             if (string.IsNullOrWhiteSpace(sheetName))
@@ -103,6 +166,28 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             throw new InvalidOperationException($"Binding for worksheet '{sheetName}' does not exist.");
+        }
+
+        public SheetTemplateBinding LoadTemplateBinding(string sheetName)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            EnsureWorkbookScope();
+            var binding = GetTemplateBindingRows()
+                .Select(ParseTemplateBindingRow)
+                .FirstOrDefault(candidate =>
+                    candidate != null &&
+                    string.Equals(candidate.SheetName, sheetName, StringComparison.OrdinalIgnoreCase));
+
+            if (binding != null)
+            {
+                return binding;
+            }
+
+            throw new InvalidOperationException($"Template binding for worksheet '{sheetName}' does not exist.");
         }
 
         public void SaveFieldMappings(string sheetName, FieldMappingTableDefinition definition, IReadOnlyList<SheetFieldMappingRow> rows)
@@ -217,6 +302,29 @@ namespace OfficeAgent.ExcelAddIn.Excel
             fieldMappingRowsCacheLoaded = true;
         }
 
+        public void ClearTemplateBinding(string sheetName)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            EnsureWorkbookScope();
+            var rows = GetTemplateBindingRows().ToList();
+            var removed = rows.RemoveAll(row =>
+                row.Length > 0 &&
+                string.Equals(row[0], sheetName, StringComparison.OrdinalIgnoreCase));
+
+            if (removed == 0)
+            {
+                return;
+            }
+
+            adapter.WriteTable(TemplateBindingsTableName, TemplateBindingHeaders, rows.ToArray());
+            templateBindingRowsCache = CloneRows(rows);
+            templateBindingRowsCacheLoaded = true;
+        }
+
         public WorksheetSnapshotCell[] LoadSnapshot(string sheetName)
         {
             if (string.IsNullOrWhiteSpace(sheetName))
@@ -245,6 +353,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         internal void InvalidateCache()
         {
+            templateBindingRowsCache = null;
+            templateBindingRowsCacheLoaded = false;
             bindingRowsCache = null;
             bindingRowsCacheLoaded = false;
             fieldMappingRowsCache = null;
@@ -274,6 +384,55 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return int.TryParse(row[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
                 ? parsed
                 : defaultValue;
+        }
+
+        private static int? ParseNullableInt(IReadOnlyList<string> row, int index)
+        {
+            if (row == null || row.Count <= index || string.IsNullOrWhiteSpace(row[index]))
+            {
+                return null;
+            }
+
+            return int.TryParse(row[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : (int?)null;
+        }
+
+        private static DateTime? ParseNullableDateTime(IReadOnlyList<string> row, int index)
+        {
+            if (row == null || row.Count <= index || string.IsNullOrWhiteSpace(row[index]))
+            {
+                return null;
+            }
+
+            return DateTime.TryParse(
+                row[index],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var parsed)
+                ? parsed
+                : (DateTime?)null;
+        }
+
+        private static SheetTemplateBinding ParseTemplateBindingRow(IReadOnlyList<string> row)
+        {
+            if (row == null || row.Count == 0 || string.IsNullOrWhiteSpace(row[0]))
+            {
+                return null;
+            }
+
+            return new SheetTemplateBinding
+            {
+                SheetName = row[0],
+                TemplateId = row.Count > 1 ? row[1] : string.Empty,
+                TemplateName = row.Count > 2 ? row[2] : string.Empty,
+                TemplateRevision = ParseNullableInt(row, 3),
+                TemplateOrigin = row.Count > 4 ? row[4] : string.Empty,
+                AppliedFingerprint = row.Count > 5 ? row[5] : string.Empty,
+                TemplateLastAppliedAt = ParseNullableDateTime(row, 6),
+                DerivedFromTemplateId = row.Count > 7 ? row[7] : string.Empty,
+                DerivedFromTemplateRevision = ParseNullableInt(row, 8),
+            };
         }
 
         private static SheetBinding ParseBindingRow(IReadOnlyList<string> row)
@@ -363,6 +522,17 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return headers;
+        }
+
+        private IReadOnlyList<string[]> GetTemplateBindingRows()
+        {
+            if (!templateBindingRowsCacheLoaded)
+            {
+                templateBindingRowsCache = adapter.ReadTable(TemplateBindingsTableName) ?? Array.Empty<string[]>();
+                templateBindingRowsCacheLoaded = true;
+            }
+
+            return templateBindingRowsCache ?? Array.Empty<string[]>();
         }
 
         private IReadOnlyList<string[]> GetBindingRows()
