@@ -226,6 +226,43 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 exception.Message);
         }
 
+        [Fact]
+        public void MatchIgnoresGroupedSingleMetadataFromOtherSheetWhenHeaderRowCountIsOne()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 5, 1, "ID");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 5,
+                HeaderRowCount = 1,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "row_id",
+                    headerType: "single",
+                    isIdColumn: true,
+                    currentSingle: "ID"),
+                CreateMappingRow(
+                    "Sheet2",
+                    apiFieldKey: "owner_grouped",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentParent: "基础信息",
+                    currentChild: "负责人"),
+            };
+
+            var columns = InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid);
+
+            var matched = Assert.Single(columns);
+            Assert.Equal("row_id", matched.ApiFieldKey);
+        }
+
         private static object CreateMatcher()
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());

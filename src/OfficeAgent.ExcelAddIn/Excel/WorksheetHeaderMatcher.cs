@@ -42,9 +42,11 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentNullException(nameof(grid));
             }
 
-            var rows = mappings ?? Array.Empty<SheetFieldMappingRow>();
+            var rows = (mappings ?? Array.Empty<SheetFieldMappingRow>())
+                .Where(mapping => mapping != null && string.Equals(mapping.SheetName, sheetName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
             var lookup = BuildLookup(definition, rows);
-            if (binding.HeaderRowCount <= 1 && lookup.HasGroupedSingleMetadata)
+            if (binding.HeaderRowCount == 1 && lookup.HasGroupedSingleMetadata)
             {
                 throw new InvalidOperationException("当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 AI_Setting。");
             }
