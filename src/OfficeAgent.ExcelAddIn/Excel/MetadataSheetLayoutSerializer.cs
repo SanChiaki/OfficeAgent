@@ -13,6 +13,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             "SheetFieldMappings",
         };
 
+        internal static IReadOnlyList<string> OrderedSectionNames => SectionOrder;
+
         public string[][] Render(IReadOnlyDictionary<string, MetadataSectionDocument> sections)
         {
             var rendered = new List<string[]>();

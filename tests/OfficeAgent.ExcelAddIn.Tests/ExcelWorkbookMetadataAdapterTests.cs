@@ -76,6 +76,48 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void WriteTablePreservesExistingTemplateBindingsWhenRewritingAnotherSection()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("AI_Setting");
+            application.MetadataSheet.SetCell(1, 1, "TemplateBindings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(2, 2, "TemplateId");
+            application.MetadataSheet.SetCell(2, 3, "TemplateOrigin");
+            application.MetadataSheet.SetCell(3, 1, "Sheet1");
+            application.MetadataSheet.SetCell(3, 2, "tpl-performance-a");
+            application.MetadataSheet.SetCell(3, 3, "store-template");
+            application.MetadataSheet.SetCell(6, 1, "SheetBindings");
+            application.MetadataSheet.SetCell(7, 1, "SheetName");
+            application.MetadataSheet.SetCell(7, 2, "SystemKey");
+            application.MetadataSheet.SetCell(8, 1, "Sheet1");
+            application.MetadataSheet.SetCell(8, 2, "current-business-system");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            adapterType.GetMethod("WriteTable").Invoke(adapter, new object[]
+            {
+                "SheetBindings",
+                new[] { "SheetName", "SystemKey" },
+                new[] { new[] { "Sheet1", "current-business-system" } },
+            });
+
+            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(1, 1));
+            Assert.Equal("tpl-performance-a", application.MetadataSheet.GetCell(3, 2));
+            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(6, 1));
+            Assert.Equal("current-business-system", application.MetadataSheet.GetCell(8, 2));
+        }
+
+        [Fact]
         public void WriteTableCanRewriteMetadataSheetUsingRangeValue2WithoutDirectCellWrites()
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
