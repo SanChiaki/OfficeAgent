@@ -321,13 +321,18 @@ namespace OfficeAgent.ExcelAddIn
                 var singleText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentSingleHeaderText);
                 var parentText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentParentHeaderText);
                 var childText = valueAccessor.GetValue(definition, mapping, FieldMappingSemanticRole.CurrentChildHeaderText);
+                var isSingleHeader = string.IsNullOrWhiteSpace(headerType) ||
+                                     string.Equals(headerType, "single", StringComparison.OrdinalIgnoreCase);
+                var isGroupedSingle = isSingleHeader && !isActivityProperty && !string.IsNullOrWhiteSpace(childText);
 
                 result.Add(new WorksheetRuntimeColumn
                 {
                     ColumnIndex = columnIndex++,
                     ApiFieldKey = apiFieldKey,
                     HeaderType = NormalizeHeaderType(headerType),
-                    DisplayText = isActivityProperty ? childText : singleText,
+                    DisplayText = isActivityProperty
+                        ? childText
+                        : (isGroupedSingle ? childText : singleText),
                     ParentDisplayText = isActivityProperty && binding.HeaderRowCount > 1 ? parentText : string.Empty,
                     ChildDisplayText = isActivityProperty ? childText : string.Empty,
                     IsIdColumn = valueAccessor.GetBoolean(definition, mapping, FieldMappingSemanticRole.IsIdColumn),

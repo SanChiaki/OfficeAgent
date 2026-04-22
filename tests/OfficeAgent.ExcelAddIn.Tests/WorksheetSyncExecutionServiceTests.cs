@@ -159,6 +159,43 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreparePartialDownloadResolvesGroupedSingleOwnerNameFromTwoRowHeader()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildGroupedSingleOwnerMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-02-01", "2026-02-09") };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 2, Value = "旧负责人" },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedGroupedSingleRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 2, "旧负责人");
+
+            _ = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+
+            Assert.Equal(new[] { "row-1" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "owner_name" }, connector.LastFindFieldKeys);
+        }
+
+        [Fact]
         public void ExecutePartialDownloadBatchesRectangularSelectionWrites()
         {
             var connector = new FakeSystemConnector();
@@ -262,6 +299,65 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("测试活动111", grid.GetCell("Sheet1", 3, 3));
             Assert.Equal("开始时间", grid.GetCell("Sheet1", 4, 3));
             Assert.Equal("2026-01-02", grid.GetCell("Sheet1", 6, 3));
+        }
+
+        [Fact]
+        public void PrepareFullDownloadUsesExistingLayoutWhenGroupedSingleHeadersAreRecognized()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildGroupedSingleOwnerMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-01-02", "2026-01-05") };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+            SeedGroupedSingleRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+
+            var plan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+
+            Assert.True(ReadBoolProperty(plan, "UsesExistingLayout"));
+        }
+
+        [Fact]
+        public void ExecuteFullDownloadWithEmptyHeadersFlattensGroupedSingleToChildText()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildGroupedSingleOwnerMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-01-02", "2026-01-05") };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+
+            var plan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal("ID", grid.GetCell("Sheet1", 3, 1));
+            Assert.Equal("负责人", grid.GetCell("Sheet1", 3, 2));
+            Assert.NotEqual("联系人信息", grid.GetCell("Sheet1", 3, 2));
+            Assert.Equal("测试活动111", grid.GetCell("Sheet1", 3, 3));
+            Assert.Equal("开始时间", grid.GetCell("Sheet1", 4, 3));
         }
 
         [Fact]
@@ -747,6 +843,44 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreparePartialUploadResolvesGroupedSingleOwnerNameFromTwoRowHeader()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildGroupedSingleOwnerMappings("Sheet1");
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 2, Value = "李四" },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedGroupedSingleRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 2, "李四");
+
+            var plan = InvokePrepare(service, "PreparePartialUpload", "Sheet1");
+            var preview = ReadPreview(plan);
+            var change = Assert.Single(preview.Changes);
+            Assert.Equal("owner_name", change.ApiFieldKey);
+            Assert.Equal("row-1", change.RowId);
+            Assert.Equal("李四", change.NewValue);
+        }
+
+        [Fact]
         public void PreparePartialUploadReadsEachRowIdAtMostOncePerRow()
         {
             var connector = new FakeSystemConnector();
@@ -1013,12 +1147,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         row?.Values != null && row.Values.TryGetValue("HeaderType", out var headerType) ? headerType ?? string.Empty : string.Empty,
                         row?.Values != null && row.Values.TryGetValue("ApiFieldKey", out var apiFieldKey) ? apiFieldKey ?? string.Empty : string.Empty,
                         row?.Values != null && row.Values.TryGetValue("IsIdColumn", out var isIdColumn) ? isIdColumn ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("DefaultSingleDisplayName", out var defaultSingle) ? defaultSingle ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("CurrentSingleDisplayName", out var currentSingle) ? currentSingle ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("DefaultParentDisplayName", out var defaultParent) ? defaultParent ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("CurrentParentDisplayName", out var currentParent) ? currentParent ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("DefaultChildDisplayName", out var defaultChild) ? defaultChild ?? string.Empty : string.Empty,
-                        row?.Values != null && row.Values.TryGetValue("CurrentChildDisplayName", out var currentChild) ? currentChild ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("DefaultL1", out var defaultL1) ? defaultL1 ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("CurrentL1", out var currentL1) ? currentL1 ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("DefaultL2", out var defaultL2) ? defaultL2 ?? string.Empty : string.Empty,
+                        row?.Values != null && row.Values.TryGetValue("CurrentL2", out var currentL2) ? currentL2 ?? string.Empty : string.Empty,
                         row?.Values != null && row.Values.TryGetValue("ActivityId", out var activityId) ? activityId ?? string.Empty : string.Empty,
                         row?.Values != null && row.Values.TryGetValue("PropertyId", out var propertyId) ? propertyId ?? string.Empty : string.Empty,
                     })
@@ -1034,6 +1166,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             if (binding.HeaderRowCount > 1)
             {
+                grid.SetCell(sheetName, row + 1, 3, "开始时间");
+                grid.SetCell(sheetName, row + 1, 4, "结束时间");
+            }
+        }
+
+        private static void SeedGroupedSingleRecognizedHeaders(FakeWorksheetGridAdapter grid, string sheetName, SheetBinding binding)
+        {
+            var row = binding.HeaderStartRow;
+            grid.SetCell(sheetName, row, 1, "ID");
+            grid.SetCell(sheetName, row, 2, "联系人信息");
+            grid.SetCell(sheetName, row, 3, "测试活动111");
+
+            if (binding.HeaderRowCount > 1)
+            {
+                grid.SetCell(sheetName, row + 1, 2, "负责人");
                 grid.SetCell(sheetName, row + 1, 3, "开始时间");
                 grid.SetCell(sheetName, row + 1, 4, "结束时间");
             }
@@ -1109,6 +1256,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
             return (SyncOperationPreview)property.GetValue(plan);
         }
 
+        private static bool ReadBoolProperty(object target, string propertyName)
+        {
+            var property = target.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (property == null)
+            {
+                throw new InvalidOperationException($"{propertyName} property was not found.");
+            }
+
+            return (bool)(property.GetValue(target) ?? false);
+        }
+
         private static string ResolveAddInAssemblyPath()
         {
             return Path.GetFullPath(
@@ -1137,12 +1298,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     new FieldMappingColumnDefinition { ColumnName = "HeaderType", Role = FieldMappingSemanticRole.HeaderType },
                     new FieldMappingColumnDefinition { ColumnName = "ApiFieldKey", Role = FieldMappingSemanticRole.ApiFieldKey },
                     new FieldMappingColumnDefinition { ColumnName = "IsIdColumn", Role = FieldMappingSemanticRole.IsIdColumn },
-                    new FieldMappingColumnDefinition { ColumnName = "DefaultSingleDisplayName", Role = FieldMappingSemanticRole.DefaultSingleHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentSingleDisplayName", Role = FieldMappingSemanticRole.CurrentSingleHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "DefaultParentDisplayName", Role = FieldMappingSemanticRole.DefaultParentHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentParentDisplayName", Role = FieldMappingSemanticRole.CurrentParentHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "DefaultChildDisplayName", Role = FieldMappingSemanticRole.DefaultChildHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentChildDisplayName", Role = FieldMappingSemanticRole.CurrentChildHeaderText },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultSingleHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultParentHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L2", Role = FieldMappingSemanticRole.DefaultChildHeaderText, RoleKey = "DefaultL2" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L2", Role = FieldMappingSemanticRole.CurrentChildHeaderText, RoleKey = "CurrentL2" },
                     new FieldMappingColumnDefinition { ColumnName = "ActivityId", Role = FieldMappingSemanticRole.ActivityIdentity },
                     new FieldMappingColumnDefinition { ColumnName = "PropertyId", Role = FieldMappingSemanticRole.PropertyIdentity },
                 },
@@ -1190,7 +1351,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["HeaderId"] = "row_id",
-                        ["CurrentSingleDisplayName"] = "ID",
+                        ["CurrentL1"] = "ID",
                     },
                 },
                 new SheetFieldMappingRow
@@ -1199,9 +1360,48 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["HeaderId"] = "owner_name",
-                        ["CurrentSingleDisplayName"] = "项目负责人",
+                        ["CurrentL1"] = "项目负责人",
                     },
                 },
+            };
+        }
+
+        private static SheetFieldMappingRow[] BuildGroupedSingleOwnerMappings(string sheetName)
+        {
+            return new[]
+            {
+                CreateMappingRow(sheetName, "row_id", "single", true, currentSingle: "ID"),
+                CreateMappingRow(
+                    sheetName,
+                    "owner_name",
+                    "single",
+                    false,
+                    defaultParent: "联系人信息",
+                    currentParent: "联系人信息",
+                    defaultChild: "负责人",
+                    currentChild: "负责人"),
+                CreateMappingRow(
+                    sheetName,
+                    "start_12345678",
+                    "activityProperty",
+                    false,
+                    defaultParent: "测试活动111",
+                    currentParent: "测试活动111",
+                    defaultChild: "开始时间",
+                    currentChild: "开始时间",
+                    activityId: "12345678",
+                    propertyId: "start"),
+                CreateMappingRow(
+                    sheetName,
+                    "end_12345678",
+                    "activityProperty",
+                    false,
+                    defaultParent: "测试活动111",
+                    currentParent: "测试活动111",
+                    defaultChild: "结束时间",
+                    currentChild: "结束时间",
+                    activityId: "12345678",
+                    propertyId: "end"),
             };
         }
 
@@ -1228,12 +1428,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     ["HeaderType"] = headerType,
                     ["ApiFieldKey"] = apiFieldKey,
                     ["IsIdColumn"] = isIdColumn ? "true" : "false",
-                    ["DefaultSingleDisplayName"] = defaultSingle,
-                    ["CurrentSingleDisplayName"] = currentSingle,
-                    ["DefaultParentDisplayName"] = defaultParent,
-                    ["CurrentParentDisplayName"] = currentParent,
-                    ["DefaultChildDisplayName"] = defaultChild,
-                    ["CurrentChildDisplayName"] = currentChild,
+                    ["DefaultL1"] = string.IsNullOrWhiteSpace(defaultSingle) ? defaultParent : defaultSingle,
+                    ["CurrentL1"] = string.IsNullOrWhiteSpace(currentSingle) ? currentParent : currentSingle,
+                    ["DefaultL2"] = defaultChild,
+                    ["CurrentL2"] = currentChild,
                     ["ActivityId"] = activityId,
                     ["PropertyId"] = propertyId,
                 },
