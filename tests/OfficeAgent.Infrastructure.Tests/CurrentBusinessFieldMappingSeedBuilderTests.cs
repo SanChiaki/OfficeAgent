@@ -85,25 +85,27 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(CurrentBusinessFieldMappingColumns.SingleHeaderType, idRow.Values[CurrentBusinessFieldMappingColumns.HeaderType]);
             Assert.Equal("row_id", idRow.Values[CurrentBusinessFieldMappingColumns.ApiFieldKey]);
             Assert.Equal("true", idRow.Values[CurrentBusinessFieldMappingColumns.IsIdColumn]);
-            Assert.Equal("ID", idRow.Values[CurrentBusinessFieldMappingColumns.DefaultSingleDisplayName]);
-            Assert.Equal("ID", idRow.Values[CurrentBusinessFieldMappingColumns.CurrentSingleDisplayName]);
+            Assert.Equal("ID", idRow.Values[CurrentBusinessFieldMappingColumns.DefaultLevel1]);
+            Assert.Equal("ID", idRow.Values[CurrentBusinessFieldMappingColumns.CurrentLevel1]);
+            Assert.Equal(string.Empty, idRow.Values[CurrentBusinessFieldMappingColumns.DefaultLevel2]);
+            Assert.Equal(string.Empty, idRow.Values[CurrentBusinessFieldMappingColumns.CurrentLevel2]);
 
             var activityRow = FindRow(rows, "start_b2");
             Assert.Equal(CurrentBusinessFieldMappingColumns.ActivityPropertyHeaderType, activityRow.Values[CurrentBusinessFieldMappingColumns.HeaderType]);
             Assert.Equal("start_b2", activityRow.Values[CurrentBusinessFieldMappingColumns.ApiFieldKey]);
             Assert.Equal("false", activityRow.Values[CurrentBusinessFieldMappingColumns.IsIdColumn]);
-            Assert.Equal("活动B", activityRow.Values[CurrentBusinessFieldMappingColumns.DefaultParentDisplayName]);
-            Assert.Equal("活动B", activityRow.Values[CurrentBusinessFieldMappingColumns.CurrentParentDisplayName]);
-            Assert.Equal("开始时间", activityRow.Values[CurrentBusinessFieldMappingColumns.DefaultChildDisplayName]);
-            Assert.Equal("开始时间", activityRow.Values[CurrentBusinessFieldMappingColumns.CurrentChildDisplayName]);
+            Assert.Equal("活动B", activityRow.Values[CurrentBusinessFieldMappingColumns.DefaultLevel1]);
+            Assert.Equal("活动B", activityRow.Values[CurrentBusinessFieldMappingColumns.CurrentLevel1]);
+            Assert.Equal("开始时间", activityRow.Values[CurrentBusinessFieldMappingColumns.DefaultLevel2]);
+            Assert.Equal("开始时间", activityRow.Values[CurrentBusinessFieldMappingColumns.CurrentLevel2]);
             Assert.Equal("b2", activityRow.Values[CurrentBusinessFieldMappingColumns.ActivityId]);
             Assert.Equal("start", activityRow.Values[CurrentBusinessFieldMappingColumns.PropertyId]);
 
             var customRow = FindRow(rows, "custom_name_a1");
             Assert.Equal("custom_name", customRow.Values[CurrentBusinessFieldMappingColumns.PropertyId]);
-            Assert.Equal("custom_name", customRow.Values[CurrentBusinessFieldMappingColumns.DefaultChildDisplayName]);
-            Assert.Equal("活动A", customRow.Values[CurrentBusinessFieldMappingColumns.CurrentParentDisplayName]);
-            Assert.Equal("名称", FindRow(rows, "name_a1").Values[CurrentBusinessFieldMappingColumns.DefaultChildDisplayName]);
+            Assert.Equal("custom_name", customRow.Values[CurrentBusinessFieldMappingColumns.DefaultLevel2]);
+            Assert.Equal("活动A", customRow.Values[CurrentBusinessFieldMappingColumns.CurrentLevel1]);
+            Assert.Equal("名称", FindRow(rows, "name_a1").Values[CurrentBusinessFieldMappingColumns.DefaultLevel2]);
         }
 
         [Fact]

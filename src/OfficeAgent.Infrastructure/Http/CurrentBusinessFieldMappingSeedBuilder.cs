@@ -7,20 +7,32 @@ namespace OfficeAgent.Infrastructure.Http
 {
     public static class CurrentBusinessFieldMappingColumns
     {
-        public const string HeaderId = "HeaderId";
         public const string HeaderType = "HeaderType";
+        public const string DefaultLevel1 = "DefaultL1";
+        public const string CurrentLevel1 = "CurrentL1";
+        public const string DefaultLevel2 = "DefaultL2";
+        public const string CurrentLevel2 = "CurrentL2";
+        public const string HeaderId = "HeaderId";
         public const string ApiFieldKey = "ApiFieldKey";
         public const string IsIdColumn = "IsIdColumn";
-        public const string DefaultSingleDisplayName = "DefaultSingleDisplayName";
-        public const string CurrentSingleDisplayName = "CurrentSingleDisplayName";
-        public const string DefaultParentDisplayName = "DefaultParentDisplayName";
-        public const string CurrentParentDisplayName = "CurrentParentDisplayName";
-        public const string DefaultChildDisplayName = "DefaultChildDisplayName";
-        public const string CurrentChildDisplayName = "CurrentChildDisplayName";
         public const string ActivityId = "ActivityId";
         public const string PropertyId = "PropertyId";
         public const string SingleHeaderType = "single";
         public const string ActivityPropertyHeaderType = "activityProperty";
+    }
+
+    public static class CurrentBusinessFieldMappingHeaders
+    {
+        public const string HeaderType = "HeaderType";
+        public const string IsdpLevel1 = "ISDP L1";
+        public const string ExcelLevel1 = "Excel L1";
+        public const string IsdpLevel2 = "ISDP L2";
+        public const string ExcelLevel2 = "Excel L2";
+        public const string HeaderId = "HeaderId";
+        public const string ApiFieldKey = "ApiFieldKey";
+        public const string IsIdColumn = "IsIdColumn";
+        public const string ActivityId = "ActivityId";
+        public const string PropertyId = "PropertyId";
     }
 
     public sealed class CurrentBusinessFieldMappingSeedBuilder
@@ -126,12 +138,10 @@ namespace OfficeAgent.Infrastructure.Http
                 [CurrentBusinessFieldMappingColumns.HeaderType] = CurrentBusinessFieldMappingColumns.SingleHeaderType,
                 [CurrentBusinessFieldMappingColumns.ApiFieldKey] = fieldKey,
                 [CurrentBusinessFieldMappingColumns.IsIdColumn] = head?.IsId == true ? "true" : "false",
-                [CurrentBusinessFieldMappingColumns.DefaultSingleDisplayName] = headerText,
-                [CurrentBusinessFieldMappingColumns.CurrentSingleDisplayName] = headerText,
-                [CurrentBusinessFieldMappingColumns.DefaultParentDisplayName] = string.Empty,
-                [CurrentBusinessFieldMappingColumns.CurrentParentDisplayName] = string.Empty,
-                [CurrentBusinessFieldMappingColumns.DefaultChildDisplayName] = string.Empty,
-                [CurrentBusinessFieldMappingColumns.CurrentChildDisplayName] = string.Empty,
+                [CurrentBusinessFieldMappingColumns.DefaultLevel1] = headerText,
+                [CurrentBusinessFieldMappingColumns.CurrentLevel1] = headerText,
+                [CurrentBusinessFieldMappingColumns.DefaultLevel2] = string.Empty,
+                [CurrentBusinessFieldMappingColumns.CurrentLevel2] = string.Empty,
                 [CurrentBusinessFieldMappingColumns.ActivityId] = string.Empty,
                 [CurrentBusinessFieldMappingColumns.PropertyId] = string.Empty,
             };
@@ -158,12 +168,10 @@ namespace OfficeAgent.Infrastructure.Http
                 [CurrentBusinessFieldMappingColumns.HeaderType] = CurrentBusinessFieldMappingColumns.ActivityPropertyHeaderType,
                 [CurrentBusinessFieldMappingColumns.ApiFieldKey] = flatKey ?? string.Empty,
                 [CurrentBusinessFieldMappingColumns.IsIdColumn] = "false",
-                [CurrentBusinessFieldMappingColumns.DefaultSingleDisplayName] = string.Empty,
-                [CurrentBusinessFieldMappingColumns.CurrentSingleDisplayName] = string.Empty,
-                [CurrentBusinessFieldMappingColumns.DefaultParentDisplayName] = activityName,
-                [CurrentBusinessFieldMappingColumns.CurrentParentDisplayName] = activityName,
-                [CurrentBusinessFieldMappingColumns.DefaultChildDisplayName] = resolvedPropertyLabel,
-                [CurrentBusinessFieldMappingColumns.CurrentChildDisplayName] = resolvedPropertyLabel,
+                [CurrentBusinessFieldMappingColumns.DefaultLevel1] = activityName,
+                [CurrentBusinessFieldMappingColumns.CurrentLevel1] = activityName,
+                [CurrentBusinessFieldMappingColumns.DefaultLevel2] = resolvedPropertyLabel,
+                [CurrentBusinessFieldMappingColumns.CurrentLevel2] = resolvedPropertyLabel,
                 [CurrentBusinessFieldMappingColumns.ActivityId] = activity?.ActivityId ?? string.Empty,
                 [CurrentBusinessFieldMappingColumns.PropertyId] = propertyKey ?? string.Empty,
             };

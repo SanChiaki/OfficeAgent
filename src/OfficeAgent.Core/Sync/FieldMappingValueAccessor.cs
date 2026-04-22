@@ -23,7 +23,7 @@ namespace OfficeAgent.Core.Sync
 
             var columnName = (definition.Columns ?? Array.Empty<FieldMappingColumnDefinition>())
                 .Where(column => column != null && column.Role == role)
-                .Select(column => column.ColumnName)
+                .Select(ResolveValueKey)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
 
             if (string.IsNullOrWhiteSpace(columnName) || row.Values == null)
@@ -42,6 +42,18 @@ namespace OfficeAgent.Core.Sync
             FieldMappingSemanticRole role)
         {
             return string.Equals(GetValue(definition, row, role), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolveValueKey(FieldMappingColumnDefinition column)
+        {
+            if (column == null)
+            {
+                return string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(column.RoleKey)
+                ? column.ColumnName ?? string.Empty
+                : column.RoleKey;
         }
     }
 }

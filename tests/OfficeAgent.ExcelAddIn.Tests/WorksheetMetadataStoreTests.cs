@@ -228,21 +228,57 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     new FieldMappingColumnDefinition
                     {
-                        ColumnName = "HeaderId",
-                        Role = FieldMappingSemanticRole.HeaderIdentity,
+                        ColumnName = "HeaderType",
+                        Role = FieldMappingSemanticRole.HeaderType,
                     },
                     new FieldMappingColumnDefinition
                     {
-                        ColumnName = "CurrentSingleDisplayName",
+                        ColumnName = "ISDP L1",
+                        Role = FieldMappingSemanticRole.DefaultSingleHeaderText,
+                        RoleKey = "DefaultL1",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "Excel L1",
                         Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
+                        RoleKey = "CurrentL1",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "ISDP L1",
+                        Role = FieldMappingSemanticRole.DefaultParentHeaderText,
+                        RoleKey = "DefaultL1",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "Excel L1",
+                        Role = FieldMappingSemanticRole.CurrentParentHeaderText,
+                        RoleKey = "CurrentL1",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "ISDP L2",
+                        Role = FieldMappingSemanticRole.DefaultChildHeaderText,
+                        RoleKey = "DefaultL2",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "Excel L2",
+                        Role = FieldMappingSemanticRole.CurrentChildHeaderText,
+                        RoleKey = "CurrentL2",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "HeaderId",
+                        Role = FieldMappingSemanticRole.HeaderIdentity,
                     },
                 },
             };
 
             adapter.SeedTable("SheetFieldMappings", new[]
             {
-                new[] { "SheetA", "legacy_id", "旧列名" },
-                new[] { "Sheet1", "old_sheet1_id", "旧负责人" },
+                new[] { "SheetA", "single", "旧L1", "当前旧L1", string.Empty, string.Empty, "legacy_id" },
+                new[] { "Sheet1", "single", "旧负责人", "当前旧负责人", string.Empty, string.Empty, "old_sheet1_id" },
             });
 
             InvokeSaveFieldMappings(
@@ -256,8 +292,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         SheetName = "Sheet1",
                         Values = new Dictionary<string, string>
                         {
+                            ["HeaderType"] = "single",
+                            ["DefaultL1"] = "负责人",
+                            ["CurrentL1"] = "项目负责人",
+                            ["DefaultL2"] = string.Empty,
+                            ["CurrentL2"] = string.Empty,
                             ["HeaderId"] = "owner_name",
-                            ["CurrentSingleDisplayName"] = "项目负责人",
                         },
                     },
                 }
@@ -268,17 +308,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var loaded = InvokeLoadFieldMappings(store, "Sheet1", definition);
             var loadedRow = Assert.Single(loaded);
+            Assert.Equal("single", loadedRow.Values["HeaderType"]);
+            Assert.Equal("负责人", loadedRow.Values["DefaultL1"]);
+            Assert.Equal("项目负责人", loadedRow.Values["CurrentL1"]);
             Assert.Equal("owner_name", loadedRow.Values["HeaderId"]);
-            Assert.Equal("项目负责人", loadedRow.Values["CurrentSingleDisplayName"]);
 
             var headers = adapter.ReadSeededHeaders("SheetFieldMappings");
             Assert.Equal(
-                new[] { "SheetName", "HeaderId", "CurrentSingleDisplayName" },
+                new[] { "SheetName", "HeaderType", "ISDP L1", "Excel L1", "ISDP L2", "Excel L2", "HeaderId" },
                 headers);
 
             var rawRows = adapter.ReadSeededTable("SheetFieldMappings");
-            Assert.Contains(rawRows, row => row[0] == "SheetA" && row[1] == "legacy_id");
-            Assert.DoesNotContain(rawRows, row => row[0] == "Sheet1" && row[1] == "old_sheet1_id");
+            Assert.Contains(rawRows, row => row[0] == "SheetA" && row[6] == "legacy_id");
+            Assert.DoesNotContain(rawRows, row => row[0] == "Sheet1" && row[6] == "old_sheet1_id");
         }
 
         [Fact]

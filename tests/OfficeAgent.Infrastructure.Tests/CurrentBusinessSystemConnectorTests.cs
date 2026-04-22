@@ -76,22 +76,22 @@ namespace OfficeAgent.Infrastructure.Tests
             var definition = connector.GetFieldMappingDefinition("performance");
             Assert.Equal("current-business-system", definition.SystemKey);
             Assert.Equal(
-                new Dictionary<string, FieldMappingSemanticRole>(StringComparer.Ordinal)
+                new[]
                 {
-                    [CurrentBusinessFieldMappingColumns.HeaderId] = FieldMappingSemanticRole.HeaderIdentity,
-                    [CurrentBusinessFieldMappingColumns.HeaderType] = FieldMappingSemanticRole.HeaderType,
-                    [CurrentBusinessFieldMappingColumns.ApiFieldKey] = FieldMappingSemanticRole.ApiFieldKey,
-                    [CurrentBusinessFieldMappingColumns.IsIdColumn] = FieldMappingSemanticRole.IsIdColumn,
-                    [CurrentBusinessFieldMappingColumns.DefaultSingleDisplayName] = FieldMappingSemanticRole.DefaultSingleHeaderText,
-                    [CurrentBusinessFieldMappingColumns.CurrentSingleDisplayName] = FieldMappingSemanticRole.CurrentSingleHeaderText,
-                    [CurrentBusinessFieldMappingColumns.DefaultParentDisplayName] = FieldMappingSemanticRole.DefaultParentHeaderText,
-                    [CurrentBusinessFieldMappingColumns.CurrentParentDisplayName] = FieldMappingSemanticRole.CurrentParentHeaderText,
-                    [CurrentBusinessFieldMappingColumns.DefaultChildDisplayName] = FieldMappingSemanticRole.DefaultChildHeaderText,
-                    [CurrentBusinessFieldMappingColumns.CurrentChildDisplayName] = FieldMappingSemanticRole.CurrentChildHeaderText,
-                    [CurrentBusinessFieldMappingColumns.ActivityId] = FieldMappingSemanticRole.ActivityIdentity,
-                    [CurrentBusinessFieldMappingColumns.PropertyId] = FieldMappingSemanticRole.PropertyIdentity,
+                    (CurrentBusinessFieldMappingHeaders.HeaderType, FieldMappingSemanticRole.HeaderType, string.Empty),
+                    (CurrentBusinessFieldMappingHeaders.IsdpLevel1, FieldMappingSemanticRole.DefaultSingleHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel1),
+                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentSingleHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
+                    (CurrentBusinessFieldMappingHeaders.IsdpLevel1, FieldMappingSemanticRole.DefaultParentHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel1),
+                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentParentHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
+                    (CurrentBusinessFieldMappingHeaders.IsdpLevel2, FieldMappingSemanticRole.DefaultChildHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel2),
+                    (CurrentBusinessFieldMappingHeaders.ExcelLevel2, FieldMappingSemanticRole.CurrentChildHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel2),
+                    (CurrentBusinessFieldMappingHeaders.HeaderId, FieldMappingSemanticRole.HeaderIdentity, string.Empty),
+                    (CurrentBusinessFieldMappingHeaders.ApiFieldKey, FieldMappingSemanticRole.ApiFieldKey, string.Empty),
+                    (CurrentBusinessFieldMappingHeaders.IsIdColumn, FieldMappingSemanticRole.IsIdColumn, string.Empty),
+                    (CurrentBusinessFieldMappingHeaders.ActivityId, FieldMappingSemanticRole.ActivityIdentity, string.Empty),
+                    (CurrentBusinessFieldMappingHeaders.PropertyId, FieldMappingSemanticRole.PropertyIdentity, string.Empty),
                 },
-                definition.Columns.ToDictionary(column => column.ColumnName, column => column.Role, StringComparer.Ordinal));
+                definition.Columns.Select(column => (column.ColumnName, column.Role, column.RoleKey)).ToArray());
         }
 
         [Fact]

@@ -119,7 +119,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             EnsureWorkbookScope();
             adapter.EnsureWorksheet(MetadataSheetName, visible: true);
-            var columns = GetValidatedColumns(definition);
+            var columns = GetDistinctFieldMappingColumns(definition);
             var headers = new[] { "SheetName" }
                 .Concat(columns.Select(column => column.ColumnName))
                 .ToArray();
@@ -137,7 +137,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
                 {
-                    var columnName = columns[columnIndex].ColumnName;
+                    var columnName = GetColumnValueKey(columns[columnIndex]);
                     values[columnIndex + 1] = mappingRow?.Values != null &&
                                               mappingRow.Values.TryGetValue(columnName, out var value)
                         ? value ?? string.Empty
@@ -165,7 +165,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             EnsureWorkbookScope();
-            var columns = GetValidatedColumns(definition);
+            var columns = GetDistinctFieldMappingColumns(definition);
             var rows = GetFieldMappingRows();
 
             return rows
@@ -178,7 +178,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                     for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
                     {
-                        var columnName = columns[columnIndex].ColumnName;
+                        var columnName = GetColumnValueKey(columns[columnIndex]);
                         values[columnName] = row.Length > columnIndex + 1
                             ? row[columnIndex + 1]
                             : string.Empty;
@@ -310,6 +310,38 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return columns;
+        }
+
+        private static FieldMappingColumnDefinition[] GetDistinctFieldMappingColumns(FieldMappingTableDefinition definition)
+        {
+            var columns = GetValidatedColumns(definition);
+            var distinct = new List<FieldMappingColumnDefinition>(columns.Length);
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var column in columns)
+            {
+                var valueKey = GetColumnValueKey(column);
+                if (!seenKeys.Add(valueKey))
+                {
+                    continue;
+                }
+
+                distinct.Add(column);
+            }
+
+            return distinct.ToArray();
+        }
+
+        private static string GetColumnValueKey(FieldMappingColumnDefinition column)
+        {
+            if (column == null)
+            {
+                return string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(column.RoleKey)
+                ? column.ColumnName ?? string.Empty
+                : column.RoleKey;
         }
 
         private string[] ResolveFieldMappingHeaders(IReadOnlyList<string[]> rows)
