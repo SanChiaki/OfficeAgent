@@ -11,14 +11,14 @@
 
 当前 Ribbon Sync 的核心思路已经从“固定列号 + 快照差异”切换为：
 
-- `AI_Setting` 是每个受管 sheet 的运行时事实来源
+- `ISDP_Setting` 是每个受管 sheet 的运行时事实来源
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
 - 当前 Ribbon 入口只做部分下载、部分上传
 - `全量下载` 和 `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
 
-当前 `AI_Setting` 的具体形态也已经固定：
+当前 `ISDP_Setting` 的具体形态也已经固定：
 
 - 它是一个可见 worksheet，便于调试和人工维护
 - 它只承载两个 section：
@@ -32,7 +32,7 @@
 - `SheetFieldMappings` 永远在下
 - 两个 section 中间固定保留两行空白
 - 当前不再使用旧的“首列表名 + 每行一条压平记录”格式
-- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `AI_Setting`
+- 一旦发生 metadata 写入，插件会按这个标准布局整表重写 `ISDP_Setting`
 
 当前不做：
 
@@ -168,7 +168,7 @@ Ribbon 点击链路：
 这里有两个实现约束：
 
 - Excel 层只固定 `SheetName` 是第一列作用域列
-- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `AI_Setting` 里的 `SheetFieldMappings` section 中
+- 除 `SheetName` 外，其余业务列都由连接器定义，并最终落到 `ISDP_Setting` 里的 `SheetFieldMappings` section 中
 
 当前 `current-business-system` 的展示列顺序是：
 
@@ -308,7 +308,7 @@ Ribbon 点击链路：
 
 真实系统接入时不要把它们重新写死回默认值。
 
-同时要注意，用户现在也可能直接手工维护 `AI_Setting`：
+同时要注意，用户现在也可能直接手工维护 `ISDP_Setting`：
 
 - 修改 `SheetBindings` 的配置值
 - 修改 `SheetFieldMappings` 的 `Excel L1 / Excel L2`
@@ -358,7 +358,7 @@ Ribbon 点击链路：
 这意味着：
 
 - 不需要为真实系统接入额外设计“旧 metadata 迁移逻辑”
-- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `AI_Setting`
+- 初始化或后续 metadata 写入时，可以直接按当前标准 section 布局覆盖 `ISDP_Setting`
 - 如果你从别的历史分支带来旧格式数据，应先清理，再按当前版本重新初始化
 
 ## 8. 真实系统落地步骤
@@ -371,7 +371,7 @@ Ribbon 点击链路：
 4. 新建真实系统的 `FieldMappingSeedBuilder`
 5. 让连接器先跑通 `GetProjects -> BuildFieldMappingSeed -> Find -> BatchSave`
 6. 再在 `ThisAddIn` 中注册或切换连接器实例
-7. 在 Excel 中执行一次 `初始化当前表`，确认 `AI_Setting` 被按当前标准布局写出
+7. 在 Excel 中执行一次 `初始化当前表`，确认 `ISDP_Setting` 被按当前标准布局写出
 8. 最后做 Excel 联调和手工回归
 
 当前注册位置：
@@ -437,7 +437,7 @@ Ribbon 点击链路：
 - 未登录时项目下拉框显示 `请先登录`，登录成功后能够自动重载项目列表
 - 项目接口返回空列表时，下拉框显示 `无可用项目`
 - 显式初始化不会破坏业务单元格
-- `AI_Setting` 会以单 sheet、上下两个 section 的可读布局写出
+- `ISDP_Setting` 会以单 sheet、上下两个 section 的可读布局写出
 - 全量下载能按配置行号落位
 - 已有表头场景下，全量下载不会重写已识别表头
 - 部分上传 / 部分下载在不包含 ID / 表头的选区里仍能正确定位

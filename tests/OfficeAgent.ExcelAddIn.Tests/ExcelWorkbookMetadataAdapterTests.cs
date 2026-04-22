@@ -28,11 +28,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
             var ensureWorksheet = adapterType.GetMethod("EnsureWorksheet", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-            ensureWorksheet.Invoke(adapter, new object[] { "AI_Setting", true });
+            ensureWorksheet.Invoke(adapter, new object[] { "ISDP_Setting", true });
 
             Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
             Assert.NotNull(application.MetadataSheet);
-            Assert.Equal("AI_Setting", application.MetadataSheet.Name);
+            Assert.Equal("ISDP_Setting", application.MetadataSheet.Name);
             Assert.Equal(1, application.BusinessSheet.ActivateCount);
         }
 
@@ -90,7 +90,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
             var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
 
-            application.CreateWorksheet("AI_Setting");
+            application.CreateWorksheet("ISDP_Setting");
             application.MetadataSheet.ThrowOnDirectCellWrites = true;
 
             adapterType.GetMethod("WriteTable").Invoke(adapter, new object[]
@@ -122,7 +122,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("AI_Setting");
+            application.CreateWorksheet("ISDP_Setting");
             application.MetadataSheet.SetCell(1, 1, "SheetBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "SystemKey");
@@ -150,7 +150,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("AI_Setting");
+            application.CreateWorksheet("ISDP_Setting");
             application.MetadataSheet.SetCell(1, 1, "SheetBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "SystemKey");
@@ -250,7 +250,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public LayoutAwareFakeExcelWorksheet CreateWorksheet(string name)
             {
                 var worksheet = workbook.Worksheets.AddWorksheet(name);
-                if (string.Equals(name, "AI_Setting", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, "ISDP_Setting", StringComparison.OrdinalIgnoreCase))
                 {
                     MetadataSheet = worksheet;
                 }

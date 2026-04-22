@@ -54,31 +54,31 @@
 ## Ribbon Sync
 
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
-- Confirm the layout dialog and enter custom values, then verify `AI_Setting` writes one `SheetBindings` row with the user-entered layout values.
+- Confirm the layout dialog and enter custom values, then verify `ISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` is clicked.
-- Open `AI_Setting` and confirm it uses one worksheet with two readable sections: `SheetBindings` on top, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
+- Open `ISDP_Setting` and confirm it uses one worksheet with two readable sections: `SheetBindings` on top, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between `SheetBindings` and `SheetFieldMappings`, and that metadata is no longer stored as flattened `tableName + values` rows.
 - Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing `先选择项目`.
-- Save a workbook with `AI_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows `先选择项目` unless `SheetBindings` 里存在 `AI_Setting` 这条显式绑定记录。
-- Switch from a bound business sheet to `AI_Setting` and confirm the Ribbon dropdown clears back to `先选择项目` when `AI_Setting` itself has no binding.
+- Save a workbook with `ISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows `先选择项目` unless `SheetBindings` 里存在 `ISDP_Setting` 这条显式绑定记录。
+- Switch from a bound business sheet to `ISDP_Setting` and confirm the Ribbon dropdown clears back to `先选择项目` when `ISDP_Setting` itself has no binding.
 - Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
-- Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon dropdown plus download/upload behavior always follow the active workbook's own `AI_Setting` metadata.
+- Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon dropdown plus download/upload behavior always follow the active workbook's own `ISDP_Setting` metadata.
 - On a sheet that already has binding metadata, switch to another project and confirm the layout dialog defaults reuse the current sheet's saved layout values.
 - Reselect the already bound project (`same systemKey + projectId`) and confirm no layout dialog appears and `SheetBindings` is not rewritten.
-- Cancel the layout dialog while switching projects and confirm both `AI_Setting` binding data and Ribbon dropdown project stay unchanged.
+- Cancel the layout dialog while switching projects and confirm both `ISDP_Setting` binding data and Ribbon dropdown project stay unchanged.
 - After switching to another project and confirming the dialog, verify old `SheetFieldMappings` are cleared; before clicking `初始化当前表`, running download/upload should report that the current sheet is not initialized.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows `请先登录`.
 - Configure the project API to return an empty array and confirm the project dropdown shows `无可用项目`.
-- Click `初始化当前表` on a sheet that already contains business cells and confirm only `AI_Setting` changes; the business area should remain untouched.
+- Click `初始化当前表` on a sheet that already contains business cells and confirm only `ISDP_Setting` changes; the business area should remain untouched.
 - Click `部分下载` and `部分上传` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
 - Confirm the `下载` and `上传` controls are rendered in separate Ribbon groups, that the download group only shows `部分下载`, the upload group only shows `部分上传`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
-- Edit `AI_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run `全量下载` and confirm headers/data are written at the configured rows.
+- Edit `ISDP_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run `全量下载` and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run `全量下载` and confirm the plugin refreshes data cells without rewriting those existing headers.
 - Modify `Excel L1` or `Excel L2` in `SheetFieldMappings`, update the matching Excel header text manually, then run `部分下载` or `部分上传` and confirm the column still resolves by current header text.
 - Set one `single` mapping row to use both `Excel L1` and `Excel L2`, keep `HeaderRowCount = 2`, prepare matching grouped headers on the sheet, then run `部分下载` and confirm the grouped-single column resolves and only the selected child cells are refreshed.
 - Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `部分上传`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
 - Keep the grouped-single headers already present on the worksheet, run `全量下载`, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
-- Clear the worksheet header area, keep the grouped-single metadata in `AI_Setting`, then run `全量下载` and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
+- Clear the worksheet header area, keep the grouped-single metadata in `ISDP_Setting`, then run `全量下载` and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
 - Verify the task pane button and login button still work after the Ribbon Sync controls are added.

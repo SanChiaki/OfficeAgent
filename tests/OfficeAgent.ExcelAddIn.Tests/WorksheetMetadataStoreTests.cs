@@ -29,7 +29,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             InvokeSaveBinding(store, binding);
 
-            Assert.Equal("AI_Setting", adapter.WorksheetName);
+            Assert.Equal("ISDP_Setting", adapter.WorksheetName);
             Assert.True(adapter.Visible);
 
             var loaded = InvokeLoadBinding(store, "Sheet1");
@@ -303,7 +303,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 }
             );
 
-            Assert.Equal("AI_Setting", adapter.WorksheetName);
+            Assert.Equal("ISDP_Setting", adapter.WorksheetName);
             Assert.True(adapter.Visible);
 
             var loaded = InvokeLoadFieldMappings(store, "Sheet1", definition);
@@ -595,7 +595,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var headersAfter = adapter.ReadSeededHeaders("SheetFieldMappings");
             Assert.Equal(headersBefore, headersAfter);
-            Assert.Equal("AI_Setting", adapter.WorksheetName);
+            Assert.Equal("ISDP_Setting", adapter.WorksheetName);
             Assert.True(adapter.Visible);
         }
 

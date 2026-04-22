@@ -48,7 +48,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var lookup = BuildLookup(definition, rows);
             if (binding.HeaderRowCount == 1 && lookup.HasGroupedSingleMetadata)
             {
-                throw new InvalidOperationException("当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 AI_Setting。");
+                throw new InvalidOperationException("当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 ISDP_Setting。");
             }
 
             var result = new List<WorksheetRuntimeColumn>();
@@ -122,7 +122,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                         {
                             if (groupedSingleHeaders.ContainsKey(groupedKey) || activityHeaders.ContainsKey(groupedKey))
                             {
-                                throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 AI_Setting。");
+                                throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 ISDP_Setting。");
                             }
 
                             groupedSingleHeaders[groupedKey] = template;
@@ -143,7 +143,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     {
                         if (groupedSingleHeaders.ContainsKey(activityKey))
                         {
-                            throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 AI_Setting。");
+                            throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 ISDP_Setting。");
                         }
 
                         if (!activityHeaders.ContainsKey(activityKey))

@@ -167,7 +167,7 @@ namespace OfficeAgent.ExcelAddIn
         private void Application_SheetChange(object sh, ExcelInterop.Range target)
         {
             var sheetName = GetWorksheetName(sh);
-            if (!string.Equals(sheetName, "AI_Setting", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(sheetName, "ISDP_Setting", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }

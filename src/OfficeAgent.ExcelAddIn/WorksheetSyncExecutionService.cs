@@ -952,7 +952,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private static InvalidOperationException CreateHeaderMatchException()
         {
-            return new InvalidOperationException("当前表头无法与映射表匹配，请先修正 AI_Setting。");
+            return new InvalidOperationException("当前表头无法与映射表匹配，请先修正 ISDP_Setting。");
         }
 
         private static void ValidateBinding(SheetBinding binding)

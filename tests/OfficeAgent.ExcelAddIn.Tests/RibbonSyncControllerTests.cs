@@ -380,7 +380,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 ProjectName = "绩效项目",
             };
 
-            var controller = CreateController(new FakeSystemConnector(), metadataStore, new FakeDialogService(), () => "AI_Setting");
+            var controller = CreateController(new FakeSystemConnector(), metadataStore, new FakeDialogService(), () => "ISDP_Setting");
 
             InvokeRefresh(controller);
 
@@ -410,7 +410,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var controller = CreateController(new FakeSystemConnector(), metadataStore, new FakeDialogService(), () => "SheetA");
 
             InvokeRefresh(controller);
-            InvokeRefreshForSheet(controller, "AI_Setting");
+            InvokeRefreshForSheet(controller, "ISDP_Setting");
 
             Assert.Equal(string.Empty, ReadActiveProjectId(controller));
             Assert.Equal("先选择项目", ReadActiveProjectDisplayName(controller));
@@ -420,15 +420,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
         public void RefreshActiveProjectFromSettingsSheetLoadsBindingWhenSettingsSheetIsExplicitlyBound()
         {
             var metadataStore = new FakeWorksheetMetadataStore();
-            metadataStore.Bindings["AI_Setting"] = new SheetBinding
+            metadataStore.Bindings["ISDP_Setting"] = new SheetBinding
             {
-                SheetName = "AI_Setting",
+                SheetName = "ISDP_Setting",
                 SystemKey = "current-business-system",
                 ProjectId = "settings-project",
                 ProjectName = "设置页项目",
             };
 
-            var controller = CreateController(new FakeSystemConnector(), metadataStore, new FakeDialogService(), () => "AI_Setting");
+            var controller = CreateController(new FakeSystemConnector(), metadataStore, new FakeDialogService(), () => "ISDP_Setting");
 
             InvokeRefresh(controller);
 
