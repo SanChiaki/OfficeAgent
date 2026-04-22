@@ -130,14 +130,15 @@ namespace OfficeAgent.Core.Templates
             EnsureTemplateProjectCompatibility(binding, storedTemplate);
             EnsureTemplateDefinitionCompatibility(binding, storedTemplate);
 
-            if (storedTemplate.Revision != expectedRevision && !overwriteRevisionConflict)
+            var boundRevision = templateBinding.TemplateRevision;
+            if (!overwriteRevisionConflict && (!boundRevision.HasValue || storedTemplate.Revision != boundRevision.Value))
             {
                 throw new InvalidOperationException("Template revision conflict.");
             }
 
             var storeExpectedRevision = overwriteRevisionConflict
                 ? storedTemplate.Revision
-                : expectedRevision;
+                : boundRevision.Value;
 
             var timestamp = DateTime.UtcNow;
             var snapshot = BuildSnapshot(

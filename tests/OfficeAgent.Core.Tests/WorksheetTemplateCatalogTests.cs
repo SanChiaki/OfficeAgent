@@ -266,6 +266,32 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void SaveSheetToExistingTemplateRejectsSpoofedCallerRevisionWhenSheetBindingIsStale()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            metadataStore.FieldMappings["Sheet-Now"] = CreateFieldMappings("Sheet-Now");
+            templateBindingStore.TemplateBindings["Sheet-Now"] = new SheetTemplateBinding
+            {
+                SheetName = "Sheet-Now",
+                TemplateId = "template-a",
+                TemplateName = "模板A",
+                TemplateRevision = 1,
+                TemplateOrigin = "store-template",
+            };
+            templateStore.Templates["template-a"] = CreateTemplate("template-a", "模板A", "system-a", "project-a", 4);
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                catalog.SaveSheetToExistingTemplate("Sheet-Now", "template-a", 4, false));
+
+            Assert.Contains("revision", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(templateStore.SaveExistingCalls);
+        }
+
+        [Fact]
         public void SaveSheetToExistingTemplateRejectsIncompatibleTemplateDefinition()
         {
             var metadataStore = new FakeWorksheetMetadataStore();
