@@ -76,6 +76,156 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(2, columns.Length);
         }
 
+        [Fact]
+        public void MatchUsesGroupedSingleDisplayNamesForTwoRowHeaders()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "基础信息");
+            grid.SetCell("Sheet1", 4, 2, "负责人");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "row_id",
+                    headerType: "single",
+                    isIdColumn: true,
+                    currentSingle: "ID"),
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "owner_name",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentParent: "基础信息",
+                    currentChild: "负责人"),
+            };
+
+            var columns = InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid);
+
+            Assert.Contains(columns, column => column.ColumnIndex == 2 && column.ApiFieldKey == "owner_name");
+        }
+
+        [Fact]
+        public void MatchPrefersMergedNormalSingleBeforeTwoLevelMatching()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 3, 1, "负责人");
+            grid.SetCell("Sheet1", 4, 1, "负责人");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "owner_name",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentSingle: "负责人"),
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "owner_grouped",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentParent: "负责人",
+                    currentChild: "负责人"),
+            };
+
+            var columns = InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid);
+
+            var matched = Assert.Single(columns);
+            Assert.Equal("owner_name", matched.ApiFieldKey);
+        }
+
+        [Fact]
+        public void MatchThrowsWhenGroupedSingleConflictsWithActivityTwoLevelKey()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 3, 1, "测试活动111");
+            grid.SetCell("Sheet1", 4, 1, "开始时间");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "start_grouped",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentParent: "测试活动111",
+                    currentChild: "开始时间"),
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "start_activity",
+                    headerType: "activityProperty",
+                    isIdColumn: false,
+                    currentParent: "测试活动111",
+                    currentChild: "开始时间"),
+            };
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid));
+
+            Assert.Equal(
+                "SheetFieldMappings 中存在重复的双层表头键，请先修正 AI_Setting。",
+                exception.Message);
+        }
+
+        [Fact]
+        public void MatchThrowsWhenSingleWithExcelL2UsedInOneRowHeader()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 5, 1, "负责人");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 5,
+                HeaderRowCount = 1,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "owner_grouped",
+                    headerType: "single",
+                    isIdColumn: false,
+                    currentParent: "基础信息",
+                    currentChild: "负责人"),
+            };
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid));
+
+            Assert.Equal(
+                "当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 AI_Setting。",
+                exception.Message);
+        }
+
         private static object CreateMatcher()
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
@@ -99,10 +249,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var method = matcher.GetType().GetMethod(
                 "Match",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            return (WorksheetRuntimeColumn[])method.Invoke(
-                matcher,
-                new object[] { sheetName, binding, definition, mappings, grid.GetTransparentProxy() });
+            try
+            {
+                return (WorksheetRuntimeColumn[])method.Invoke(
+                    matcher,
+                    new object[] { sheetName, binding, definition, mappings, grid.GetTransparentProxy() });
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
         }
 
         private static FieldMappingTableDefinition BuildDefinition()
@@ -115,9 +271,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     new FieldMappingColumnDefinition { ColumnName = "ApiFieldKey", Role = FieldMappingSemanticRole.ApiFieldKey },
                     new FieldMappingColumnDefinition { ColumnName = "HeaderType", Role = FieldMappingSemanticRole.HeaderType },
                     new FieldMappingColumnDefinition { ColumnName = "IsIdColumn", Role = FieldMappingSemanticRole.IsIdColumn },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentSingleDisplayName", Role = FieldMappingSemanticRole.CurrentSingleHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentParentDisplayName", Role = FieldMappingSemanticRole.CurrentParentHeaderText },
-                    new FieldMappingColumnDefinition { ColumnName = "CurrentChildDisplayName", Role = FieldMappingSemanticRole.CurrentChildHeaderText },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L2", Role = FieldMappingSemanticRole.CurrentChildHeaderText, RoleKey = "CurrentL2" },
                 },
             };
         }
@@ -166,9 +322,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     ["ApiFieldKey"] = apiFieldKey,
                     ["HeaderType"] = headerType,
                     ["IsIdColumn"] = isIdColumn ? "true" : "false",
-                    ["CurrentSingleDisplayName"] = currentSingle,
-                    ["CurrentParentDisplayName"] = currentParent,
-                    ["CurrentChildDisplayName"] = currentChild,
+                    ["CurrentL1"] = string.IsNullOrWhiteSpace(currentSingle) ? currentParent : currentSingle,
+                    ["CurrentL2"] = currentChild,
                 },
             };
         }

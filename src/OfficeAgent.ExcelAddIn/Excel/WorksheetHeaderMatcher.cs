@@ -44,6 +44,11 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             var rows = mappings ?? Array.Empty<SheetFieldMappingRow>();
             var lookup = BuildLookup(definition, rows);
+            if (binding.HeaderRowCount <= 1 && lookup.HasGroupedSingleMetadata)
+            {
+                throw new InvalidOperationException("当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 AI_Setting。");
+            }
+
             var result = new List<WorksheetRuntimeColumn>();
             var lastUsedColumn = grid.GetLastUsedColumn(sheetName);
             var headerRow = binding.HeaderStartRow <= 0 ? 1 : binding.HeaderStartRow;
@@ -79,7 +84,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
             IReadOnlyList<SheetFieldMappingRow> mappings)
         {
             var singleHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
+            var groupedSingleHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
             var activityHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
+            var hasGroupedSingleMetadata = false;
 
             foreach (var mapping in mappings)
             {
@@ -105,7 +112,21 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 if (IsSingleHeader(headerType))
                 {
-                    if (!string.IsNullOrWhiteSpace(currentSingle) && !singleHeaders.ContainsKey(currentSingle))
+                    if (!string.IsNullOrWhiteSpace(currentChildText))
+                    {
+                        hasGroupedSingleMetadata = true;
+                        var groupedKey = BuildTwoLevelKey(currentParentText, currentChildText);
+                        if (!string.IsNullOrWhiteSpace(groupedKey))
+                        {
+                            if (groupedSingleHeaders.ContainsKey(groupedKey) || activityHeaders.ContainsKey(groupedKey))
+                            {
+                                throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 AI_Setting。");
+                            }
+
+                            groupedSingleHeaders[groupedKey] = template;
+                        }
+                    }
+                    else if (!string.IsNullOrWhiteSpace(currentSingle) && !singleHeaders.ContainsKey(currentSingle))
                     {
                         singleHeaders[currentSingle] = template;
                     }
@@ -115,15 +136,23 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 if (string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase))
                 {
-                    var activityKey = BuildActivityKey(currentParentText, currentChildText);
-                    if (!string.IsNullOrWhiteSpace(activityKey) && !activityHeaders.ContainsKey(activityKey))
+                    var activityKey = BuildTwoLevelKey(currentParentText, currentChildText);
+                    if (!string.IsNullOrWhiteSpace(activityKey))
                     {
-                        activityHeaders[activityKey] = template;
+                        if (groupedSingleHeaders.ContainsKey(activityKey))
+                        {
+                            throw new InvalidOperationException("SheetFieldMappings 中存在重复的双层表头键，请先修正 AI_Setting。");
+                        }
+
+                        if (!activityHeaders.ContainsKey(activityKey))
+                        {
+                            activityHeaders[activityKey] = template;
+                        }
                     }
                 }
             }
 
-            return new HeaderLookup(singleHeaders, activityHeaders);
+            return new HeaderLookup(singleHeaders, groupedSingleHeaders, activityHeaders, hasGroupedSingleMetadata);
         }
 
         private WorksheetRuntimeColumn FindMatch(
@@ -149,7 +178,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 return CloneSingleHeader(mergedSingleHeader);
             }
 
-            var activityLookupKey = BuildActivityKey(currentParent, bottomText);
+            var activityLookupKey = BuildTwoLevelKey(currentParent, bottomText);
+            if (lookup.GroupedSingleHeaders.TryGetValue(activityLookupKey, out var groupedSingleHeader))
+            {
+                return CloneGroupedSingleHeader(groupedSingleHeader);
+            }
+
             if (lookup.ActivityHeaders.TryGetValue(activityLookupKey, out var activityHeader))
             {
                 return CloneActivityHeader(activityHeader);
@@ -184,7 +218,20 @@ namespace OfficeAgent.ExcelAddIn.Excel
             };
         }
 
-        private static string BuildActivityKey(string parentText, string childText)
+        private static WorksheetRuntimeColumn CloneGroupedSingleHeader(WorksheetRuntimeColumn template)
+        {
+            return new WorksheetRuntimeColumn
+            {
+                ApiFieldKey = template.ApiFieldKey,
+                HeaderType = template.HeaderType,
+                DisplayText = template.ChildDisplayText,
+                ParentDisplayText = template.ParentDisplayText,
+                ChildDisplayText = template.ChildDisplayText,
+                IsIdColumn = template.IsIdColumn,
+            };
+        }
+
+        private static string BuildTwoLevelKey(string parentText, string childText)
         {
             if (string.IsNullOrWhiteSpace(parentText) || string.IsNullOrWhiteSpace(childText))
             {
@@ -198,15 +245,23 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             public HeaderLookup(
                 IReadOnlyDictionary<string, WorksheetRuntimeColumn> singleHeaders,
-                IReadOnlyDictionary<string, WorksheetRuntimeColumn> activityHeaders)
+                IReadOnlyDictionary<string, WorksheetRuntimeColumn> groupedSingleHeaders,
+                IReadOnlyDictionary<string, WorksheetRuntimeColumn> activityHeaders,
+                bool hasGroupedSingleMetadata)
             {
                 SingleHeaders = singleHeaders ?? throw new ArgumentNullException(nameof(singleHeaders));
+                GroupedSingleHeaders = groupedSingleHeaders ?? throw new ArgumentNullException(nameof(groupedSingleHeaders));
                 ActivityHeaders = activityHeaders ?? throw new ArgumentNullException(nameof(activityHeaders));
+                HasGroupedSingleMetadata = hasGroupedSingleMetadata;
             }
 
             public IReadOnlyDictionary<string, WorksheetRuntimeColumn> SingleHeaders { get; }
 
+            public IReadOnlyDictionary<string, WorksheetRuntimeColumn> GroupedSingleHeaders { get; }
+
             public IReadOnlyDictionary<string, WorksheetRuntimeColumn> ActivityHeaders { get; }
+
+            public bool HasGroupedSingleMetadata { get; }
         }
 
         private static bool IsSingleHeader(string headerType)
