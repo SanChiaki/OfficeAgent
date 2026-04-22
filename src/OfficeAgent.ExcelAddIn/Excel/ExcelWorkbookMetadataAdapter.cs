@@ -8,7 +8,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 {
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
-        private const string MetadataSheetName = "AI_Setting";
+        private const string MetadataSheetName = "ISDP_Setting";
 
         private readonly ExcelInterop.Application application;
         private readonly MetadataSheetLayoutSerializer serializer = new MetadataSheetLayoutSerializer();

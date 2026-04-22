@@ -529,7 +529,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("Application.SheetChange += Application_SheetChange;", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("private void Application_SheetChange(object sh, ExcelInterop.Range target)", addInCodeText, StringComparison.Ordinal);
-            Assert.Contains("string.Equals(sheetName, \"AI_Setting\", StringComparison.OrdinalIgnoreCase)", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("string.Equals(sheetName, \"ISDP_Setting\", StringComparison.OrdinalIgnoreCase)", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("metadataStore.InvalidateCache();", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("RibbonSyncController?.InvalidateRefreshState();", addInCodeText, StringComparison.Ordinal);
         }
