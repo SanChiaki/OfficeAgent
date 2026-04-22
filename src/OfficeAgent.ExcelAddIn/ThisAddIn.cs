@@ -105,7 +105,9 @@ namespace OfficeAgent.ExcelAddIn
                 WorksheetMetadataStore,
                 WorksheetSyncService,
                 GetActiveWorksheetName,
-                WorksheetSyncExecutionService);
+                WorksheetSyncExecutionService,
+                new Dialogs.RibbonSyncDialogService(),
+                () => Globals.Ribbons.AgentRibbon?.BeginLoginFlow(refreshProjectsAfterSuccess: false));
             TemplateStore = new LocalJsonTemplateStore(Path.Combine(appDataDirectory, "templates"));
             TemplateCatalog = new WorksheetTemplateCatalog(
                 SystemConnectorRegistry,

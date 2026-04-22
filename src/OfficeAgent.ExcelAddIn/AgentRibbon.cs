@@ -5,8 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Office.Tools.Ribbon;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
+using OfficeAgent.ExcelAddIn.Dialogs;
 
 namespace OfficeAgent.ExcelAddIn
 {
@@ -47,7 +49,17 @@ namespace OfficeAgent.ExcelAddIn
             Globals.ThisAddIn.TaskPaneController?.Toggle();
         }
 
-        private async void LoginButton_Click(object sender, RibbonControlEventArgs e)
+        private void LoginButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            BeginLoginFlow(refreshProjectsAfterSuccess: true);
+        }
+
+        internal async void BeginLoginFlow(bool refreshProjectsAfterSuccess)
+        {
+            await ExecuteLoginFlow(refreshProjectsAfterSuccess).ConfigureAwait(true);
+        }
+
+        private async Task<bool> ExecuteLoginFlow(bool refreshProjectsAfterSuccess)
         {
             var settings = Globals.ThisAddIn.SettingsStore.Load();
             var ssoUrl = settings.SsoUrl;
@@ -55,7 +67,7 @@ namespace OfficeAgent.ExcelAddIn
             if (string.IsNullOrWhiteSpace(ssoUrl))
             {
                 MessageBox.Show("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E SSO \u5730\u5740\u3002", "ISDP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
 
             loginButton.Label = "\u767B\u5F55\u4E2D...";
@@ -63,14 +75,28 @@ namespace OfficeAgent.ExcelAddIn
 
             try
             {
-                var popup = new SsoLoginPopup(ssoUrl, settings.SsoLoginSuccessPath, Globals.ThisAddIn.SharedCookies, Globals.ThisAddIn.CookieStore);
-                await popup.InitializeAsync();
-                var dialogResult = popup.ShowDialog();
-                if (dialogResult == DialogResult.OK)
+                using (var popup = new SsoLoginPopup(ssoUrl, settings.SsoLoginSuccessPath, Globals.ThisAddIn.SharedCookies, Globals.ThisAddIn.CookieStore))
+                {
+                    await popup.InitializeAsync().ConfigureAwait(true);
+                    var dialogResult = popup.ShowDialog();
+                    if (dialogResult != DialogResult.OK)
+                    {
+                        return false;
+                    }
+                }
+
+                if (refreshProjectsAfterSuccess)
                 {
                     PopulateProjectDropDown();
                     RefreshProjectDropDownFromController();
                 }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "ISDP", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
             finally
             {
@@ -209,25 +235,22 @@ namespace OfficeAgent.ExcelAddIn
                             $"Populated project dropdown. ItemCount={projectDropDown.Items.Count}; Text={GetProjectDropDownDisplayText() ?? "<null>"}");
                     }
                 }
+                catch (AuthenticationRequiredException ex)
+                {
+                    SetProjectDropDownStatus("请先登录");
+                    OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
+                    if (OperationResultDialog.ShowAuthenticationRequired(ex.Message))
+                    {
+                        BeginLoginFlow(refreshProjectsAfterSuccess: true);
+                    }
+                }
                 catch (InvalidOperationException ex)
                 {
-                    MessageBoxIcon icon;
-                    if (ex.Message.IndexOf("请先登录", StringComparison.Ordinal) >= 0)
-                    {
-                        icon = MessageBoxIcon.Warning;
-                        SetProjectDropDownStatus("请先登录");
-                        OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
-                    }
-                    else
-                    {
-                        icon = MessageBoxIcon.Error;
-                        SetProjectDropDownStatus("项目加载失败");
-                        OfficeAgentLog.Error("ribbon", "project_dropdown.load_failed", "Failed to load project list.", ex);
-                    }
-
+                    SetProjectDropDownStatus("项目加载失败");
+                    OfficeAgentLog.Error("ribbon", "project_dropdown.load_failed", "Failed to load project list.", ex);
                     ScheduleProjectLoadWarning(
                         $"项目列表加载失败。\r\n{ex.Message}",
-                        icon);
+                        MessageBoxIcon.Error);
                 }
                 catch (Exception ex)
                 {

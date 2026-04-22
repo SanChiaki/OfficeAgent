@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -17,6 +18,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly Func<string> activeSheetNameProvider;
         private readonly WorksheetSyncExecutionService executionService;
         private readonly IRibbonSyncDialogService dialogService;
+        private readonly Action authenticationLoginAction;
         private string lastRefreshedSheetName;
 
         public RibbonSyncController(
@@ -28,7 +30,8 @@ namespace OfficeAgent.ExcelAddIn
                 worksheetSyncService,
                 activeSheetNameProvider,
                 executionService: null,
-                new RibbonSyncDialogService())
+                new RibbonSyncDialogService(),
+                authenticationLoginAction: null)
         {
         }
 
@@ -42,7 +45,8 @@ namespace OfficeAgent.ExcelAddIn
                 worksheetSyncService,
                 activeSheetNameProvider,
                 executionService,
-                new RibbonSyncDialogService())
+                new RibbonSyncDialogService(),
+                authenticationLoginAction: null)
         {
         }
 
@@ -52,12 +56,30 @@ namespace OfficeAgent.ExcelAddIn
             Func<string> activeSheetNameProvider,
             WorksheetSyncExecutionService executionService,
             IRibbonSyncDialogService dialogService)
+            : this(
+                metadataStore,
+                worksheetSyncService,
+                activeSheetNameProvider,
+                executionService,
+                dialogService,
+                authenticationLoginAction: null)
+        {
+        }
+
+        internal RibbonSyncController(
+            IWorksheetMetadataStore metadataStore,
+            WorksheetSyncService worksheetSyncService,
+            Func<string> activeSheetNameProvider,
+            WorksheetSyncExecutionService executionService,
+            IRibbonSyncDialogService dialogService,
+            Action authenticationLoginAction)
         {
             this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
             this.activeSheetNameProvider = activeSheetNameProvider ?? throw new ArgumentNullException(nameof(activeSheetNameProvider));
             this.executionService = executionService;
             this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+            this.authenticationLoginAction = authenticationLoginAction;
 
             ActiveProjectDisplayName = DefaultProjectDisplayName;
             ActiveProjectId = string.Empty;
@@ -185,6 +207,10 @@ namespace OfficeAgent.ExcelAddIn
                 });
                 dialogService.ShowInfo("初始化当前表完成。");
             }
+            catch (AuthenticationRequiredException ex)
+            {
+                HandleAuthenticationRequired(ex);
+            }
             catch (Exception ex)
             {
                 dialogService.ShowError(ex.Message);
@@ -214,6 +240,10 @@ namespace OfficeAgent.ExcelAddIn
                 executionService.ExecuteDownload(plan);
                 dialogService.ShowInfo(
                     $"{plan.OperationName}完成。\r\n记录数：{plan.Rows?.Count ?? 0}\r\n字段数：{CountDownloadFields(plan)}");
+            }
+            catch (AuthenticationRequiredException ex)
+            {
+                HandleAuthenticationRequired(ex);
             }
             catch (Exception ex)
             {
@@ -245,6 +275,10 @@ namespace OfficeAgent.ExcelAddIn
 
                 executionService.ExecuteUpload(plan);
                 dialogService.ShowInfo($"{plan.OperationName}完成。\r\n提交单元格数：{preview.Changes.Length}");
+            }
+            catch (AuthenticationRequiredException ex)
+            {
+                HandleAuthenticationRequired(ex);
             }
             catch (Exception ex)
             {
@@ -340,6 +374,14 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             ApplyBindingState(binding);
+        }
+
+        private void HandleAuthenticationRequired(AuthenticationRequiredException ex)
+        {
+            if (dialogService.ShowAuthenticationRequired(ex.Message))
+            {
+                authenticationLoginAction?.Invoke();
+            }
         }
 
         private static int CountDownloadFields(WorksheetDownloadPlan plan)

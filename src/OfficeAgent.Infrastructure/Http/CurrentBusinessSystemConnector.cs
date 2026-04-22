@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Security.Authentication;
 using System.Text;
 using Newtonsoft.Json;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -304,12 +305,10 @@ namespace OfficeAgent.Infrastructure.Http
                 return;
             }
 
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            if (response.StatusCode == HttpStatusCode.Unauthorized ||
+                response.StatusCode == HttpStatusCode.Forbidden)
             {
-                var message = string.IsNullOrWhiteSpace(responseBody)
-                    ? "业务系统未登录，请先登录后重试。"
-                    : "业务系统未登录，请先登录后重试。";
-                throw new InvalidOperationException(message);
+                throw new AuthenticationRequiredException("当前未登录，请先登录");
             }
 
             response.EnsureSuccessStatusCode();

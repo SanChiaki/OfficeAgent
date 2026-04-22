@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -267,6 +268,49 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteInitializeCurrentSheetPromptsLoginWhenAuthenticationIsRequired()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BuildFieldMappingSeedException = new AuthenticationRequiredException("当前未登录，请先登录"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AuthenticationRequiredResult = true,
+            };
+            var loginTriggered = false;
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 9,
+            };
+
+            var controller = CreateController(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                () =>
+                {
+                    loginTriggered = true;
+                });
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Single(dialogService.AuthenticationRequiredMessages);
+            Assert.Equal("当前未登录，请先登录", dialogService.AuthenticationRequiredMessages[0]);
+            Assert.True(loginTriggered);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
         public void RefreshActiveProjectFromSheetMetadataLoadsBindingForCurrentSheet()
         {
             var metadataStore = new FakeWorksheetMetadataStore();
@@ -464,6 +508,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeDialogService dialogService,
             Func<string> sheetNameProvider)
         {
+            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null);
+        }
+
+        private static object CreateController(
+            FakeSystemConnector connector,
+            FakeWorksheetMetadataStore metadataStore,
+            FakeDialogService dialogService,
+            Func<string> sheetNameProvider,
+            Action authenticationLoginAction)
+        {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
             var executionService = CreateExecutionService(addInAssembly, connector, metadataStore);
@@ -474,24 +528,39 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
 
-            var ctor = controllerType.GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
+            var ctorTypes = authenticationLoginAction == null
+                ? new[]
                 {
                     typeof(IWorksheetMetadataStore),
                     typeof(WorksheetSyncService),
                     typeof(Func<string>),
                     executionService.GetType(),
                     dialogInterface,
-                },
+                }
+                : new[]
+                {
+                    typeof(IWorksheetMetadataStore),
+                    typeof(WorksheetSyncService),
+                    typeof(Func<string>),
+                    executionService.GetType(),
+                    dialogInterface,
+                    typeof(Action),
+                };
+
+            var ctor = controllerType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: ctorTypes,
                 modifiers: null);
 
             if (ctor == null)
             {
                 throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
             }
-            return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() });
+
+            return authenticationLoginAction == null
+                ? ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() })
+                : ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction });
         }
 
         private static object CreateExecutionService(
@@ -703,6 +772,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public string LastBuildFieldMappingSeedProjectId { get; private set; }
 
+            public Exception BuildFieldMappingSeedException { get; set; }
+
             public IReadOnlyList<ProjectOption> GetProjects()
             {
                 return Array.Empty<ProjectOption>();
@@ -729,6 +800,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public IReadOnlyList<SheetFieldMappingRow> BuildFieldMappingSeed(string sheetName, string projectId)
             {
+                if (BuildFieldMappingSeedException != null)
+                {
+                    throw BuildFieldMappingSeedException;
+                }
+
                 LastBuildFieldMappingSeedProjectId = projectId;
                 return FieldMappingSeedRows;
             }
@@ -821,7 +897,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<SheetBinding> ProjectLayoutPrompts { get; } = new List<SheetBinding>();
 
+            public List<string> AuthenticationRequiredMessages { get; } = new List<string>();
+
             public SheetBinding NextProjectLayoutBinding { get; set; }
+
+            public bool AuthenticationRequiredResult { get; set; }
 
             public override IMessage Invoke(IMessage msg)
             {
@@ -843,6 +923,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "ShowError":
                         ErrorMessages.Add((string)call.InArgs[0]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ShowAuthenticationRequired":
+                        AuthenticationRequiredMessages.Add((string)call.InArgs[0]);
+                        return new ReturnMessage(AuthenticationRequiredResult, null, 0, call.LogicalCallContext, call);
                     default:
                         throw new NotSupportedException(call.MethodName);
                 }

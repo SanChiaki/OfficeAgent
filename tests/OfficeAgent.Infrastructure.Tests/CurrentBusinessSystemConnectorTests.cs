@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Infrastructure.Http;
 using Xunit;
@@ -54,16 +55,18 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("performance", projects[0].ProjectId);
         }
 
-        [Fact]
-        public void GetProjectsPromptsLoginWhenProjectsEndpointReturnsUnauthorized()
+        [Theory]
+        [InlineData(HttpStatusCode.Unauthorized)]
+        [InlineData(HttpStatusCode.Forbidden)]
+        public void GetProjectsPromptsLoginWhenProjectsEndpointRequiresAuthentication(HttpStatusCode statusCode)
         {
             var connector = CurrentBusinessSystemConnector.ForTests(
                 "https://api.internal.example",
-                new UnauthorizedProjectsHandler());
+                new AuthRequiredProjectsHandler(statusCode));
 
-            var error = Assert.Throws<InvalidOperationException>(() => connector.GetProjects());
+            var error = Assert.Throws<AuthenticationRequiredException>(() => connector.GetProjects());
 
-            Assert.Contains("请先登录", error.Message);
+            Assert.Equal("当前未登录，请先登录", error.Message);
         }
 
         [Fact]
@@ -284,11 +287,18 @@ namespace OfficeAgent.Infrastructure.Tests
             }
         }
 
-        private sealed class UnauthorizedProjectsHandler : HttpMessageHandler
+        private sealed class AuthRequiredProjectsHandler : HttpMessageHandler
         {
+            private readonly HttpStatusCode statusCode;
+
+            public AuthRequiredProjectsHandler(HttpStatusCode statusCode)
+            {
+                this.statusCode = statusCode;
+            }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                return Task.FromResult(new HttpResponseMessage(statusCode)
                 {
                     Content = new StringContent(
                         "{\"code\":\"unauthorized\",\"message\":\"未登录，请先通过 SSO 登录。\"}",

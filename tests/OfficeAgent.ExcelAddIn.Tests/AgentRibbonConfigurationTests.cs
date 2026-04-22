@@ -160,9 +160,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("catch (InvalidOperationException ex)", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("请先登录", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("MessageBoxIcon.Warning", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("catch (AuthenticationRequiredException ex)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ShowAuthenticationRequired", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -174,7 +173,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "AgentRibbon.cs"));
 
             Assert.Contains("SetProjectDropDownStatus(\"请先登录\")", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("ScheduleProjectLoadWarning(", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ExecuteLoginFlow", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AuthenticationPromptOffersPointMeToLoginButton()
+        {
+            var dialogCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "OperationResultDialog.cs"));
+
+            Assert.Contains("点我登录", dialogCodeText, StringComparison.Ordinal);
+            Assert.Contains("ShowAuthenticationRequired", dialogCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AuthenticationPromptSizesButtonsFromMeasuredTextInsteadOfFixedWidths()
+        {
+            var dialogCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "OperationResultDialog.cs"));
+
+            Assert.Contains("TextRenderer.MeasureText", dialogCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("new Rectangle(154, 88, 90, 28)", dialogCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("new Rectangle(250, 88, 90, 28)", dialogCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
