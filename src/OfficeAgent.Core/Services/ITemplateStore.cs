@@ -11,6 +11,6 @@ namespace OfficeAgent.Core.Services
 
         TemplateDefinition SaveNew(TemplateDefinition template);
 
-        TemplateDefinition SaveExisting(TemplateDefinition template);
+        TemplateDefinition SaveExisting(TemplateDefinition template, int expectedRevision);
     }
 }

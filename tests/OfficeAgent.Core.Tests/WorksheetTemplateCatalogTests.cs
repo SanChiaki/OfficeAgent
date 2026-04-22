@@ -142,6 +142,170 @@ namespace OfficeAgent.Core.Tests
             Assert.Null(state.StoredTemplateRevision);
         }
 
+        [Fact]
+        public void ApplyTemplateToSheetRejectsIncompatibleTemplateDefinition()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            var incompatibleTemplate = CreateTemplate("template-a", "模板A", "system-a", "project-a");
+            incompatibleTemplate.FieldMappingDefinition = new FieldMappingTableDefinition
+            {
+                SystemKey = "system-a",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "LegacyField",
+                        Role = FieldMappingSemanticRole.ApiFieldKey,
+                    },
+                },
+            };
+            incompatibleTemplate.FieldMappingDefinitionFingerprint =
+                TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(incompatibleTemplate.FieldMappingDefinition);
+            templateStore.Templates[incompatibleTemplate.TemplateId] = incompatibleTemplate;
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                catalog.ApplyTemplateToSheet("Sheet-Now", incompatibleTemplate.TemplateId));
+
+            Assert.Contains("compatible", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void GetSheetStateDisablesSaveAndAvoidsDirtyForIncompatibleTemplateDefinition()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            metadataStore.FieldMappings["Sheet-Now"] = CreateFieldMappings("Sheet-Now");
+            templateBindingStore.TemplateBindings["Sheet-Now"] = new SheetTemplateBinding
+            {
+                SheetName = "Sheet-Now",
+                TemplateId = "template-a",
+                TemplateName = "模板A",
+                TemplateRevision = 1,
+                TemplateOrigin = "store-template",
+                AppliedFingerprint = "outdated-fingerprint",
+            };
+            var incompatibleTemplate = CreateTemplate("template-a", "模板A", "system-a", "project-a");
+            incompatibleTemplate.FieldMappingDefinition = new FieldMappingTableDefinition
+            {
+                SystemKey = "system-a",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "LegacyField",
+                        Role = FieldMappingSemanticRole.ApiFieldKey,
+                    },
+                },
+            };
+            incompatibleTemplate.FieldMappingDefinitionFingerprint =
+                TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(incompatibleTemplate.FieldMappingDefinition);
+            templateStore.Templates[incompatibleTemplate.TemplateId] = incompatibleTemplate;
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            var state = catalog.GetSheetState("Sheet-Now");
+
+            Assert.False(state.CanSaveTemplate);
+            Assert.False(state.IsDirty);
+            Assert.False(state.TemplateMissing);
+        }
+
+        [Fact]
+        public void SaveSheetToExistingTemplatePassesExpectedRevisionToStore()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            metadataStore.FieldMappings["Sheet-Now"] = CreateFieldMappings("Sheet-Now");
+            templateBindingStore.TemplateBindings["Sheet-Now"] = new SheetTemplateBinding
+            {
+                SheetName = "Sheet-Now",
+                TemplateId = "template-a",
+                TemplateName = "模板A",
+                TemplateRevision = 1,
+                TemplateOrigin = "store-template",
+            };
+            templateStore.Templates["template-a"] = CreateTemplate("template-a", "模板A", "system-a", "project-a", 1);
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            catalog.SaveSheetToExistingTemplate("Sheet-Now", "template-a", 1, false);
+
+            var call = Assert.Single(templateStore.SaveExistingCalls);
+            Assert.Equal(1, call.ExpectedRevision);
+        }
+
+        [Fact]
+        public void SaveSheetToExistingTemplateUsesLatestStoredRevisionWhenOverwriteEnabled()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            metadataStore.FieldMappings["Sheet-Now"] = CreateFieldMappings("Sheet-Now");
+            templateBindingStore.TemplateBindings["Sheet-Now"] = new SheetTemplateBinding
+            {
+                SheetName = "Sheet-Now",
+                TemplateId = "template-a",
+                TemplateName = "模板A",
+                TemplateRevision = 1,
+                TemplateOrigin = "store-template",
+            };
+            templateStore.Templates["template-a"] = CreateTemplate("template-a", "模板A", "system-a", "project-a", 4);
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            catalog.SaveSheetToExistingTemplate("Sheet-Now", "template-a", 1, true);
+
+            var call = Assert.Single(templateStore.SaveExistingCalls);
+            Assert.Equal(4, call.ExpectedRevision);
+        }
+
+        [Fact]
+        public void SaveSheetToExistingTemplateRejectsIncompatibleTemplateDefinition()
+        {
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var templateBindingStore = new FakeWorksheetTemplateBindingStore();
+            var templateStore = new FakeTemplateStore();
+            metadataStore.Bindings["Sheet-Now"] = CreateBinding("Sheet-Now", "system-a", "project-a", "项目A");
+            metadataStore.FieldMappings["Sheet-Now"] = CreateFieldMappings("Sheet-Now");
+            templateBindingStore.TemplateBindings["Sheet-Now"] = new SheetTemplateBinding
+            {
+                SheetName = "Sheet-Now",
+                TemplateId = "template-a",
+                TemplateName = "模板A",
+                TemplateRevision = 1,
+                TemplateOrigin = "store-template",
+            };
+            var incompatibleTemplate = CreateTemplate("template-a", "模板A", "system-a", "project-a", 1);
+            incompatibleTemplate.FieldMappingDefinition = new FieldMappingTableDefinition
+            {
+                SystemKey = "system-a",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition
+                    {
+                        ColumnName = "LegacyField",
+                        Role = FieldMappingSemanticRole.ApiFieldKey,
+                    },
+                },
+            };
+            incompatibleTemplate.FieldMappingDefinitionFingerprint =
+                TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(incompatibleTemplate.FieldMappingDefinition);
+            templateStore.Templates["template-a"] = incompatibleTemplate;
+            var catalog = CreateCatalog(metadataStore, templateBindingStore, templateStore);
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                catalog.SaveSheetToExistingTemplate("Sheet-Now", "template-a", 1, false));
+
+            Assert.Contains("compatible", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(templateStore.SaveExistingCalls);
+        }
+
         private static WorksheetTemplateCatalog CreateCatalog(
             FakeWorksheetMetadataStore metadataStore,
             FakeWorksheetTemplateBindingStore templateBindingStore,
@@ -192,7 +356,7 @@ namespace OfficeAgent.Core.Tests
             string projectId,
             int revision = 1)
         {
-            return new TemplateDefinition
+            var template = new TemplateDefinition
             {
                 TemplateId = templateId,
                 TemplateName = templateName,
@@ -212,9 +376,18 @@ namespace OfficeAgent.Core.Tests
                             ColumnName = "ApiFieldKey",
                             Role = FieldMappingSemanticRole.ApiFieldKey,
                         },
+                        new FieldMappingColumnDefinition
+                        {
+                            ColumnName = "HeaderType",
+                            Role = FieldMappingSemanticRole.HeaderType,
+                        },
+                        new FieldMappingColumnDefinition
+                        {
+                            ColumnName = "Excel L1",
+                            Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
+                        },
                     },
                 },
-                FieldMappingDefinitionFingerprint = "definition-fingerprint",
                 FieldMappings = new[]
                 {
                     new TemplateFieldMappingRow
@@ -231,6 +404,9 @@ namespace OfficeAgent.Core.Tests
                 CreatedAtUtc = DateTime.UtcNow.AddDays(-1),
                 UpdatedAtUtc = DateTime.UtcNow,
             };
+            template.FieldMappingDefinitionFingerprint =
+                TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(template.FieldMappingDefinition);
+            return template;
         }
 
         private sealed class FakeSystemConnector : ISystemConnector
@@ -383,11 +559,18 @@ namespace OfficeAgent.Core.Tests
 
         private sealed class FakeTemplateStore : ITemplateStore
         {
+            public sealed class SaveExistingCall
+            {
+                public TemplateDefinition Template { get; set; }
+
+                public int ExpectedRevision { get; set; }
+            }
+
             public Dictionary<string, TemplateDefinition> Templates { get; } = new Dictionary<string, TemplateDefinition>(StringComparer.OrdinalIgnoreCase);
 
             public List<TemplateDefinition> SaveNewCalls { get; } = new List<TemplateDefinition>();
 
-            public List<TemplateDefinition> SaveExistingCalls { get; } = new List<TemplateDefinition>();
+            public List<SaveExistingCall> SaveExistingCalls { get; } = new List<SaveExistingCall>();
 
             public IReadOnlyList<TemplateDefinition> ListByProject(string systemKey, string projectId)
             {
@@ -411,9 +594,14 @@ namespace OfficeAgent.Core.Tests
                 return template;
             }
 
-            public TemplateDefinition SaveExisting(TemplateDefinition template)
+            public TemplateDefinition SaveExisting(TemplateDefinition template, int expectedRevision)
             {
-                SaveExistingCalls.Add(template);
+                SaveExistingCalls.Add(
+                    new SaveExistingCall
+                    {
+                        Template = template,
+                        ExpectedRevision = expectedRevision,
+                    });
                 Templates[template.TemplateId] = template;
                 return template;
             }

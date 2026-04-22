@@ -21,18 +21,16 @@ namespace OfficeAgent.Core.Templates
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
 
-            var payload = string.Join(
-                "\n",
-                new[]
-                {
-                    template.SystemKey ?? string.Empty,
-                    template.ProjectId ?? string.Empty,
-                    template.ProjectName ?? string.Empty,
-                    template.HeaderStartRow.ToString(),
-                    template.HeaderRowCount.ToString(),
-                    template.DataStartRow.ToString(),
-                    BuildFieldMappingDefinitionFingerprint(template.FieldMappingDefinition),
-                }.Concat(canonicalRows));
+            var payload = EncodeParts(
+                "template",
+                template.SystemKey ?? string.Empty,
+                template.ProjectId ?? string.Empty,
+                template.ProjectName ?? string.Empty,
+                template.HeaderStartRow.ToString(),
+                template.HeaderRowCount.ToString(),
+                template.DataStartRow.ToString(),
+                BuildFieldMappingDefinitionFingerprint(template.FieldMappingDefinition),
+                EncodeParts(canonicalRows));
 
             return ComputeSha256Hex(payload);
         }
@@ -49,8 +47,7 @@ namespace OfficeAgent.Core.Templates
                 .Select((column, index) =>
                 {
                     var value = column ?? new FieldMappingColumnDefinition();
-                    return string.Join(
-                        "|",
+                    return EncodeParts(
                         index.ToString(),
                         value.ColumnName ?? string.Empty,
                         value.Role.ToString(),
@@ -58,9 +55,7 @@ namespace OfficeAgent.Core.Templates
                 })
                 .ToArray();
 
-            var payload = string.Join(
-                "\n",
-                new[] { definition.SystemKey ?? string.Empty }.Concat(canonicalColumns));
+            var payload = EncodeParts("definition", definition.SystemKey ?? string.Empty, EncodeParts(canonicalColumns));
 
             return ComputeSha256Hex(payload);
         }
@@ -71,9 +66,33 @@ namespace OfficeAgent.Core.Templates
             var pairs = values
                 .Where(pair => !string.Equals(pair.Key, "SheetName", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-                .Select(pair => string.Join("=", pair.Key ?? string.Empty, pair.Value ?? string.Empty));
+                .Select(pair => EncodeParts(pair.Key ?? string.Empty, pair.Value ?? string.Empty));
 
-            return string.Join("|", pairs);
+            return EncodeParts(pairs);
+        }
+
+        private static string EncodeParts(IEnumerable<string> values)
+        {
+            if (values == null)
+            {
+                return "0#";
+            }
+
+            var builder = new StringBuilder();
+            foreach (var value in values)
+            {
+                var token = value ?? string.Empty;
+                builder.Append(token.Length.ToString());
+                builder.Append('#');
+                builder.Append(token);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string EncodeParts(params string[] values)
+        {
+            return EncodeParts((IEnumerable<string>)values ?? Array.Empty<string>());
         }
 
         private static string ComputeSha256Hex(string value)

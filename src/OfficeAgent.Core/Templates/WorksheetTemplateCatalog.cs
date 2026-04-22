@@ -78,8 +78,9 @@ namespace OfficeAgent.Core.Templates
 
             state.StoredTemplateRevision = storedTemplate.Revision;
             state.TemplateMissing = false;
-            state.CanSaveTemplate = IsTemplateInSameProject(binding, storedTemplate);
-            state.IsDirty = IsDirty(sheetName, binding, templateBinding);
+            var isCompatible = IsTemplateCompatibleWithCurrentDefinition(binding, storedTemplate);
+            state.CanSaveTemplate = isCompatible;
+            state.IsDirty = isCompatible && IsDirty(sheetName, binding, templateBinding);
             return state;
         }
 
@@ -89,6 +90,7 @@ namespace OfficeAgent.Core.Templates
             var template = templateStore.Load(templateId)
                 ?? throw new InvalidOperationException("Template was not found.");
             EnsureTemplateProjectCompatibility(binding, template);
+            EnsureTemplateDefinitionCompatibility(binding, template);
 
             var nextBinding = templateDefinitionNormalizer.ToSheetBinding(template, sheetName);
             var nextFieldMappings = templateDefinitionNormalizer.ToSheetFieldMappings(template, sheetName);
@@ -126,11 +128,16 @@ namespace OfficeAgent.Core.Templates
             var storedTemplate = templateStore.Load(templateId)
                 ?? throw new InvalidOperationException("Template was not found.");
             EnsureTemplateProjectCompatibility(binding, storedTemplate);
+            EnsureTemplateDefinitionCompatibility(binding, storedTemplate);
 
             if (storedTemplate.Revision != expectedRevision && !overwriteRevisionConflict)
             {
                 throw new InvalidOperationException("Template revision conflict.");
             }
+
+            var storeExpectedRevision = overwriteRevisionConflict
+                ? storedTemplate.Revision
+                : expectedRevision;
 
             var timestamp = DateTime.UtcNow;
             var snapshot = BuildSnapshot(
@@ -141,7 +148,7 @@ namespace OfficeAgent.Core.Templates
                 storedTemplate.Revision + 1,
                 storedTemplate.CreatedAtUtc == default(DateTime) ? timestamp : storedTemplate.CreatedAtUtc,
                 timestamp);
-            var savedTemplate = templateStore.SaveExisting(snapshot);
+            var savedTemplate = templateStore.SaveExisting(snapshot, storeExpectedRevision);
 
             worksheetTemplateBindingStore.SaveTemplateBinding(
                 new SheetTemplateBinding
@@ -266,6 +273,30 @@ namespace OfficeAgent.Core.Templates
             {
                 throw new InvalidOperationException("Template project does not match current sheet binding.");
             }
+        }
+
+        private void EnsureTemplateDefinitionCompatibility(SheetBinding binding, TemplateDefinition template)
+        {
+            if (!IsTemplateCompatibleWithCurrentDefinition(binding, template))
+            {
+                throw new InvalidOperationException("Template definition is not compatible with current connector definition.");
+            }
+        }
+
+        private bool IsTemplateCompatibleWithCurrentDefinition(SheetBinding binding, TemplateDefinition template)
+        {
+            if (!IsTemplateInSameProject(binding, template))
+            {
+                return false;
+            }
+
+            var currentDefinition = GetFieldMappingDefinition(binding);
+            var currentFingerprint = TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(currentDefinition);
+            var templateFingerprint = string.IsNullOrWhiteSpace(template.FieldMappingDefinitionFingerprint)
+                ? TemplateFingerprintBuilder.BuildFieldMappingDefinitionFingerprint(template.FieldMappingDefinition)
+                : template.FieldMappingDefinitionFingerprint;
+
+            return string.Equals(currentFingerprint, templateFingerprint, StringComparison.Ordinal);
         }
 
         private bool TryLoadBinding(string sheetName, out SheetBinding binding)
