@@ -6,6 +6,8 @@
 **/dist/
 **/*.tsbuildinfo
 /artifacts/installer/
+/installer/OfficeAgent.SetupBundle/prereqs/*.exe
+!/installer/OfficeAgent.SetupBundle/prereqs/README.md
 *.user
 *.suo
 .env

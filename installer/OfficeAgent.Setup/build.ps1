@@ -36,6 +36,12 @@ $addinProject = Join-Path $repoRoot "src\\OfficeAgent.ExcelAddIn\\OfficeAgent.Ex
 $addinOutputRoot = Join-Path $repoRoot "src\\OfficeAgent.ExcelAddIn\\bin\\$Configuration"
 $payloadRoot = Join-Path $repoRoot "artifacts\\installer\\payload"
 $outputRoot = Join-Path $repoRoot "artifacts\\installer"
+$bundleRoot = Join-Path $repoRoot "installer\\OfficeAgent.SetupBundle"
+$bundleSource = Join-Path $bundleRoot "Bundle.wxs"
+$bundlePrereqRoot = Join-Path $bundleRoot "prereqs"
+$offlineSetupPath = Join-Path $outputRoot "OfficeAgent.Setup.exe"
+$offlineSetupWixPdbPath = Join-Path $outputRoot "OfficeAgent.Setup.wixpdb"
+$toolsManifestPath = Join-Path $repoRoot ".config\\dotnet-tools.json"
 $wixSource = Join-Path $PSScriptRoot "Product.wxs"
 $msbuild = Select-MsBuildExe
 $buildVstoAddInScript = Join-Path $repoRoot "eng\\Build-VstoAddIn.ps1"
@@ -52,6 +58,30 @@ function Invoke-NativeCommand {
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    }
+}
+
+function Ensure-WixExtension {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExtensionReference
+    )
+
+    Write-Host "Ensuring WiX extension $ExtensionReference..."
+    Invoke-NativeCommand "dotnet" "wix" "extension" "add" "--global" $ExtensionReference
+}
+
+function Assert-FileExists {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Missing ${Description}: $Path"
     }
 }
 
@@ -83,6 +113,29 @@ function Build-MsiForArchitecture {
 }
 
 Write-Host "Using MSBuild: $msbuild"
+Assert-FileExists -Path $toolsManifestPath -Description "dotnet tools manifest"
+$toolsManifest = Get-Content -Raw $toolsManifestPath | ConvertFrom-Json
+$wixToolVersion = $toolsManifest.tools.wix.version
+$wixBalExtension = "WixToolset.Bal.wixext"
+$wixUtilExtension = "WixToolset.Util.wixext"
+$wixExtensionCacheRoot = Join-Path $env:USERPROFILE ".wix\\extensions"
+$wixExtensionCacheFolderName = "wixext{0}" -f $wixToolVersion.Split('.')[0]
+$wixBalExtensionPath = Join-Path $wixExtensionCacheRoot "$wixBalExtension\\$wixToolVersion\\$wixExtensionCacheFolderName\\WixToolset.BootstrapperApplications.wixext.dll"
+$wixUtilExtensionPath = Join-Path $wixExtensionCacheRoot "$wixUtilExtension\\$wixToolVersion\\$wixExtensionCacheFolderName\\WixToolset.Util.wixext.dll"
+
+if ([string]::IsNullOrWhiteSpace($wixToolVersion)) {
+    throw "Unable to determine WiX tool version from $toolsManifestPath"
+}
+
+$vstoRuntimeInstaller = Join-Path $bundlePrereqRoot "vstor_redist.exe"
+$webView2RuntimeInstallerX86 = Join-Path $bundlePrereqRoot "MicrosoftEdgeWebView2RuntimeInstallerX86.exe"
+$webView2RuntimeInstallerX64 = Join-Path $bundlePrereqRoot "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+
+Assert-FileExists -Path $bundleSource -Description "offline setup bundle source"
+Assert-FileExists -Path $vstoRuntimeInstaller -Description "VSTO runtime redistributable"
+Assert-FileExists -Path $webView2RuntimeInstallerX86 -Description "WebView2 x86 standalone installer"
+Assert-FileExists -Path $webView2RuntimeInstallerX64 -Description "WebView2 x64 standalone installer"
+
 Write-Host "Installing frontend dependencies..."
 Push-Location $frontendRoot
 try {
@@ -109,6 +162,12 @@ try {
 finally {
     Pop-Location
 }
+
+Write-Host "Ensuring WiX bundle extensions are installed..."
+Ensure-WixExtension "$wixBalExtension/$wixToolVersion"
+Ensure-WixExtension "$wixUtilExtension/$wixToolVersion"
+Assert-FileExists -Path $wixBalExtensionPath -Description "WiX bootstrapper extension"
+Assert-FileExists -Path $wixUtilExtensionPath -Description "WiX util extension"
 
 $commitCount = [int](git rev-list --count HEAD).Trim()
 $productVersion = "1.0.$commitCount"
@@ -169,5 +228,20 @@ foreach ($architecture in $Architectures) {
     $builtMsiPaths += Build-MsiForArchitecture -Architecture $architecture -ProductVersion $productVersion
 }
 
-Write-Host "MSI created at:"
+Assert-FileExists -Path (Join-Path $outputRoot "OfficeAgent.Setup-x86.msi") -Description "x86 OfficeAgent MSI"
+Assert-FileExists -Path (Join-Path $outputRoot "OfficeAgent.Setup-x64.msi") -Description "x64 OfficeAgent MSI"
+
+if (Test-Path $offlineSetupPath) {
+    Remove-Item -Force $offlineSetupPath
+}
+
+if (Test-Path $offlineSetupWixPdbPath) {
+    Remove-Item -Force $offlineSetupWixPdbPath
+}
+
+Write-Host "Building offline setup bundle..."
+Invoke-NativeCommand "dotnet" "wix" "build" $bundleSource "-arch" "x86" "-ext" $wixBalExtensionPath "-ext" $wixUtilExtensionPath "-bindpath" $bundleRoot "-bindpath" $outputRoot "-d" "ProductVersion=$productVersion" "-o" $offlineSetupPath
+
+Write-Host "Installer outputs created at:"
 $builtMsiPaths | ForEach-Object { Write-Host " - $_" }
+Write-Host " - $offlineSetupPath"

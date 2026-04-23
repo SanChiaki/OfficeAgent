@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Bundle
+    Name="OfficeAgent"
+    Manufacturer="OfficeAgent"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="A83D3E4A-FE0B-4A49-82A7-6528D0908AA5"
+    Compressed="yes">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        Theme="rtfLicense"
+        LicenseFile="BundleLicense.rtf" />
+    </BootstrapperApplication>
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeVersion64"
+      Variable="VstoRuntimeVersion64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4R"
+      Value="Version"
+      Result="value"
+      Bitness="always64" />
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeVersion32"
+      Variable="VstoRuntimeVersion32"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4R"
+      Value="Version"
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeInstall64"
+      Variable="VstoRuntimeInstall64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4"
+      Value="Install"
+      Result="value"
+      Bitness="always64" />
+
+    <util:RegistrySearch
+      Id="SearchVstoRuntimeInstall32"
+      Variable="VstoRuntimeInstall32"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\VSTO Runtime Setup\v4"
+      Value="Install"
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeMachine32"
+      Variable="WebView2RuntimeMachine32"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+      Value="pv"
+      Result="value"
+      Bitness="always32" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeMachine64"
+      Variable="WebView2RuntimeMachine64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+      Value="pv"
+      Result="value"
+      Bitness="always64" />
+
+    <util:RegistrySearch
+      Id="SearchWebView2RuntimeUser"
+      Variable="WebView2RuntimeUser"
+      Root="HKCU"
+      Key="Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+      Value="pv"
+      Result="value" />
+
+    <Chain>
+      <ExePackage
+        Id="VstoRuntime"
+        DisplayName="Microsoft Visual Studio Tools for Office Runtime"
+        SourceFile="prereqs\vstor_redist.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        DetectCondition="VstoRuntimeVersion64 OR VstoRuntimeVersion32 OR VstoRuntimeInstall64 = 1 OR VstoRuntimeInstall32 = 1"
+        InstallArguments="/quiet /norestart" />
+
+      <ExePackage
+        Id="WebView2RuntimeX86"
+        DisplayName="Microsoft Edge WebView2 Runtime (x86)"
+        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX86.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64 = 0"
+        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
+        InstallArguments="/silent /install" />
+
+      <ExePackage
+        Id="WebView2RuntimeX64"
+        DisplayName="Microsoft Edge WebView2 Runtime (x64)"
+        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+        PerMachine="yes"
+        Permanent="yes"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64"
+        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
+        InstallArguments="/silent /install" />
+
+      <MsiPackage
+        Id="OfficeAgentMsiX86"
+        DisplayName="OfficeAgent (x86)"
+        SourceFile="OfficeAgent.Setup-x86.msi"
+        Visible="no"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64 = 0" />
+
+      <MsiPackage
+        Id="OfficeAgentMsiX64"
+        DisplayName="OfficeAgent (x64)"
+        SourceFile="OfficeAgent.Setup-x64.msi"
+        Visible="no"
+        Vital="yes"
+        Compressed="yes"
+        InstallCondition="VersionNT64" />
+    </Chain>
+  </Bundle>
+</Wix>
