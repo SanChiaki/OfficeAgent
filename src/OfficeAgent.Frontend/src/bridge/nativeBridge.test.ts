@@ -90,6 +90,45 @@ describe('NativeBridge', () => {
       model: 'gpt-5-mini',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
+      uiLanguageOverride: 'system',
+    });
+
+    await expect(bridge.getHostContext()).resolves.toEqual({
+      resolvedUiLocale: 'en',
+      uiLanguageOverride: 'system',
+    });
+
+    await expect(bridge.saveSettings({
+      apiKey: 'key-123',
+      baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'https://business.example.com',
+      model: 'gpt-5-mini',
+      ssoUrl: 'https://sso.example.com',
+      ssoLoginSuccessPath: '/auth/success',
+      uiLanguageOverride: 'zh',
+    })).resolves.toEqual({
+      apiKey: 'key-123',
+      baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'https://business.example.com',
+      model: 'gpt-5-mini',
+      ssoUrl: 'https://sso.example.com',
+      ssoLoginSuccessPath: '/auth/success',
+      uiLanguageOverride: 'zh',
+    });
+
+    await expect(bridge.getSettings()).resolves.toEqual({
+      apiKey: 'key-123',
+      baseUrl: 'https://api.example.com',
+      businessBaseUrl: 'https://business.example.com',
+      model: 'gpt-5-mini',
+      ssoUrl: 'https://sso.example.com',
+      ssoLoginSuccessPath: '/auth/success',
+      uiLanguageOverride: 'zh',
+    });
+
+    await expect(bridge.getHostContext()).resolves.toEqual({
+      resolvedUiLocale: 'en',
+      uiLanguageOverride: 'zh',
     });
 
     await expect(bridge.getSelectionContext()).resolves.toEqual({
@@ -342,6 +381,9 @@ describe('NativeBridge', () => {
         baseUrl: 'https://api.example.com',
         businessBaseUrl: 'https://business.example.com',
         model: 'gpt-5-mini',
+        ssoUrl: '',
+        ssoLoginSuccessPath: '',
+        uiLanguageOverride: 'system',
       },
     });
 
@@ -350,6 +392,34 @@ describe('NativeBridge', () => {
       baseUrl: 'https://api.example.com',
       businessBaseUrl: 'https://business.example.com',
       model: 'gpt-5-mini',
+      ssoUrl: '',
+      ssoLoginSuccessPath: '',
+      uiLanguageOverride: 'system',
+    });
+  });
+
+  it('sends getHostContext requests through the structured bridge contract', async () => {
+    const webView = createMockWebView();
+    const bridge = new NativeBridge(webView);
+
+    const pending = bridge.getHostContext();
+    const [request] = webView.postedMessages as Array<{ type: string; requestId: string }>;
+
+    expect(request.type).toBe('bridge.getHostContext');
+
+    webView.dispatch({
+      type: 'bridge.getHostContext',
+      requestId: request.requestId,
+      ok: true,
+      payload: {
+        resolvedUiLocale: 'zh',
+        uiLanguageOverride: 'en',
+      },
+    });
+
+    await expect(pending).resolves.toEqual({
+      resolvedUiLocale: 'zh',
+      uiLanguageOverride: 'en',
     });
   });
 

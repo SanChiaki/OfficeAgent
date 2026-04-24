@@ -16,6 +16,12 @@ export interface AppSettings {
   model: string;
   ssoUrl: string;
   ssoLoginSuccessPath: string;
+  uiLanguageOverride?: 'system' | 'zh' | 'en';
+}
+
+export interface HostContext {
+  resolvedUiLocale: 'zh' | 'en';
+  uiLanguageOverride: 'system' | 'zh' | 'en';
 }
 
 export interface LoginResult {

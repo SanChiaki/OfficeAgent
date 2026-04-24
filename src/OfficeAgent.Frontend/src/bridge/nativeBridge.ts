@@ -4,12 +4,13 @@
   BridgeEventEnvelope,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
-  ExcelCommand,
-  ExcelCommandPreview,
-  ExcelCommandResult,
   AgentPlan,
   AgentRequestEnvelope,
   AgentResult,
+  ExcelCommand,
+  ExcelCommandPreview,
+  ExcelCommandResult,
+  HostContext,
   LoginResult,
   LoginStatus,
   SelectionContext,
@@ -25,6 +26,7 @@
 const BRIDGE_TYPES = {
   ping: 'bridge.ping',
   getSettings: 'bridge.getSettings',
+  getHostContext: 'bridge.getHostContext',
   getSelectionContext: 'bridge.getSelectionContext',
   selectionContextChanged: 'bridge.selectionContextChanged',
   getSessions: 'bridge.getSessions',
@@ -50,6 +52,7 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   model: 'gpt-5-mini',
   ssoUrl: '',
   ssoLoginSuccessPath: '',
+  uiLanguageOverride: 'system',
 };
 
 const BROWSER_PREVIEW_SELECTION_CONTEXT: SelectionContext = {
@@ -100,6 +103,7 @@ type SelectionContextListener = (payload: SelectionContext) => void;
 
 export class NativeBridge {
   private readonly webView?: WebViewHostLike;
+  private browserPreviewSettings: AppSettings = { ...BROWSER_PREVIEW_SETTINGS };
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly selectionContextListeners = new Set<SelectionContextListener>();
   private readonly handleMessage = (event: WebViewMessageEventLike) => {
@@ -148,6 +152,10 @@ export class NativeBridge {
 
   getSettings() {
     return this.invoke<void, AppSettings>(BRIDGE_TYPES.getSettings);
+  }
+
+  getHostContext() {
+    return this.invoke<void, HostContext>(BRIDGE_TYPES.getHostContext);
   }
 
   getSelectionContext() {
@@ -204,7 +212,14 @@ export class NativeBridge {
       }
 
       if (type === BRIDGE_TYPES.getSettings) {
-        return Promise.resolve(BROWSER_PREVIEW_SETTINGS as TResult);
+        return Promise.resolve(this.browserPreviewSettings as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.getHostContext) {
+        return Promise.resolve({
+          resolvedUiLocale: 'en',
+          uiLanguageOverride: this.browserPreviewSettings.uiLanguageOverride ?? 'system',
+        } as TResult);
       }
 
       if (type === BRIDGE_TYPES.getSelectionContext) {
@@ -220,7 +235,7 @@ export class NativeBridge {
       }
 
       if (type === BRIDGE_TYPES.saveSettings) {
-        return Promise.resolve({
+        this.browserPreviewSettings = {
           apiKey: typeof (payload as AppSettings | undefined)?.apiKey === 'string' ? (payload as AppSettings).apiKey : '',
           baseUrl: typeof (payload as AppSettings | undefined)?.baseUrl === 'string'
             ? (payload as AppSettings).baseUrl
@@ -237,7 +252,12 @@ export class NativeBridge {
           ssoLoginSuccessPath: typeof (payload as AppSettings | undefined)?.ssoLoginSuccessPath === 'string'
             ? (payload as AppSettings).ssoLoginSuccessPath
             : BROWSER_PREVIEW_SETTINGS.ssoLoginSuccessPath,
-        } as TResult);
+          uiLanguageOverride: isValidUiLanguageOverride((payload as AppSettings | undefined)?.uiLanguageOverride)
+            ? (payload as AppSettings).uiLanguageOverride
+            : BROWSER_PREVIEW_SETTINGS.uiLanguageOverride,
+        };
+
+        return Promise.resolve(this.browserPreviewSettings as TResult);
       }
 
       if (type === BRIDGE_TYPES.executeExcelCommand) {
@@ -345,6 +365,10 @@ function normalizeError(error: BridgeErrorPayload | undefined): BridgeErrorPaylo
     code: 'bridge_error',
     message: 'The native host returned an invalid error payload.',
   };
+}
+
+function isValidUiLanguageOverride(value: unknown): value is NonNullable<AppSettings['uiLanguageOverride']> {
+  return value === 'system' || value === 'zh' || value === 'en';
 }
 
 function createBrowserPreviewCommandResult(command: ExcelCommand): ExcelCommandResult {
