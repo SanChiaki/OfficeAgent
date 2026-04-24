@@ -128,13 +128,9 @@ if ([string]::IsNullOrWhiteSpace($wixToolVersion)) {
 }
 
 $vstoRuntimeInstaller = Join-Path $bundlePrereqRoot "vstor_redist.exe"
-$webView2RuntimeInstallerX86 = Join-Path $bundlePrereqRoot "MicrosoftEdgeWebView2RuntimeInstallerX86.exe"
-$webView2RuntimeInstallerX64 = Join-Path $bundlePrereqRoot "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
 
 Assert-FileExists -Path $bundleSource -Description "offline setup bundle source"
 Assert-FileExists -Path $vstoRuntimeInstaller -Description "VSTO runtime redistributable"
-Assert-FileExists -Path $webView2RuntimeInstallerX86 -Description "WebView2 x86 standalone installer"
-Assert-FileExists -Path $webView2RuntimeInstallerX64 -Description "WebView2 x64 standalone installer"
 
 Write-Host "Installing frontend dependencies..."
 Push-Location $frontendRoot

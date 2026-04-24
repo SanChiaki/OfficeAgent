@@ -51,67 +51,18 @@
       Result="value"
       Bitness="always32" />
 
-    <util:RegistrySearch
-      Id="SearchWebView2RuntimeMachine32"
-      Variable="WebView2RuntimeMachine32"
-      Root="HKLM"
-      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-      Value="pv"
-      Result="value"
-      Bitness="always32" />
-
-    <util:RegistrySearch
-      Id="SearchWebView2RuntimeMachine64"
-      Variable="WebView2RuntimeMachine64"
-      Root="HKLM"
-      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-      Value="pv"
-      Result="value"
-      Bitness="always64" />
-
-    <util:RegistrySearch
-      Id="SearchWebView2RuntimeUser"
-      Variable="WebView2RuntimeUser"
-      Root="HKCU"
-      Key="Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-      Value="pv"
-      Result="value" />
-
     <Chain>
       <ExePackage
         Id="VstoRuntime"
         DisplayName="Microsoft Visual Studio Tools for Office Runtime"
         SourceFile="prereqs\vstor_redist.exe"
         PerMachine="yes"
+        Cache="remove"
         Permanent="yes"
         Vital="yes"
         Compressed="yes"
         DetectCondition="VstoRuntimeVersion64 OR VstoRuntimeVersion32 OR VstoRuntimeInstall64 = 1 OR VstoRuntimeInstall32 = 1"
         InstallArguments="/quiet /norestart" />
-
-      <ExePackage
-        Id="WebView2RuntimeX86"
-        DisplayName="Microsoft Edge WebView2 Runtime (x86)"
-        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX86.exe"
-        PerMachine="yes"
-        Permanent="yes"
-        Vital="yes"
-        Compressed="yes"
-        InstallCondition="VersionNT64 = 0"
-        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
-        InstallArguments="/silent /install" />
-
-      <ExePackage
-        Id="WebView2RuntimeX64"
-        DisplayName="Microsoft Edge WebView2 Runtime (x64)"
-        SourceFile="prereqs\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
-        PerMachine="yes"
-        Permanent="yes"
-        Vital="yes"
-        Compressed="yes"
-        InstallCondition="VersionNT64"
-        DetectCondition="WebView2RuntimeMachine32 OR WebView2RuntimeMachine64 OR WebView2RuntimeUser"
-        InstallArguments="/silent /install" />
 
       <MsiPackage
         Id="OfficeAgentMsiX86"
@@ -120,7 +71,9 @@
         Visible="no"
         Vital="yes"
         Compressed="yes"
-        InstallCondition="VersionNT64 = 0" />
+        InstallCondition="VersionNT64 = 0">
+        <MsiProperty Name="SKIPWEBVIEW2CHECK" Value="1" />
+      </MsiPackage>
 
       <MsiPackage
         Id="OfficeAgentMsiX64"
@@ -129,7 +82,9 @@
         Visible="no"
         Vital="yes"
         Compressed="yes"
-        InstallCondition="VersionNT64" />
+        InstallCondition="VersionNT64">
+        <MsiProperty Name="SKIPWEBVIEW2CHECK" Value="1" />
+      </MsiPackage>
     </Chain>
   </Bundle>
 </Wix>

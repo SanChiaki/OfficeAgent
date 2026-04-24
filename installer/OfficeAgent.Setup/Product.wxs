@@ -13,7 +13,7 @@
       Condition="Installed OR VSTORUNTIMEVERSION OR VSTORUNTIMEWOW6432VERSION OR VSTORUNTIMEINSTALL = 1 OR VSTORUNTIMEWOW6432INSTALL = 1"
       Message="OfficeAgent requires the Microsoft Visual Studio Tools for Office Runtime 4.0 or later. Install the VSTO runtime, then run this installer again." />
     <Launch
-      Condition="Installed OR WEBVIEW2RUNTIMEWOW6432 OR WEBVIEW2RUNTIMENATIVE OR WEBVIEW2RUNTIMEUSER"
+      Condition="Installed OR SKIPWEBVIEW2CHECK = 1 OR WEBVIEW2RUNTIMEWOW6432 OR WEBVIEW2RUNTIMENATIVE OR WEBVIEW2RUNTIMEUSER"
       Message="OfficeAgent requires the Microsoft Edge WebView2 Runtime. Install the Evergreen Runtime or your offline enterprise package, then run this installer again." />
     <InstallUISequence>
       <AppSearch Before="LaunchConditions" />

@@ -2,11 +2,12 @@
 
 ## Installer
 
-- Confirm `installer/OfficeAgent.SetupBundle/prereqs/` contains `vstor_redist.exe`, `MicrosoftEdgeWebView2RuntimeInstallerX86.exe`, and `MicrosoftEdgeWebView2RuntimeInstallerX64.exe` before starting the build.
+- Confirm `installer/OfficeAgent.SetupBundle/prereqs/` contains `vstor_redist.exe` before starting the build.
 - Run `installer/OfficeAgent.Setup/build.ps1` and confirm `artifacts/installer/OfficeAgent.Setup.exe`, `artifacts/installer/OfficeAgent.Setup-x86.msi`, and `artifacts/installer/OfficeAgent.Setup-x64.msi` are created.
-- Run `OfficeAgent.Setup.exe` on a machine missing both prerequisites and confirm it installs VSTO Runtime, installs WebView2 Runtime, and then installs OfficeAgent.
-- Run `OfficeAgent.Setup.exe` on a machine with both prerequisites already installed and confirm it skips both prerequisite installers.
-- Run `OfficeAgent.Setup.exe` twice on the same machine and confirm the second run does not reinstall prerequisites and falls through to normal OfficeAgent maintenance behavior.
+- Run `OfficeAgent.Setup.exe` on a machine missing the VSTO runtime and confirm it installs VSTO Runtime and then installs OfficeAgent.
+- Run `OfficeAgent.Setup.exe` on a machine missing the WebView2 runtime and confirm it still installs OfficeAgent without attempting to install WebView2.
+- Run `OfficeAgent.Setup.exe` on a machine with the VSTO runtime already installed and confirm it skips the VSTO installer.
+- Run `OfficeAgent.Setup.exe` twice on the same machine and confirm the second run does not reinstall VSTO and falls through to normal OfficeAgent maintenance behavior.
 - Choose the MSI that matches the target Excel bitness only for direct enterprise distribution or debugging. Do not install the x86 package for x64 Excel or the x64 package for x86 Excel.
 - Install the direct MSI under a standard user profile.
 - Confirm files are deployed under `%LocalAppData%\\OfficeAgent\\ExcelAddIn`.
