@@ -28,6 +28,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly HashSet<string> allowedTypes = new HashSet<string>(StringComparer.Ordinal)
         {
             BridgeMessageTypes.Ping,
+            BridgeMessageTypes.GetHostContext,
             BridgeMessageTypes.GetSettings,
             BridgeMessageTypes.GetSelectionContext,
             BridgeMessageTypes.GetSessions,
@@ -44,6 +45,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
+        private readonly Func<string> getResolvedUiLocale;
 
         public WebMessageRouter(
             FileSessionStore sessionStore,
@@ -52,7 +54,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
-            FileCookieStore cookieStore)
+            FileCookieStore cookieStore,
+            Func<string> getResolvedUiLocale)
         {
             this.sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
             this.settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -61,6 +64,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             this.agentOrchestrator = agentOrchestrator ?? throw new ArgumentNullException(nameof(agentOrchestrator));
             this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
             this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
+            this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
         }
 
         public string Route(string rawRequestJson)
@@ -187,6 +191,17 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 Host = "ISDP",
                                 Version = VersionInfo.AppVersion,
                             });
+                    case BridgeMessageTypes.GetHostContext:
+                        if (HasUnexpectedPayload(request.Payload))
+                        {
+                            return Error(
+                                request.Type,
+                                request.RequestId,
+                                code: "malformed_payload",
+                                message: "bridge.getHostContext does not accept a payload.");
+                        }
+
+                        return Success(request.Type, request.RequestId, GetHostContextPayload());
                     case BridgeMessageTypes.GetSettings:
                         if (HasUnexpectedPayload(request.Payload))
                         {
@@ -622,7 +637,20 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                    IsStringToken(payloadObject["baseUrl"]) &&
                    IsStringToken(payloadObject["businessBaseUrl"]) &&
                    IsStringToken(payloadObject["model"]) &&
+                   IsOptionalStringToken(payloadObject["uiLanguageOverride"]) &&
                    payloadObject.Count >= 4;
+        }
+
+        private HostContextPayload GetHostContextPayload()
+        {
+            var settings = settingsStore.Load() ?? new AppSettings();
+            var resolvedUiLocale = getResolvedUiLocale() ?? string.Empty;
+
+            return new HostContextPayload
+            {
+                ResolvedUiLocale = string.Equals(resolvedUiLocale, "zh", StringComparison.OrdinalIgnoreCase) ? "zh" : "en",
+                UiLanguageOverride = AppSettings.NormalizeUiLanguageOverride(settings.UiLanguageOverride),
+            };
         }
 
         private static bool HasUnexpectedPayload(JToken payload)
@@ -638,6 +666,11 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private static bool IsStringToken(JToken token)
         {
             return token != null && token.Type == JTokenType.String;
+        }
+
+        private static bool IsOptionalStringToken(JToken token)
+        {
+            return token == null || token.Type == JTokenType.String;
         }
 
         private WebMessageResponse ExecuteExcelCommand(WebMessageRequest request)

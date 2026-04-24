@@ -26,7 +26,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
-            FileCookieStore cookieStore)
+            FileCookieStore cookieStore,
+            Func<string> getResolvedUiLocale)
         {
             Dock = DockStyle.Fill;
 
@@ -36,7 +37,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             };
             Controls.Add(webView);
 
-            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
+            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
             Load += TaskPaneHostControl_Load;
         }
 

@@ -30,10 +30,11 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
-            FileCookieStore cookieStore)
+            FileCookieStore cookieStore,
+            Func<string> getResolvedUiLocale)
         {
             this.webView = webView;
-            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
+            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
         }
 
         public async Task InitializeAsync()

@@ -1,5 +1,7 @@
 using System;
+using System.Globalization;
 using System.IO;
+using Microsoft.Office.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
@@ -7,6 +9,7 @@ using OfficeAgent.Core.Skills;
 using OfficeAgent.Core.Sync;
 using OfficeAgent.Core.Templates;
 using OfficeAgent.ExcelAddIn.Excel;
+using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.ExcelAddIn.TaskPane;
 using OfficeAgent.Infrastructure.Diagnostics;
 using OfficeAgent.Infrastructure.Http;
@@ -36,6 +39,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
+        internal Func<string> GetResolvedUiLocale { get; private set; }
 
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
@@ -52,6 +56,8 @@ namespace OfficeAgent.ExcelAddIn
             SettingsStore = new FileSettingsStore(
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
+            var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
+            GetResolvedUiLocale = () => uiLocaleResolver.Resolve(SettingsStore.Load());
 
             SharedCookies = new SharedCookieContainer();
             CookieStore = new FileCookieStore(
@@ -121,7 +127,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore);
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, GetResolvedUiLocale);
             Application.WorkbookActivate += Application_WorkbookActivate;
             Application.SheetActivate += Application_SheetActivate;
             Application.SheetSelectionChange += Application_SheetSelectionChange;
@@ -216,6 +222,34 @@ namespace OfficeAgent.ExcelAddIn
         {
             var worksheet = sheet as ExcelInterop.Worksheet;
             return worksheet?.Name ?? string.Empty;
+        }
+
+        private string GetExcelUiLocale()
+        {
+            try
+            {
+                var languageSettings = Application?.LanguageSettings;
+                if (languageSettings == null)
+                {
+                    return string.Empty;
+                }
+
+                var languageId = languageSettings.LanguageID[MsoAppLanguageID.msoLanguageIDUI];
+                if (languageId <= 0)
+                {
+                    return string.Empty;
+                }
+
+                return CultureInfo.GetCultureInfo(languageId).Name;
+            }
+            catch (CultureNotFoundException)
+            {
+                return string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private void RestoreWorksheetFocus(ExcelInterop.Range target)

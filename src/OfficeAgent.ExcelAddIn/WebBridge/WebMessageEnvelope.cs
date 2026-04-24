@@ -6,6 +6,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
     internal static class BridgeMessageTypes
     {
         public const string Ping = "bridge.ping";
+        public const string GetHostContext = "bridge.getHostContext";
         public const string GetSettings = "bridge.getSettings";
         public const string GetSelectionContext = "bridge.getSelectionContext";
         public const string SelectionContextChanged = "bridge.selectionContextChanged";
@@ -66,6 +67,15 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         [JsonProperty("version")]
         public string Version { get; set; }
+    }
+
+    internal sealed class HostContextPayload
+    {
+        [JsonProperty("resolvedUiLocale")]
+        public string ResolvedUiLocale { get; set; } = "en";
+
+        [JsonProperty("uiLanguageOverride")]
+        public string UiLanguageOverride { get; set; } = "system";
     }
 
     internal sealed class WebMessageEvent

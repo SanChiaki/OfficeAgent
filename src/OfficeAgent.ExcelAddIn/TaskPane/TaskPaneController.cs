@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Office.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
@@ -17,6 +18,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
+        private readonly Func<string> getResolvedUiLocale;
         private Microsoft.Office.Tools.CustomTaskPane taskPane;
         private TaskPaneHostControl hostControl;
 
@@ -28,7 +30,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
-            FileCookieStore cookieStore)
+            FileCookieStore cookieStore,
+            Func<string> getResolvedUiLocale)
         {
             this.addIn = addIn;
             this.sessionStore = sessionStore;
@@ -38,6 +41,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             this.agentOrchestrator = agentOrchestrator;
             this.sharedCookies = sharedCookies;
             this.cookieStore = cookieStore;
+            this.getResolvedUiLocale = getResolvedUiLocale;
         }
 
         public void Toggle()
@@ -73,7 +77,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 return;
             }
 
-            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore);
+            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
             taskPane = addIn.CustomTaskPanes.Add(hostControl, "ISDP AI");
             taskPane.DockPosition = MsoCTPDockPosition.msoCTPDockPositionRight;
             taskPane.Width = 800;

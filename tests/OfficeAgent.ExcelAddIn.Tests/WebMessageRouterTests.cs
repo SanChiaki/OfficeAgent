@@ -126,6 +126,65 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void SaveSettingsRoundTripsUiLanguageOverride()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+
+            var router = CreateRouter(sessionStore, settingsStore, resolvedUiLocale: "en");
+            var responseJson = InvokeRoute(
+                router,
+                "{\"type\":\"bridge.saveSettings\",\"requestId\":\"req-1\",\"payload\":{\"apiKey\":\"secret-token\",\"baseUrl\":\"https://llm.internal.example\",\"businessBaseUrl\":\"https://business.internal.example\",\"model\":\"gpt-5-mini\",\"uiLanguageOverride\":\"zh\",\"ssoUrl\":\"\",\"ssoLoginSuccessPath\":\"\"}}");
+
+            Assert.Contains("\"ok\":true", responseJson);
+            Assert.Contains("\"uiLanguageOverride\":\"zh\"", responseJson);
+
+            var settingsAfter = settingsStore.Load();
+            Assert.Equal("zh", settingsAfter.UiLanguageOverride);
+        }
+
+        [Fact]
+        public void GetHostContextReturnsResolvedLocaleAndPersistedOverride()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+            settingsStore.Save(new AppSettings
+            {
+                ApiKey = "secret-token",
+                BaseUrl = "https://api.internal.example",
+                BusinessBaseUrl = "https://business.internal.example",
+                Model = "gpt-5-mini",
+                UiLanguageOverride = "zh",
+            });
+
+            var router = CreateRouter(sessionStore, settingsStore, resolvedUiLocale: "en");
+            var responseJson = InvokeRoute(router, "{\"type\":\"bridge.getHostContext\",\"requestId\":\"req-1\"}");
+
+            Assert.Contains("\"ok\":true", responseJson);
+            Assert.Contains("\"resolvedUiLocale\":\"en\"", responseJson);
+            Assert.Contains("\"uiLanguageOverride\":\"zh\"", responseJson);
+        }
+
+        [Fact]
+        public void GetHostContextRejectsPayload()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+
+            var router = CreateRouter(sessionStore, settingsStore, resolvedUiLocale: "en");
+            var responseJson = InvokeRoute(router, "{\"type\":\"bridge.getHostContext\",\"requestId\":\"req-1\",\"payload\":{}}");
+
+            Assert.Contains("\"ok\":false", responseJson);
+            Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
+        }
+
+        [Fact]
         public void GetSettingsRejectsEmptyObjectPayload()
         {
             var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
@@ -432,28 +491,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
-        private static object CreateRouter(FileSessionStore sessionStore, FileSettingsStore settingsStore)
+        private static object CreateRouter(
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
+            string resolvedUiLocale = "en")
         {
             return CreateRouter(
                 sessionStore,
                 settingsStore,
                 new FakeExcelContextService(SelectionContext.Empty("No selection available.")),
                 new FakeExcelCommandExecutor(),
-                new FakeAgentOrchestrator());
-        }
-
-        private static object CreateRouter(
-            FileSessionStore sessionStore,
-            FileSettingsStore settingsStore,
-            IExcelContextService selectionContextService,
-            IExcelCommandExecutor excelCommandExecutor)
-        {
-            return CreateRouter(
-                sessionStore,
-                settingsStore,
-                selectionContextService,
-                excelCommandExecutor,
-                new FakeAgentOrchestrator());
+                new FakeAgentOrchestrator(),
+                resolvedUiLocale);
         }
 
         private static object CreateRouter(
@@ -461,7 +510,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FileSettingsStore settingsStore,
             IExcelContextService selectionContextService,
             IExcelCommandExecutor excelCommandExecutor,
-            IAgentOrchestrator agentOrchestrator)
+            string resolvedUiLocale = "en")
+        {
+            return CreateRouter(
+                sessionStore,
+                settingsStore,
+                selectionContextService,
+                excelCommandExecutor,
+                new FakeAgentOrchestrator(),
+                resolvedUiLocale);
+        }
+
+        private static object CreateRouter(
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
+            IExcelContextService selectionContextService,
+            IExcelCommandExecutor excelCommandExecutor,
+            IAgentOrchestrator agentOrchestrator,
+            string resolvedUiLocale = "en")
         {
             var sharedCookies = new SharedCookieContainer();
             var cookieStore = new FileCookieStore(
@@ -476,7 +542,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 routerType,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore },
+                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, (Func<string>)(() => resolvedUiLocale) },
                 culture: null);
         }
 
