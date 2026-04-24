@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("OfficeAgent.ExcelAddIn")]
@@ -11,3 +12,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
 [assembly: Guid("d4d8f387-9648-447d-8b83-4af6f55ecc34")]
+[assembly: InternalsVisibleTo("OfficeAgent.ExcelAddIn.Tests")]

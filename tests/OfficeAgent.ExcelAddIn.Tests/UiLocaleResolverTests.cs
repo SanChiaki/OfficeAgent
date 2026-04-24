@@ -1,8 +1,5 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using OfficeAgent.Core.Models;
+using OfficeAgent.ExcelAddIn.Localization;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
@@ -18,9 +15,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [InlineData("", "en")]
         public void ResolveUsesExcelUiLocaleWhenOverrideIsSystem(string excelUiLocale, string expectedLocale)
         {
-            var resolver = CreateResolver(excelUiLocale);
+            var resolver = new UiLocaleResolver(() => excelUiLocale);
 
-            var resolvedLocale = Resolve(resolver, new AppSettings());
+            var resolvedLocale = resolver.Resolve(new AppSettings());
 
             Assert.Equal(expectedLocale, resolvedLocale);
         }
@@ -32,9 +29,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [InlineData("EN", "zh-TW", "en")]
         public void ResolveHonorsExplicitUiLanguageOverrides(string overrideValue, string excelUiLocale, string expectedLocale)
         {
-            var resolver = CreateResolver(excelUiLocale);
+            var resolver = new UiLocaleResolver(() => excelUiLocale);
 
-            var resolvedLocale = Resolve(resolver, new AppSettings
+            var resolvedLocale = resolver.Resolve(new AppSettings
             {
                 UiLanguageOverride = overrideValue,
             });
@@ -45,49 +42,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Fact]
         public void ResolveTreatsInvalidOverrideAsSystem()
         {
-            var resolver = CreateResolver("zh-CN");
+            var resolver = new UiLocaleResolver(() => "zh-CN");
 
-            var resolvedLocale = Resolve(resolver, new AppSettings
+            var resolvedLocale = resolver.Resolve(new AppSettings
             {
                 UiLanguageOverride = "de",
             });
 
             Assert.Equal("zh", resolvedLocale);
-        }
-
-        private static object CreateResolver(string excelUiLocale)
-        {
-            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
-                "src",
-                "OfficeAgent.ExcelAddIn",
-                "bin",
-                "Debug",
-                "OfficeAgent.ExcelAddIn.dll"));
-            var resolverType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Localization.UiLocaleResolver", throwOnError: true);
-
-            return Activator.CreateInstance(resolverType, new object[] { (Func<string>)(() => excelUiLocale) });
-        }
-
-        private static string Resolve(object resolver, AppSettings settings)
-        {
-            var method = resolver.GetType().GetMethod("Resolve", BindingFlags.Instance | BindingFlags.Public);
-
-            Assert.NotNull(method);
-
-            return (string)method.Invoke(resolver, new object[] { settings });
-        }
-
-        private static string ResolveRepositoryPath(params string[] segments)
-        {
-            return Path.GetFullPath(Path.Combine(new[]
-            {
-                AppContext.BaseDirectory,
-                "..",
-                "..",
-                "..",
-                "..",
-                "..",
-            }.Concat(segments).ToArray()));
         }
     }
 }

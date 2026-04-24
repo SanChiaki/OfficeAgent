@@ -3,7 +3,7 @@ using OfficeAgent.Core.Models;
 
 namespace OfficeAgent.ExcelAddIn.Localization
 {
-    public sealed class UiLocaleResolver
+    internal sealed class UiLocaleResolver
     {
         private readonly Func<string> getExcelUiLocale;
 
