@@ -99,7 +99,7 @@ namespace OfficeAgent.IntegrationTests
 
             var projects = connector.GetProjects();
 
-            Assert.Equal(3, projects.Count);
+            Assert.Equal(4, projects.Count);
             Assert.Contains(
                 projects,
                 project => string.Equals(project.ProjectId, "performance", StringComparison.Ordinal)
@@ -112,6 +112,10 @@ namespace OfficeAgent.IntegrationTests
                 projects,
                 project => string.Equals(project.ProjectId, "customer-onboarding", StringComparison.Ordinal)
                     && string.Equals(project.DisplayName, "客户上线项目", StringComparison.Ordinal));
+            Assert.Contains(
+                projects,
+                project => string.Equals(project.ProjectId, "large-activity-benchmark", StringComparison.Ordinal)
+                    && string.Equals(project.DisplayName, "大数据活动压测项目", StringComparison.Ordinal));
 
             var rows = connector.Find("delivery-tracker", Array.Empty<string>(), Array.Empty<string>());
 
@@ -122,6 +126,69 @@ namespace OfficeAgent.IntegrationTests
                     "delivery-row-",
                     row["row_id"]?.ToString() ?? string.Empty,
                     StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public async Task GetProjectsIncludesLargeBenchmarkProjectWithActivitySchema()
+        {
+            var connector = await CreateConnectorAsync();
+
+            var projects = connector.GetProjects();
+
+            Assert.Equal(4, projects.Count);
+            Assert.Contains(
+                projects,
+                project => string.Equals(project.ProjectId, "large-activity-benchmark", StringComparison.Ordinal)
+                    && string.Equals(project.DisplayName, "大数据活动压测项目", StringComparison.Ordinal));
+
+            var rows = connector.Find("large-activity-benchmark", Array.Empty<string>(), Array.Empty<string>());
+
+            Assert.Equal(10000, rows.Count);
+
+            var firstRow = rows[0];
+            Assert.Equal(11, firstRow.Count);
+            Assert.Equal("benchmark-row-00001", firstRow["row_id"]?.ToString());
+            Assert.True(firstRow.ContainsKey("name_benchmarka"));
+            Assert.True(firstRow.ContainsKey("start_benchmarka"));
+            Assert.True(firstRow.ContainsKey("end_benchmarka"));
+            Assert.True(firstRow.ContainsKey("name_benchmarkb"));
+            Assert.True(firstRow.ContainsKey("start_benchmarkb"));
+            Assert.True(firstRow.ContainsKey("end_benchmarkb"));
+
+            var schema = connector.GetSchema("large-activity-benchmark");
+
+            Assert.Contains(schema.Columns, column => column.ApiFieldKey == "owner_name" && column.ColumnKind == WorksheetColumnKind.Single);
+            Assert.Contains(schema.Columns, column => column.ApiFieldKey == "region" && column.ColumnKind == WorksheetColumnKind.Single);
+            Assert.Contains(schema.Columns, column => column.ApiFieldKey == "priority" && column.ColumnKind == WorksheetColumnKind.Single);
+            Assert.Contains(schema.Columns, column => column.ApiFieldKey == "status" && column.ColumnKind == WorksheetColumnKind.Single);
+            Assert.Equal(6, schema.Columns.Count(column => column.ColumnKind == WorksheetColumnKind.ActivityProperty));
+        }
+
+        [Fact]
+        public async Task BatchSaveAcceptsLargeBenchmarkPayload()
+        {
+            var connector = await CreateConnectorAsync();
+
+            var changes = Enumerable.Range(1, 10000)
+                .Select(index => new CellChange
+                {
+                    RowId = $"benchmark-row-{index:D5}",
+                    ApiFieldKey = "status",
+                    NewValue = "LoadTestStatus",
+                })
+                .ToArray();
+
+            connector.BatchSave("large-activity-benchmark", changes);
+
+            var rows = connector.Find(
+                "large-activity-benchmark",
+                new[] { "benchmark-row-00001", "benchmark-row-05000", "benchmark-row-10000" },
+                new[] { "status" });
+
+            Assert.Equal(3, rows.Count);
+            Assert.All(
+                rows,
+                row => Assert.Equal("LoadTestStatus", row["status"]?.ToString()));
         }
 
         private async Task<CurrentBusinessSystemConnector> CreateConnectorAsync()

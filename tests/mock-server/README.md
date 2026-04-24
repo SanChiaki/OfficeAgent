@@ -95,6 +95,10 @@ node server.js
   {
     "projectId": "customer-onboarding",
     "displayName": "客户上线项目"
+  },
+  {
+    "projectId": "large-activity-benchmark",
+    "displayName": "大数据活动压测项目"
   }
 ]
 ```
@@ -203,6 +207,12 @@ Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.w
   - `10` 条示例数据
   - `activityId = 99887766`
   - `activityName = 上线流程`
+- `large-activity-benchmark`
+  - `displayName = 大数据活动压测项目`
+  - `10000` 条示例数据
+  - `4` 个普通字段：`owner_name`、`region`、`priority`、`status`
+  - `2` 个 activity 头：`benchmarka`、`benchmarkb`
+  - 每行字段为 `row_id + 10` 个业务字段
 
 ## 数据持久化说明
 

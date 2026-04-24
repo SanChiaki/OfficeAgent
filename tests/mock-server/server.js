@@ -67,6 +67,7 @@ const connectorProjectData = {
       { rowId: "onboarding-row-9", ownerName: "客户成功九组", startDate: "2026-03-25", endDate: "2026-03-27" },
       { rowId: "onboarding-row-10", ownerName: "客户成功十组", startDate: "2026-03-28", endDate: "2026-03-30" },
     ]),
+  "large-activity-benchmark": createLargeActivityBenchmarkProject(),
 };
 
 const connectorProjects = Object.keys(connectorProjectData).map(function (projectId) {
@@ -110,6 +111,62 @@ function createConnectorRows(activityId, rows) {
       [endFieldKey]: row.endDate,
     };
   });
+}
+
+function createLargeActivityBenchmarkProject() {
+  return {
+    projectId: "large-activity-benchmark",
+    displayName: "大数据活动压测项目",
+    headList: createLargeActivityBenchmarkHeadList(),
+    rows: createLargeActivityBenchmarkRows(10000),
+  };
+}
+
+function createLargeActivityBenchmarkHeadList() {
+  return [
+    { fieldKey: "row_id", headerText: "ID", headType: "single", isId: true },
+    { fieldKey: "owner_name", headerText: "负责人", headType: "single" },
+    { fieldKey: "region", headerText: "区域", headType: "single" },
+    { fieldKey: "priority", headerText: "优先级", headType: "single" },
+    { fieldKey: "status", headerText: "状态", headType: "single" },
+    { headType: "activity", activityId: "benchmarka", activityName: "基准阶段A" },
+    { headType: "activity", activityId: "benchmarkb", activityName: "基准阶段B" },
+  ];
+}
+
+function createLargeActivityBenchmarkRows(rowCount) {
+  var regions = ["华东", "华北", "华南", "西南", "海外"];
+  var priorities = ["P0", "P1", "P2", "P3"];
+  var statuses = ["未开始", "进行中", "已完成", "已暂停"];
+  var rows = [];
+
+  for (var index = 0; index < rowCount; index++) {
+    var rowNumber = index + 1;
+    var benchmarkRowId = "benchmark-row-" + String(rowNumber).padStart(5, "0");
+    var ownerName = "区域负责人" + String((index % 300) + 1).padStart(3, "0");
+    var dayOffset = index % 28;
+
+    rows.push({
+      row_id: benchmarkRowId,
+      owner_name: ownerName,
+      region: regions[index % regions.length],
+      priority: priorities[index % priorities.length],
+      status: statuses[index % statuses.length],
+      name_benchmarka: "阶段A-" + String(rowNumber).padStart(5, "0"),
+      start_benchmarka: createIsoDate(2026, 1, 1 + dayOffset),
+      end_benchmarka: createIsoDate(2026, 1, 3 + dayOffset),
+      name_benchmarkb: "阶段B-" + String(rowNumber).padStart(5, "0"),
+      start_benchmarkb: createIsoDate(2026, 1, 4 + dayOffset),
+      end_benchmarkb: createIsoDate(2026, 1, 6 + dayOffset),
+    });
+  }
+
+  return rows;
+}
+
+function createIsoDate(year, month, day) {
+  var date = new Date(Date.UTC(year, month - 1, day));
+  return date.toISOString().slice(0, 10);
 }
 
 function getConnectorProject(projectId) {
@@ -191,7 +248,7 @@ ssoApp.listen(3100, function () {
 // ---------------------------------------------------------------------------
 
 const apiApp = express();
-apiApp.use(express.json());
+apiApp.use(express.json({ limit: "20mb" }));
 apiApp.use(cookieParser());
 
 function requireAuth(req, res, next) {

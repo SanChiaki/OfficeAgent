@@ -449,7 +449,7 @@ grouped single 当前支持的运行场景：
 - `GET /projects`
   - Ribbon 项目下拉框加载入口
   - 返回当前系统可用项目列表
-  - 当前 mock server 内置 3 个项目：`performance`、`delivery-tracker`、`customer-onboarding`
+  - 当前 mock server 内置 4 个项目：`performance`、`delivery-tracker`、`customer-onboarding`、`large-activity-benchmark`
 - `POST /head`
   - 返回 `headList`
   - 按 `projectId` 返回对应项目的字段头
