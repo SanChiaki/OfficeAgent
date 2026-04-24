@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Windows.Forms;
 using OfficeAgent.Core.Models;
 using Xunit;
 
@@ -91,14 +96,136 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Null(args[5]);
         }
 
+        [Fact]
+        public void DialogLayoutDoesNotClipOrOverlapWhenFontScalesUp()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                using (var scaledFont = CreateStressFont(dialog.Font))
+                {
+                    ApplyFont(dialog, scaledFont);
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    AssertLayoutFits(dialog);
+                }
+            });
+        }
+
         private static MethodInfo GetTryCreateBindingMethod()
         {
-            return Assembly.LoadFrom(ResolveAddInAssemblyPath())
-                .GetType("OfficeAgent.ExcelAddIn.Dialogs.ProjectLayoutDialog", throwOnError: true)
+            return GetProjectLayoutDialogType()
                 .GetMethod(
                     "TryCreateBinding",
                     BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new InvalidOperationException("ProjectLayoutDialog.TryCreateBinding was not found.");
+        }
+
+        private static Form CreateDialog()
+        {
+            return (Form)Activator.CreateInstance(
+                GetProjectLayoutDialogType(),
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { CreateSeedBinding() },
+                culture: null);
+        }
+
+        private static Type GetProjectLayoutDialogType()
+        {
+            return Assembly.LoadFrom(ResolveAddInAssemblyPath())
+                .GetType("OfficeAgent.ExcelAddIn.Dialogs.ProjectLayoutDialog", throwOnError: true);
+        }
+
+        private static void AssertLayoutFits(Control root)
+        {
+            foreach (var parent in EnumerateParents(root))
+            {
+                var visibleChildren = parent.Controls.Cast<Control>().ToArray();
+
+                foreach (var child in visibleChildren)
+                {
+                    Assert.True(
+                        parent.ClientRectangle.Contains(child.Bounds),
+                        $"Control '{child.Name ?? child.Text}' exceeds its parent bounds.");
+
+                    if (child is Label label)
+                    {
+                        var preferred = label.GetPreferredSize(new Size(Math.Max(label.Width, 1), 0));
+                        Assert.True(
+                            preferred.Height <= label.Height,
+                            $"Label '{label.Text}' is clipped vertically. Preferred height: {preferred.Height}, actual height: {label.Height}.");
+                    }
+                }
+
+                for (var i = 0; i < visibleChildren.Length; i++)
+                {
+                    for (var j = i + 1; j < visibleChildren.Length; j++)
+                    {
+                        Assert.False(
+                            visibleChildren[i].Bounds.IntersectsWith(visibleChildren[j].Bounds),
+                            $"Controls '{visibleChildren[i].Name ?? visibleChildren[i].Text}' and '{visibleChildren[j].Name ?? visibleChildren[j].Text}' overlap.");
+                    }
+                }
+            }
+        }
+
+        private static IEnumerable<Control> EnumerateParents(Control root)
+        {
+            yield return root;
+
+            foreach (Control child in root.Controls)
+            {
+                foreach (var descendant in EnumerateParents(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
+        private static void ApplyFont(Control root, Font font)
+        {
+            root.Font = font;
+
+            foreach (Control child in root.Controls)
+            {
+                ApplyFont(child, font);
+            }
+        }
+
+        private static Font CreateStressFont(Font fallbackFont)
+        {
+            const string ChineseUiFontName = "Microsoft YaHei UI";
+            var family = FontFamily.Families.FirstOrDefault(item => string.Equals(item.Name, ChineseUiFontName, StringComparison.Ordinal))
+                ?? fallbackFont.FontFamily;
+            var size = Math.Max(fallbackFont.Size + 4f, 14f);
+            return new Font(family, size, fallbackFont.Style);
+        }
+
+        private static void RunInSta(Action action)
+        {
+            Exception failure = null;
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            if (failure != null)
+            {
+                throw new TargetInvocationException(failure);
+            }
         }
 
         private static SheetBinding CreateSeedBinding()
