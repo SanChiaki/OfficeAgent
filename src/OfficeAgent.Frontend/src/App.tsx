@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { nativeBridge } from './bridge/nativeBridge';
 import { ConfirmationCard } from './components/ConfirmationCard';
-import { getUiStrings, isUntitledSessionTitle, localizeSessionTitle } from './i18n/uiStrings';
+import { getUiStrings, isLegacySystemUntitledSessionTitle, UNTITLED_SESSION_STORAGE_TITLE } from './i18n/uiStrings';
 import type {
   AgentPlan,
   AgentRequestEnvelope,
@@ -68,6 +68,7 @@ export function App() {
   const [sessionThreads, setSessionThreads] = useState<Record<string, ThreadMessage[]>>({});
   const [pendingConfirmations, setPendingConfirmations] = useState<Record<string, PendingConfirmation>>({});
   const [pendingCommandSessions, setPendingCommandSessions] = useState<Record<string, boolean>>({});
+  const [systemUntitledSessionIds, setSystemUntitledSessionIds] = useState<Record<string, true>>({});
   const sessionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const settingsDialogRef = useRef<HTMLElement | null>(null);
@@ -79,6 +80,7 @@ export function App() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameValueDirty, setRenameValueDirty] = useState(false);
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null);
   const [loginStatus, setLoginStatus] = useState<LoginStatus | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -141,7 +143,7 @@ export function App() {
 
           // Check if the most recent session is a usable new chat (empty " untitled and no messages)
           let reusableSession: ChatSession | undefined;
-          if (latestSession && isUntitledSessionTitle(latestSession.title) && latestSession.messages.length === 0) {
+          if (latestSession && isLegacySystemUntitledSessionTitle(latestSession.title) && latestSession.messages.length === 0) {
             reusableSession = latestSession;
           }
 
@@ -158,7 +160,7 @@ export function App() {
             const now = new Date().toISOString();
             const newSession: ChatSession = {
               id,
-              title: getUiStrings(startupLocale).untitledSessionTitle,
+              title: UNTITLED_SESSION_STORAGE_TITLE,
               createdAtUtc: now,
               updatedAtUtc: now,
               messages: [],
@@ -168,6 +170,7 @@ export function App() {
           }
 
           setSessions(displaySessions);
+          setSystemUntitledSessionIds(deriveSystemUntitledSessionIds(displaySessions));
           setSessionThreads((current) => hydrateSessionThreads(current, displaySessions, startupLocale));
           setActiveSessionId(newSessionId);
         })
@@ -177,6 +180,7 @@ export function App() {
           }
 
           setSessions([]);
+          setSystemUntitledSessionIds({});
           setActiveSessionId('');
         });
 
@@ -379,7 +383,7 @@ export function App() {
     const now = new Date().toISOString();
     const newSession: ChatSession = {
       id,
-      title: strings.untitledSessionTitle,
+      title: UNTITLED_SESSION_STORAGE_TITLE,
       createdAtUtc: now,
       updatedAtUtc: now,
       messages: [],
@@ -389,29 +393,60 @@ export function App() {
       ...current,
       [id]: createInitialThreadMessages(undefined, uiLocale),
     }));
+    setSystemUntitledSessionIds((current) => ({
+      ...current,
+      [id]: true,
+    }));
     setActiveSessionId(id);
     setIsSessionsDrawerOpen(false);
   }
 
-  function handleRenameStart(sessionId: string, currentTitle: string) {
-    setRenamingSessionId(sessionId);
-    setRenameValue(currentTitle);
+  function handleRenameStart(session: ChatSession) {
+    setRenamingSessionId(session.id);
+    setRenameValue(getSessionDisplayTitle(session, systemUntitledSessionIds, strings));
+    setRenameValueDirty(false);
   }
 
   function handleRenameConfirm() {
     if (!renamingSessionId) return;
+    const session = findSessionById(sessions, renamingSessionId);
+    if (!session) {
+      setRenamingSessionId(null);
+      setRenameValue('');
+      setRenameValueDirty(false);
+      return;
+    }
+
     const trimmed = renameValue.trim();
     if (!trimmed) return;
+    const isSystemUntitled = systemUntitledSessionIds[renamingSessionId] === true;
+    if (isSystemUntitled && !renameValueDirty && trimmed === strings.untitledSessionTitle) {
+      setRenamingSessionId(null);
+      setRenameValue('');
+      setRenameValueDirty(false);
+      return;
+    }
+
     setSessions((current) =>
       current.map((s) => s.id === renamingSessionId ? { ...s, title: trimmed } : s),
     );
+    setSystemUntitledSessionIds((current) => {
+      if (!isSystemUntitled) {
+        return current;
+      }
+
+      const { [renamingSessionId]: _ignored, ...rest } = current;
+      return rest;
+    });
     setRenamingSessionId(null);
     setRenameValue('');
+    setRenameValueDirty(false);
   }
 
   function handleRenameCancel() {
     setRenamingSessionId(null);
     setRenameValue('');
+    setRenameValueDirty(false);
   }
 
   function handleRenameKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
@@ -446,6 +481,10 @@ export function App() {
     });
     setPendingCommandSessions((current) => {
       const { [targetId]: _, ...rest } = current;
+      return rest;
+    });
+    setSystemUntitledSessionIds((current) => {
+      const { [targetId]: _ignored, ...rest } = current;
       return rest;
     });
 
@@ -583,7 +622,7 @@ export function App() {
 
   // Auto-rename session when first user message arrives
   useEffect(() => {
-    if (!activeSession || !isUntitledSessionTitle(activeSession.title)) {
+    if (!activeSession || systemUntitledSessionIds[activeSession.id] !== true) {
       return;
     }
 
@@ -602,7 +641,11 @@ export function App() {
         s.id === activeSession.id ? { ...s, title: newTitle } : s,
       ),
     );
-  }, [activeSession?.id, activeSession?.title, sessionThreads]);
+    setSystemUntitledSessionIds((current) => {
+      const { [activeSession.id]: _ignored, ...rest } = current;
+      return rest;
+    });
+  }, [activeSession?.id, systemUntitledSessionIds, sessionThreads]);
 
   async function handlePendingConfirmationConfirm() {
     if (!activePendingConfirmation || !activeSession?.id) {
@@ -835,7 +878,7 @@ export function App() {
               <MenuIcon />
             </button>
 
-            <h1 className="title">{activeSession ? localizeSessionTitle(activeSession.title, strings) : strings.appHeadingFallback}</h1>
+            <h1 className="title">{activeSession ? getSessionDisplayTitle(activeSession, systemUntitledSessionIds, strings) : strings.appHeadingFallback}</h1>
           </div>
 
           <button
@@ -947,7 +990,10 @@ export function App() {
                         className="session-chip__edit-input"
                         type="text"
                         value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
+                        onChange={(e) => {
+                          setRenameValue(e.target.value);
+                          setRenameValueDirty(true);
+                        }}
                         onKeyDown={handleRenameKeyDown}
                         autoFocus
                       />
@@ -969,9 +1015,9 @@ export function App() {
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSessionSelect(session.id); } }}
                     >
-                      <span className="session-chip__title">{localizeSessionTitle(session.title, strings)}</span>
+                      <span className="session-chip__title">{getSessionDisplayTitle(session, systemUntitledSessionIds, strings)}</span>
                       <div className="session-chip__actions">
-                        <button type="button" className="session-chip__action-btn" aria-label={strings.renameSession} onClick={(e) => { e.stopPropagation(); handleRenameStart(session.id, localizeSessionTitle(session.title, strings)); }}>
+                        <button type="button" className="session-chip__action-btn" aria-label={strings.renameSession} onClick={(e) => { e.stopPropagation(); handleRenameStart(session); }}>
                           <PencilIcon />
                         </button>
                         <button type="button" className="session-chip__action-btn" aria-label={strings.deleteSession} onClick={(e) => { e.stopPropagation(); setDeleteConfirmSessionId(session.id); }}>
@@ -1142,7 +1188,7 @@ export function App() {
           <div className="delete-dialog">
             <h2 className="delete-dialog__title">{strings.deleteSessionDialogTitle}</h2>
             <p className="delete-dialog__message">
-              {strings.deleteSessionPrompt(localizeSessionTitle(sessions.find((s) => s.id === deleteConfirmSessionId)?.title ?? '', strings))}
+              {strings.deleteSessionPrompt(getSessionDisplayTitle(sessions.find((s) => s.id === deleteConfirmSessionId), systemUntitledSessionIds, strings))}
             </p>
             <div className="delete-dialog__actions">
               <button type="button" className="ghost-button" onClick={() => setDeleteConfirmSessionId(null)}>{strings.cancel}</button>
@@ -1212,6 +1258,28 @@ function hydrateSessionThreads(
 
 function findSessionById(sessions: ChatSession[], sessionId: string): ChatSession | undefined {
   return sessions.find((session) => session.id === sessionId);
+}
+
+function deriveSystemUntitledSessionIds(sessions: ChatSession[]) {
+  return sessions.reduce<Record<string, true>>((accumulator, session) => {
+    if (session.messages.length === 0 && isLegacySystemUntitledSessionTitle(session.title)) {
+      accumulator[session.id] = true;
+    }
+
+    return accumulator;
+  }, {});
+}
+
+function getSessionDisplayTitle(
+  session: ChatSession | undefined,
+  systemUntitledSessionIds: Record<string, true>,
+  strings: ReturnType<typeof getUiStrings>,
+) {
+  if (!session) {
+    return '';
+  }
+
+  return systemUntitledSessionIds[session.id] === true ? strings.untitledSessionTitle : session.title;
 }
 
 function createResultMessage(result: ExcelCommandResult): ThreadMessage {

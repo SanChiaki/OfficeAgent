@@ -64,7 +64,8 @@ export type UiStrings = {
   formatPlanStepUploadData: string;
 };
 
-export const LEGACY_UNTITLED_SESSION_TITLES = ['New chat', 'Untitled', '新建会话', '未命名会话'] as const;
+export const UNTITLED_SESSION_STORAGE_TITLE = 'New chat';
+export const LEGACY_SYSTEM_UNTITLED_SESSION_TITLES = ['New chat', 'Untitled'] as const;
 
 export const uiStrings: Record<UiLocale, UiStrings> = {
   zh: {
@@ -199,10 +200,6 @@ export function getUiStrings(locale: UiLocale): UiStrings {
   return uiStrings[locale];
 }
 
-export function isUntitledSessionTitle(title: string) {
-  return LEGACY_UNTITLED_SESSION_TITLES.includes(title as (typeof LEGACY_UNTITLED_SESSION_TITLES)[number]);
-}
-
-export function localizeSessionTitle(title: string, strings: UiStrings) {
-  return isUntitledSessionTitle(title) ? strings.untitledSessionTitle : title;
+export function isLegacySystemUntitledSessionTitle(title: string) {
+  return LEGACY_SYSTEM_UNTITLED_SESSION_TITLES.includes(title as (typeof LEGACY_SYSTEM_UNTITLED_SESSION_TITLES)[number]);
 }

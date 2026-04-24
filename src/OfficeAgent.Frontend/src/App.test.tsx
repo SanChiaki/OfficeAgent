@@ -11,6 +11,7 @@ vi.mock('./bridge/nativeBridge', () => ({
     getHostContext: vi.fn(),
     getSelectionContext: vi.fn(),
     getSessions: vi.fn(),
+    saveSessions: vi.fn(),
     onSelectionContextChanged: vi.fn(),
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
@@ -108,6 +109,7 @@ beforeEach(() => {
       selectionContextListener = null;
     };
   });
+  mockedBridge.saveSessions.mockImplementation(async (state) => state);
   mockedBridge.saveSettings.mockImplementation(async (settings) => settings);
   mockedBridge.executeExcelCommand.mockResolvedValue({
     commandType: 'excel.readSelectionTable',
@@ -170,27 +172,27 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(screen.getByRole('banner', { name: /聊天页眉|chat header/i })).toBeInTheDocument();
+    expect(await screen.findByRole('banner', { name: /聊天页眉/i })).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: /消息线程|message thread/i }),
+      screen.getByRole('region', { name: /消息线程/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/欢迎使用\s*ISDP|welcome to isdp/i),
+      screen.getByText(/欢迎使用\s*ISDP/),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('status', { name: /选区胶囊|selection capsule/i }),
+      screen.getByRole('status', { name: /选区胶囊/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('textbox', { name: /消息输入框|message composer/i }),
+      screen.getByRole('textbox', { name: /消息输入框/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /打开会话列表|open sessions drawer/i }),
+      screen.getByRole('button', { name: /打开会话列表/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /打开设置|open settings/i }),
+      screen.getByRole('button', { name: /打开设置/i }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(/未命名会话|untitled/i, { selector: 'h1' }),
+      await screen.findByText(/未命名会话/i, { selector: 'h1' }),
     ).toBeInTheDocument();
     expect(
       await screen.findByText(/sheet1 · a1:c4/i),
@@ -208,21 +210,21 @@ describe('App shell', () => {
       screen.queryByText(/project a · cn · 42/i),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('complementary', { name: /会话抽屉|sessions drawer/i }),
+      screen.queryByRole('complementary', { name: /会话抽屉/i }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /打开会话列表|open sessions drawer/i }));
+    await user.click(screen.getByRole('button', { name: /打开会话列表/i }));
 
     expect(
-      await screen.findByRole('complementary', { name: /会话抽屉|sessions drawer/i }),
+      await screen.findByRole('complementary', { name: /会话抽屉/i }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: /browser preview/i }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
+    await user.click(screen.getByRole('button', { name: /打开设置/i }));
 
-    const settingsDialog = screen.getByRole('dialog', { name: /设置对话框|settings dialog/i });
+    const settingsDialog = screen.getByRole('dialog', { name: /设置对话框/i });
     expect(settingsDialog).toBeInTheDocument();
     expect(
       within(settingsDialog).getAllByLabelText(/^api key$/i)[0],
@@ -262,6 +264,49 @@ describe('App shell', () => {
     expect(screen.getByRole('dialog', { name: /settings dialog/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
+  });
+
+  it('does not persist a localized placeholder when renaming an untitled session without editing it', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /打开会话列表/i }));
+    const sidebar = await screen.findByRole('complementary', { name: /会话抽屉/i });
+    await user.click(within(sidebar).getAllByRole('button', { name: /重命名会话/i })[0]);
+    await user.click(screen.getByRole('button', { name: /确认重命名/i }));
+    await user.click(within(sidebar).getByRole('button', { name: /review notes/i }));
+
+    expect(mockedBridge.saveSessions).toHaveBeenCalledWith(expect.objectContaining({
+      sessions: expect.arrayContaining([
+        expect.objectContaining({
+          id: expect.any(String),
+          title: 'New chat',
+        }),
+      ]),
+    }));
+  });
+
+  it('keeps an explicitly chosen placeholder title as user data', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /打开会话列表/i }));
+    const sidebar = await screen.findByRole('complementary', { name: /会话抽屉/i });
+    await user.click(within(sidebar).getAllByRole('button', { name: /重命名会话/i })[0]);
+    const renameInput = within(sidebar).getByDisplayValue('未命名会话');
+    await user.clear(renameInput);
+    await user.type(renameInput, '未命名会话');
+    await user.click(screen.getByRole('button', { name: /确认重命名/i }));
+    await user.click(within(sidebar).getByRole('button', { name: /关闭会话列表/i }));
+
+    expect(await screen.findByText(/^未命名会话$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('textbox', { name: /消息输入框/i }));
+    await user.type(screen.getByRole('textbox', { name: /消息输入框/i }), 'hello{enter}');
+
+    expect(await screen.findByRole('heading', { name: /未命名会话/i })).toBeInTheDocument();
   });
 
   it('uses ISDP AI as the fallback panel title before sessions load', async () => {
