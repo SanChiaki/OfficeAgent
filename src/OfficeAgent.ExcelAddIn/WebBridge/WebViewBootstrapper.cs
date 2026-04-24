@@ -31,7 +31,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale)
         {
             this.webView = webView;
             messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);

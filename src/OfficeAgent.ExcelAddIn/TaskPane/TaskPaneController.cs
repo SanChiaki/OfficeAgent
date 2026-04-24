@@ -18,7 +18,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
-        private readonly Func<string> getResolvedUiLocale;
+        private readonly Func<AppSettings, string> getResolvedUiLocale;
         private Microsoft.Office.Tools.CustomTaskPane taskPane;
         private TaskPaneHostControl hostControl;
 
@@ -31,7 +31,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale)
         {
             this.addIn = addIn;
             this.sessionStore = sessionStore;

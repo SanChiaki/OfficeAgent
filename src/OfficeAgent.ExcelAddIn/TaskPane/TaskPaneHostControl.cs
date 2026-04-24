@@ -27,7 +27,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale)
         {
             Dock = DockStyle.Fill;
 

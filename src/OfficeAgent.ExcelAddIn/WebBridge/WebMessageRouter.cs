@@ -45,7 +45,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
-        private readonly Func<string> getResolvedUiLocale;
+        private readonly Func<AppSettings, string> getResolvedUiLocale;
 
         public WebMessageRouter(
             FileSessionStore sessionStore,
@@ -55,7 +55,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale)
         {
             this.sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
             this.settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -201,7 +201,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 message: "bridge.getHostContext does not accept a payload.");
                         }
 
-                        return Success(request.Type, request.RequestId, GetHostContextPayload());
+                        return Success(request.Type, request.RequestId, GetHostContextPayload(settingsStore.Load() ?? new AppSettings()));
                     case BridgeMessageTypes.GetSettings:
                         if (HasUnexpectedPayload(request.Payload))
                         {
@@ -641,10 +641,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                    payloadObject.Count >= 4;
         }
 
-        private HostContextPayload GetHostContextPayload()
+        private HostContextPayload GetHostContextPayload(AppSettings settings)
         {
-            var settings = settingsStore.Load() ?? new AppSettings();
-            var resolvedUiLocale = getResolvedUiLocale() ?? string.Empty;
+            var resolvedUiLocale = getResolvedUiLocale(settings) ?? string.Empty;
 
             return new HostContextPayload
             {
@@ -670,7 +669,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         private static bool IsOptionalStringToken(JToken token)
         {
-            return token == null || token.Type == JTokenType.String;
+            return token == null || token.Type == JTokenType.String || token.Type == JTokenType.Null;
         }
 
         private WebMessageResponse ExecuteExcelCommand(WebMessageRequest request)

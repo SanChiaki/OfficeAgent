@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using Microsoft.Office.Core;
 using OfficeAgent.Core.Diagnostics;
+using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Skills;
@@ -39,7 +40,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
-        internal Func<string> GetResolvedUiLocale { get; private set; }
+        internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
 
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
@@ -57,7 +58,7 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
-            GetResolvedUiLocale = () => uiLocaleResolver.Resolve(SettingsStore.Load());
+            GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
             SharedCookies = new SharedCookieContainer();
             CookieStore = new FileCookieStore(
