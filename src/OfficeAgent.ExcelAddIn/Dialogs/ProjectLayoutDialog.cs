@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using OfficeAgent.Core.Models;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn.Dialogs
 {
@@ -11,12 +12,14 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly TextBox headerRowCountTextBox;
         private readonly TextBox dataStartRowTextBox;
         private readonly SheetBinding suggestedBinding;
+        private readonly HostLocalizedStrings strings;
 
-        public ProjectLayoutDialog(SheetBinding suggestedBinding)
+        public ProjectLayoutDialog(SheetBinding suggestedBinding, HostLocalizedStrings strings = null)
         {
             this.suggestedBinding = suggestedBinding ?? throw new ArgumentNullException(nameof(suggestedBinding));
+            this.strings = strings ?? Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
 
-            Text = "配置当前表布局";
+            Text = this.strings.ProjectLayoutDialogTitle;
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Font;
             AutoSize = true;
@@ -32,7 +35,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 AutoSize = true,
                 Margin = new Padding(0),
                 MaximumSize = new Size(520, 0),
-                Text = "下面三个值会写入当前工作表的同步配置（SheetBindings），请确认后保存。",
+                Text = this.strings.ProjectLayoutInstructionText,
             };
 
             var projectLabel = new Label
@@ -40,7 +43,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 AutoSize = true,
                 Margin = new Padding(0, 8, 0, 0),
                 MaximumSize = new Size(520, 0),
-                Text = FormatProjectLabel(suggestedBinding),
+                Text = FormatProjectLabel(suggestedBinding, this.strings),
             };
 
             var fieldsLayout = new FlowLayoutPanel
@@ -71,7 +74,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             var okButton = new Button
             {
-                Text = "确定",
+                Text = this.strings.OkButtonText,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 DialogResult = DialogResult.None,
@@ -82,7 +85,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             var cancelButton = new Button
             {
-                Text = "取消",
+                Text = this.strings.CancelButtonText,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 DialogResult = DialogResult.Cancel,
@@ -133,10 +136,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 headerStartRowTextBox.Text,
                 headerRowCountTextBox.Text,
                 dataStartRowTextBox.Text,
+                strings,
                 out var binding,
                 out var errorMessage))
             {
-                MessageBox.Show(this, errorMessage, "ISDP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, errorMessage, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -180,9 +184,9 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             return textBox;
         }
 
-        private static string FormatProjectLabel(SheetBinding binding)
+        private static string FormatProjectLabel(SheetBinding binding, HostLocalizedStrings strings)
         {
-            return string.Format("当前绑定：{0} | {1}", binding.ProjectId, binding.ProjectName);
+            return strings.ProjectLayoutCurrentBindingText(binding.ProjectId, binding.ProjectName);
         }
 
         private static bool TryCreateBinding(
@@ -190,6 +194,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             string headerStartRowText,
             string headerRowCountText,
             string dataStartRowText,
+            HostLocalizedStrings strings,
             out SheetBinding binding,
             out string errorMessage)
         {
@@ -200,28 +205,29 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             binding = null;
             errorMessage = null;
+            var localizedStrings = strings ?? HostLocalizedStrings.ForLocale("en");
 
             if (!TryParsePositiveInt(headerStartRowText, out var headerStartRow))
             {
-                errorMessage = "HeaderStartRow 必须是正整数。";
+                errorMessage = localizedStrings.ProjectLayoutPositiveIntegerError("HeaderStartRow");
                 return false;
             }
 
             if (!TryParsePositiveInt(headerRowCountText, out var headerRowCount))
             {
-                errorMessage = "HeaderRowCount 必须是正整数。";
+                errorMessage = localizedStrings.ProjectLayoutPositiveIntegerError("HeaderRowCount");
                 return false;
             }
 
             if (!TryParsePositiveInt(dataStartRowText, out var dataStartRow))
             {
-                errorMessage = "DataStartRow 必须是正整数。";
+                errorMessage = localizedStrings.ProjectLayoutPositiveIntegerError("DataStartRow");
                 return false;
             }
 
             if (dataStartRow < headerStartRow + headerRowCount)
             {
-                errorMessage = "DataStartRow 必须大于或等于 HeaderStartRow + HeaderRowCount。";
+                errorMessage = localizedStrings.ProjectLayoutDataStartValidationError;
                 return false;
             }
 

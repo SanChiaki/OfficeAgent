@@ -18,13 +18,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var method = GetTryCreateBindingMethod();
             var seed = CreateSeedBinding();
-            var args = new object[] { seed, "abc", "2", "3", null, null };
+            var args = new object[] { seed, "abc", "2", "3", CreateHostStrings(), null, null };
 
             var success = (bool)method.Invoke(null, args);
 
             Assert.False(success);
-            Assert.Null(args[4]);
-            Assert.Equal("HeaderStartRow 必须是正整数。", (string)args[5]);
+            Assert.Null(args[5]);
+            Assert.Equal("HeaderStartRow 必须是正整数。", (string)args[6]);
         }
 
         [Fact]
@@ -32,15 +32,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var method = GetTryCreateBindingMethod();
             var seed = CreateSeedBinding();
-            var args = new object[] { seed, "1", "2", "2", null, null };
+            var args = new object[] { seed, "1", "2", "2", CreateHostStrings(), null, null };
 
             var success = (bool)method.Invoke(null, args);
 
             Assert.False(success);
-            Assert.Null(args[4]);
+            Assert.Null(args[5]);
             Assert.Equal(
                 "DataStartRow 必须大于或等于 HeaderStartRow + HeaderRowCount。",
-                (string)args[5]);
+                (string)args[6]);
         }
 
         [Fact]
@@ -48,13 +48,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var method = GetTryCreateBindingMethod();
             var seed = CreateSeedBinding();
-            var args = new object[] { seed, "1", "abc", "3", null, null };
+            var args = new object[] { seed, "1", "abc", "3", CreateHostStrings(), null, null };
 
             var success = (bool)method.Invoke(null, args);
 
             Assert.False(success);
-            Assert.Null(args[4]);
-            Assert.Equal("HeaderRowCount 必须是正整数。", (string)args[5]);
+            Assert.Null(args[5]);
+            Assert.Equal("HeaderRowCount 必须是正整数。", (string)args[6]);
         }
 
         [Fact]
@@ -62,13 +62,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var method = GetTryCreateBindingMethod();
             var seed = CreateSeedBinding();
-            var args = new object[] { seed, "1", "2", "abc", null, null };
+            var args = new object[] { seed, "1", "2", "abc", CreateHostStrings(), null, null };
 
             var success = (bool)method.Invoke(null, args);
 
             Assert.False(success);
-            Assert.Null(args[4]);
-            Assert.Equal("DataStartRow 必须是正整数。", (string)args[5]);
+            Assert.Null(args[5]);
+            Assert.Equal("DataStartRow 必须是正整数。", (string)args[6]);
         }
 
         [Fact]
@@ -76,12 +76,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var method = GetTryCreateBindingMethod();
             var seed = CreateSeedBinding();
-            var args = new object[] { seed, "4", "1", "5", null, null };
+            var args = new object[] { seed, "4", "1", "5", CreateHostStrings(), null, null };
 
             var success = (bool)method.Invoke(null, args);
 
             Assert.True(success);
-            var binding = Assert.IsType<SheetBinding>(args[4]);
+            var binding = Assert.IsType<SheetBinding>(args[5]);
             Assert.NotSame(seed, binding);
             Assert.Equal("Sheet1", binding.SheetName);
             Assert.Equal("current-business-system", binding.SystemKey);
@@ -93,7 +93,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(1, seed.HeaderStartRow);
             Assert.Equal(2, seed.HeaderRowCount);
             Assert.Equal(3, seed.DataStartRow);
-            Assert.Null(args[5]);
+            Assert.Null(args[6]);
         }
 
         [Fact]
@@ -113,6 +113,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
             });
         }
 
+        [Fact]
+        public void DialogCanRenderEnglishChrome()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog("en"))
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    Assert.Equal("Configure sheet layout", dialog.Text);
+                    Assert.Contains(FindButtons(dialog), button => string.Equals(button.Text, "OK", StringComparison.Ordinal));
+                    Assert.Contains(FindButtons(dialog), button => string.Equals(button.Text, "Cancel", StringComparison.Ordinal));
+                    Assert.Contains(
+                        FindLabels(dialog),
+                        label => label.Text?.IndexOf("Current binding:", StringComparison.Ordinal) >= 0);
+                }
+            });
+        }
+
         private static MethodInfo GetTryCreateBindingMethod()
         {
             return GetProjectLayoutDialogType()
@@ -122,20 +142,51 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 ?? throw new InvalidOperationException("ProjectLayoutDialog.TryCreateBinding was not found.");
         }
 
-        private static Form CreateDialog()
+        private static Form CreateDialog(string locale = "zh")
         {
+            var hostStrings = CreateHostStrings(locale);
+
             return (Form)Activator.CreateInstance(
                 GetProjectLayoutDialogType(),
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { CreateSeedBinding() },
+                args: new object[] { CreateSeedBinding(), hostStrings },
                 culture: null);
+        }
+
+        private static object CreateHostStrings(string locale = "zh")
+        {
+            var hostStringsType = LoadAddInAssembly().GetType(
+                "OfficeAgent.ExcelAddIn.Localization.HostLocalizedStrings",
+                throwOnError: true);
+            var forLocale = hostStringsType.GetMethod("ForLocale", BindingFlags.Public | BindingFlags.Static);
+
+            return forLocale.Invoke(null, new object[] { locale });
         }
 
         private static Type GetProjectLayoutDialogType()
         {
-            return Assembly.LoadFrom(ResolveAddInAssemblyPath())
+            return LoadAddInAssembly()
                 .GetType("OfficeAgent.ExcelAddIn.Dialogs.ProjectLayoutDialog", throwOnError: true);
+        }
+
+        private static Assembly LoadAddInAssembly()
+        {
+            return Assembly.LoadFrom(ResolveAddInAssemblyPath());
+        }
+
+        private static IEnumerable<Button> FindButtons(Control root)
+        {
+            return root.Controls.Cast<Control>()
+                .SelectMany(control => FindButtons(control))
+                .Concat(root is Button button ? new[] { button } : Array.Empty<Button>());
+        }
+
+        private static IEnumerable<Label> FindLabels(Control root)
+        {
+            return root.Controls.Cast<Control>()
+                .SelectMany(control => FindLabels(control))
+                .Concat(root is Label label ? new[] { label } : Array.Empty<Label>());
         }
 
         private static void AssertLayoutFits(Control root)

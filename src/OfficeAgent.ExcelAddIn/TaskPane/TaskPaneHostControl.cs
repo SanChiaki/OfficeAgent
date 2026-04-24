@@ -5,6 +5,7 @@ using Microsoft.Web.WebView2.WinForms;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.ExcelAddIn.WebBridge;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
@@ -18,6 +19,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private SelectionContext pendingSelectionContext;
         private bool isLoadStarted;
         private bool isBridgeReady;
+        private readonly Func<AppSettings, string> getResolvedUiLocale;
+        private readonly FileSettingsStore settingsStore;
 
         public TaskPaneHostControl(
             FileSessionStore sessionStore,
@@ -29,6 +32,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             FileCookieStore cookieStore,
             Func<AppSettings, string> getResolvedUiLocale)
         {
+            this.settingsStore = settingsStore;
+            this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
             Dock = DockStyle.Fill;
 
             webView = new WebView2
@@ -68,7 +73,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 Controls.Add(new Label
                 {
                     Dock = DockStyle.Fill,
-                    Text = "WebView2 Runtime is required to render ISDP.",
+                    Text = GetStrings().TaskPaneRuntimeMissingMessage,
                     TextAlign = System.Drawing.ContentAlignment.MiddleCenter
                 });
             }
@@ -79,7 +84,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 Controls.Add(new Label
                 {
                     Dock = DockStyle.Fill,
-                    Text = "ISDP could not initialize the task pane. Check the local log and reopen Excel.",
+                    Text = GetStrings().TaskPaneInitializationFailedMessage,
                     TextAlign = System.Drawing.ContentAlignment.MiddleCenter
                 });
             }
@@ -94,6 +99,11 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             }
 
             bootstrapper.PublishSelectionContext(selectionContext);
+        }
+
+        private HostLocalizedStrings GetStrings()
+        {
+            return HostLocalizedStrings.ForLocale(getResolvedUiLocale(settingsStore.Load()));
         }
     }
 }

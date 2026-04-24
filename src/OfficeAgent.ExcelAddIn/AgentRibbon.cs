@@ -9,21 +9,15 @@ using OfficeAgent.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Dialogs;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn
 {
     public partial class AgentRibbon
     {
-        private const string ProjectDropDownPlaceholderText = "先选择项目";
         private const string ProjectDropDownPlaceholderTag = "__no_project__";
         private const string SyntheticProjectDropDownTagPrefix = "__display__:";
-
-        private static readonly string[] StickyNoProjectTexts =
-        {
-            "请先登录",
-            "无可用项目",
-            "项目加载失败",
-        };
+        private static string ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText;
 
         private readonly Dictionary<string, ProjectOption> projectOptionsByKey =
             new Dictionary<string, ProjectOption>(StringComparer.Ordinal);
@@ -35,11 +29,12 @@ namespace OfficeAgent.ExcelAddIn
         private bool isUpdatingProjectDropDown;
         private bool isBoundToSyncController;
         private bool isBoundToTemplateController;
-        private string lastControllerOwnedProjectDropDownText = "先选择项目";
+        private string lastControllerOwnedProjectDropDownText = HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
-            SetProjectDropDownText("先选择项目");
+            ApplyLocalizedLabels();
+            SetProjectDropDownText(ProjectDropDownPlaceholderText);
             RefreshTemplateButtonsFromController();
             BindToControllersAndRefresh();
         }
@@ -66,11 +61,12 @@ namespace OfficeAgent.ExcelAddIn
 
             if (string.IsNullOrWhiteSpace(ssoUrl))
             {
-                MessageBox.Show("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E SSO \u5730\u5740\u3002", "ISDP", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                var strings = GetStrings();
+                MessageBox.Show(strings.ConfigureSsoUrlFirstMessage, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
-            loginButton.Label = "\u767B\u5F55\u4E2D...";
+            loginButton.Label = GetStrings().RibbonLoginInProgressButtonLabel;
             loginButton.Enabled = false;
 
             try
@@ -95,12 +91,12 @@ namespace OfficeAgent.ExcelAddIn
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "ISDP", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, GetStrings().HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
             finally
             {
-                loginButton.Label = "\u767B\u5F55";
+                loginButton.Label = GetStrings().RibbonLoginButtonLabel;
                 loginButton.Enabled = true;
             }
         }
@@ -124,11 +120,13 @@ namespace OfficeAgent.ExcelAddIn
                 var noProjectRestoreText = GetNoProjectRestoreText(
                     projectOptionsByKey.Count,
                     syncController.ActiveProjectId,
-                    lastControllerOwnedProjectDropDownText);
+                    lastControllerOwnedProjectDropDownText,
+                    ProjectDropDownPlaceholderText,
+                    GetStickyNoProjectTexts());
                 if (noProjectRestoreText != null)
                 {
                     SetProjectDropDownText(noProjectRestoreText);
-                    if (IsStickyNoProjectText(noProjectRestoreText))
+                    if (IsStickyNoProjectText(noProjectRestoreText, GetStickyNoProjectTexts()))
                     {
                         OfficeAgentLog.Warn(
                             "ribbon",
@@ -158,12 +156,12 @@ namespace OfficeAgent.ExcelAddIn
                 }
                 else
                 {
-                    text = "先选择项目";
+                    text = ProjectDropDownPlaceholderText;
                 }
 
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    text = "先选择项目";
+                    text = ProjectDropDownPlaceholderText;
                 }
 
                 SetProjectDropDownText(text);
@@ -195,7 +193,7 @@ namespace OfficeAgent.ExcelAddIn
             {
                 projectDropDown.Items.Clear();
                 AddProjectDropDownPlaceholderItem();
-                SetProjectDropDownText("先选择项目");
+                SetProjectDropDownText(ProjectDropDownPlaceholderText);
 
                 try
                 {
@@ -220,10 +218,10 @@ namespace OfficeAgent.ExcelAddIn
 
                     if (projectOptionsByKey.Count == 0)
                     {
-                        SetProjectDropDownStatus("无可用项目");
+                        SetProjectDropDownStatus(GetStrings().ProjectDropDownNoAvailableProjectsText);
                         OfficeAgentLog.Warn("ribbon", "project_dropdown.empty", "Project list returned no available projects.");
                         ScheduleProjectLoadWarning(
-                            "项目列表加载完成，但未获取到任何可用项目。\r\n请检查登录状态或项目接口返回。",
+                            GetStrings().ProjectListEmptyWarningMessage,
                             MessageBoxIcon.Warning);
                     }
                     else
@@ -237,7 +235,7 @@ namespace OfficeAgent.ExcelAddIn
                 }
                 catch (AuthenticationRequiredException ex)
                 {
-                    SetProjectDropDownStatus("请先登录");
+                    SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);
                     OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
                     if (OperationResultDialog.ShowAuthenticationRequired(ex.Message))
                     {
@@ -246,18 +244,18 @@ namespace OfficeAgent.ExcelAddIn
                 }
                 catch (InvalidOperationException ex)
                 {
-                    SetProjectDropDownStatus("项目加载失败");
+                    SetProjectDropDownStatus(GetStrings().ProjectDropDownLoadFailedText);
                     OfficeAgentLog.Error("ribbon", "project_dropdown.load_failed", "Failed to load project list.", ex);
                     ScheduleProjectLoadWarning(
-                        $"项目列表加载失败。\r\n{ex.Message}",
+                        GetStrings().ProjectListLoadFailedMessage(ex.Message),
                         MessageBoxIcon.Error);
                 }
                 catch (Exception ex)
                 {
-                    SetProjectDropDownStatus("项目加载失败");
+                    SetProjectDropDownStatus(GetStrings().ProjectDropDownLoadFailedText);
                     OfficeAgentLog.Error("ribbon", "project_dropdown.load_failed", "Failed to load project list.", ex);
                     ScheduleProjectLoadWarning(
-                        $"项目列表加载失败。\r\n{ex.Message}",
+                        GetStrings().ProjectListLoadFailedMessage(ex.Message),
                         MessageBoxIcon.Error);
                 }
             }
@@ -276,12 +274,12 @@ namespace OfficeAgent.ExcelAddIn
                 $"Scheduling project dropdown warning. SynchronizationContext={syncContext?.GetType().FullName ?? "null"}; Message={message}");
             if (syncContext == null)
             {
-                MessageBox.Show(message, "ISDP", MessageBoxButtons.OK, icon);
+                MessageBox.Show(message, GetStrings().HostWindowTitle, MessageBoxButtons.OK, icon);
                 return;
             }
 
             syncContext.Post(
-                _ => MessageBox.Show(message, "ISDP", MessageBoxButtons.OK, icon),
+                _ => MessageBox.Show(message, GetStrings().HostWindowTitle, MessageBoxButtons.OK, icon),
                 state: null);
         }
 
@@ -438,6 +436,7 @@ namespace OfficeAgent.ExcelAddIn
 
         internal void BindToControllersAndRefresh()
         {
+            ApplyLocalizedLabels();
             if (TryBindToSyncController())
             {
                 Globals.ThisAddIn.RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
@@ -550,7 +549,9 @@ namespace OfficeAgent.ExcelAddIn
             var noProjectRestoreText = GetNoProjectRestoreText(
                 projectOptionsByKey.Count,
                 syncController?.ActiveProjectId,
-                lastControllerOwnedProjectDropDownText);
+                lastControllerOwnedProjectDropDownText,
+                ProjectDropDownPlaceholderText,
+                GetStickyNoProjectTexts());
             if (noProjectRestoreText != null)
             {
                 isUpdatingProjectDropDown = true;
@@ -571,19 +572,53 @@ namespace OfficeAgent.ExcelAddIn
 
         private static string GetNoProjectRestoreText(int projectOptionCount, string activeProjectId, string lastControllerOwnedText)
         {
+            return GetNoProjectRestoreText(
+                projectOptionCount,
+                activeProjectId,
+                lastControllerOwnedText,
+                HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText,
+                new[]
+                {
+                    HostLocalizedStrings.ForLocale("en").ProjectDropDownLoginRequiredText,
+                    HostLocalizedStrings.ForLocale("en").ProjectDropDownNoAvailableProjectsText,
+                    HostLocalizedStrings.ForLocale("en").ProjectDropDownLoadFailedText,
+                    HostLocalizedStrings.ForLocale("zh").ProjectDropDownLoginRequiredText,
+                    HostLocalizedStrings.ForLocale("zh").ProjectDropDownNoAvailableProjectsText,
+                    HostLocalizedStrings.ForLocale("zh").ProjectDropDownLoadFailedText,
+                });
+        }
+
+        private static string GetNoProjectRestoreText(
+            int projectOptionCount,
+            string activeProjectId,
+            string lastControllerOwnedText,
+            string placeholderText,
+            string[] stickyNoProjectTexts)
+        {
             if (projectOptionCount != 0 || !string.IsNullOrWhiteSpace(activeProjectId))
             {
                 return null;
             }
 
-            return IsStickyNoProjectText(lastControllerOwnedText)
+            return IsStickyNoProjectText(lastControllerOwnedText, stickyNoProjectTexts)
                 ? lastControllerOwnedText
-                : "先选择项目";
+                : (string.IsNullOrWhiteSpace(placeholderText) ? HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText : placeholderText);
         }
 
-        private static bool IsStickyNoProjectText(string text)
+        private static bool IsStickyNoProjectText(string text, string[] stickyNoProjectTexts)
         {
-            return Array.IndexOf(StickyNoProjectTexts, text ?? string.Empty) >= 0;
+            return Array.IndexOf(stickyNoProjectTexts ?? Array.Empty<string>(), text ?? string.Empty) >= 0;
+        }
+
+        private static string[] GetStickyNoProjectTexts()
+        {
+            var strings = GetStrings();
+            return new[]
+            {
+                strings.ProjectDropDownLoginRequiredText,
+                strings.ProjectDropDownNoAvailableProjectsText,
+                strings.ProjectDropDownLoadFailedText,
+            };
         }
 
         private void FullDownloadButton_Click(object sender, RibbonControlEventArgs e)
@@ -604,6 +639,35 @@ namespace OfficeAgent.ExcelAddIn
         private void PartialUploadButton_Click(object sender, RibbonControlEventArgs e)
         {
             Globals.ThisAddIn.RibbonSyncController?.ExecutePartialUpload();
+        }
+
+        private void ApplyLocalizedLabels()
+        {
+            var strings = GetStrings();
+            tab1.Label = strings.RibbonTabLabel;
+            group1.Label = strings.RibbonAgentGroupLabel;
+            toggleTaskPaneButton.Label = strings.RibbonAgentButtonLabel;
+            groupProject.Label = strings.RibbonProjectGroupLabel;
+            initializeSheetButton.Label = strings.RibbonInitializeSheetButtonLabel;
+            groupTemplate.Label = strings.RibbonTemplateGroupLabel;
+            applyTemplateButton.Label = strings.RibbonApplyTemplateButtonLabel;
+            saveTemplateButton.Label = strings.RibbonSaveTemplateButtonLabel;
+            saveAsTemplateButton.Label = strings.RibbonSaveAsTemplateButtonLabel;
+            groupDownload.Label = strings.RibbonDownloadGroupLabel;
+            fullDownloadButton.Label = strings.RibbonFullDownloadButtonLabel;
+            partialDownloadButton.Label = strings.RibbonPartialDownloadButtonLabel;
+            groupUpload.Label = strings.RibbonUploadGroupLabel;
+            fullUploadButton.Label = strings.RibbonFullUploadButtonLabel;
+            partialUploadButton.Label = strings.RibbonPartialUploadButtonLabel;
+            group2.Label = strings.RibbonAccountGroupLabel;
+            loginButton.Label = strings.RibbonLoginButtonLabel;
+            projectDropDown.Label = ProjectDropDownPlaceholderText;
+        }
+
+        private static HostLocalizedStrings GetStrings()
+        {
+            var strings = Globals.ThisAddIn?.HostLocalizedStrings;
+            return strings ?? HostLocalizedStrings.ForLocale("en");
         }
     }
 }

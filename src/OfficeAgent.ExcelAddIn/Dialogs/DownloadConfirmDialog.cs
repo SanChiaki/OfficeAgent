@@ -1,6 +1,7 @@
 using System.Text;
 using OfficeAgent.Core.Models;
 using System.Windows.Forms;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn.Dialogs
 {
@@ -13,18 +14,19 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             int fieldCount,
             SyncOperationPreview overwritePreview)
         {
+            var strings = Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
             var builder = new StringBuilder()
-                .AppendLine($"确认要执行{operationName}吗？")
-                .AppendLine($"项目：{projectName}")
-                .AppendLine($"记录数：{rowCount}")
-                .AppendLine($"字段数：{fieldCount}");
+                .AppendLine(strings.ConfirmOperationPrompt(operationName))
+                .AppendLine(strings.ProjectLine(projectName))
+                .AppendLine(strings.RowCountLine(rowCount))
+                .AppendLine(strings.FieldCountLine(fieldCount));
 
             var dirtyCount = overwritePreview?.Changes?.Length ?? 0;
             if (dirtyCount > 0)
             {
                 builder
                     .AppendLine()
-                    .AppendLine($"将覆盖 {dirtyCount} 个未上传改单元格。");
+                    .AppendLine(strings.OverwriteDirtyCellsLine(dirtyCount));
 
                 foreach (var detail in overwritePreview.Details ?? System.Array.Empty<string>())
                 {
@@ -34,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             var result = MessageBox.Show(
                 builder.ToString(),
-                "ISDP",
+                strings.HostWindowTitle,
                 MessageBoxButtons.YesNo,
                 dirtyCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
                 dirtyCount > 0 ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1);

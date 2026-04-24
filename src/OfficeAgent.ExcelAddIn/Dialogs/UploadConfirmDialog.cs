@@ -1,6 +1,7 @@
 using System.Text;
 using OfficeAgent.Core.Models;
 using System.Windows.Forms;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn.Dialogs
 {
@@ -8,9 +9,10 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
     {
         public static bool Confirm(string operationName, string projectName, SyncOperationPreview preview)
         {
+            var strings = Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
             var builder = new StringBuilder()
-                .AppendLine($"确认要执行{operationName}吗？")
-                .AppendLine($"项目：{projectName}")
+                .AppendLine(strings.ConfirmOperationPrompt(operationName))
+                .AppendLine(strings.ProjectLine(projectName))
                 .AppendLine(preview?.Summary ?? string.Empty);
 
             foreach (var detail in preview?.Details ?? System.Array.Empty<string>())
@@ -20,7 +22,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             var result = MessageBox.Show(
                 builder.ToString(),
-                "ISDP",
+                strings.HostWindowTitle,
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question,
                 MessageBoxDefaultButton.Button2);

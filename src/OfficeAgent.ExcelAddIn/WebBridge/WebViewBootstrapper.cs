@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
@@ -19,6 +20,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private const string VirtualHost = "appassets.officeagent.local";
         private readonly WebView2 webView;
         private readonly WebMessageRouter messageRouter;
+        private readonly FileSettingsStore settingsStore;
+        private readonly Func<AppSettings, string> getResolvedUiLocale;
         private bool isInitialized;
         private bool isProcessing;
 
@@ -34,6 +37,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             Func<AppSettings, string> getResolvedUiLocale)
         {
             this.webView = webView;
+            this.settingsStore = settingsStore;
+            this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
             messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
         }
 
@@ -64,7 +69,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             if (frontendFolder == null)
             {
                 OfficeAgentLog.Warn("webview", "frontend.missing", "Frontend assets were not found for the task pane.");
-                webView.NavigateToString(BuildFallbackHtml());
+                webView.NavigateToString(GetStrings().BootstrapperFallbackHtml);
                 return;
             }
 
@@ -112,7 +117,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                 if (isProcessing)
                 {
                     // Swallow any posting failure — the process might be in a bad state.
-                    TryPostErrorResponse(rawJson, "busy", "Another request is already in progress. Please wait.");
+                    TryPostErrorResponse(rawJson, "busy", GetStrings().BridgeBusyMessage);
                     return;
                 }
 
@@ -131,8 +136,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     // Use TryPostError so a secondary failure cannot escape async void.
                     var requestId = ExtractRequestId(rawJson);
                     var message = error is OperationCanceledException
-                        ? "Agent request timed out."
-                        : (error.Message ?? "Agent execution failed.");
+                        ? GetStrings().BridgeAgentRequestTimedOutMessage
+                        : (error.Message ?? GetStrings().BridgeAgentExecutionFailedMessage);
                     TryPostError(requestId, rawJson, "internal_error", message);
                 }
                 finally
@@ -274,24 +279,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             TryPostWebMessage(errorJson);
         }
 
-        private static string BuildFallbackHtml()
+        private HostLocalizedStrings GetStrings()
         {
-            return @"<!doctype html>
-<html lang=""en"">
-  <head>
-    <meta charset=""utf-8"" />
-    <title>ISDP</title>
-    <style>
-      body { font-family: Segoe UI, sans-serif; padding: 24px; color: #1f2937; }
-      code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
-    </style>
-  </head>
-  <body>
-    <h1>ISDP</h1>
-    <p>Frontend assets were not found.</p>
-    <p>Build <code>src/OfficeAgent.Frontend</code> and reopen the task pane.</p>
-  </body>
-</html>";
+            return HostLocalizedStrings.ForLocale(getResolvedUiLocale(settingsStore.Load() ?? new AppSettings()));
         }
     }
 }

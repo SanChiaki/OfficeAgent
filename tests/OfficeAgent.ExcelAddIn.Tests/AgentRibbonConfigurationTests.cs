@@ -57,6 +57,37 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void RibbonRuntimeLabelsComeFromHostLocalizedStrings()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("var strings = Globals.ThisAddIn?.HostLocalizedStrings", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ApplyLocalizedLabels", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonDesignerUsesEnglishSafeDefaultsForLocalizedControls()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.groupProject.Label = \"Project\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.projectDropDown.Label = \"Select project\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.Label = \"Initialize sheet\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDownload.Label = \"Download\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupUpload.Label = \"Upload\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.group2.Label = \"Account\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.Label = \"Login\";", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void UploadGroupOmitsFullUploadButton()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
@@ -172,7 +203,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("SetProjectDropDownStatus(\"请先登录\")", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText)", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("ExecuteLoginFlow", ribbonCodeText, StringComparison.Ordinal);
         }
 
@@ -185,7 +216,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "Dialogs",
                 "OperationResultDialog.cs"));
 
-            Assert.Contains("点我登录", dialogCodeText, StringComparison.Ordinal);
+            Assert.Contains("AuthenticationRequiredLoginButtonText", dialogCodeText, StringComparison.Ordinal);
             Assert.Contains("ShowAuthenticationRequired", dialogCodeText, StringComparison.Ordinal);
         }
 
@@ -212,7 +243,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "AgentRibbon.cs"));
 
             Assert.Contains("if (projectOptionsByKey.Count == 0)", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("未获取到任何可用项目", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ProjectListEmptyWarningMessage", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -223,8 +254,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("SetProjectDropDownStatus(\"请先登录\")", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("SetProjectDropDownStatus(\"无可用项目\")", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownStatus(GetStrings().ProjectDropDownNoAvailableProjectsText)", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -246,7 +277,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("SetProjectDropDownText(\"先选择项目\");", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownText(ProjectDropDownPlaceholderText);", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -651,20 +682,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "Debug",
                 "OfficeAgent.ExcelAddIn.dll"));
             var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
-            var method = ribbonType.GetMethod("GetNoProjectRestoreText", BindingFlags.Static | BindingFlags.NonPublic);
+            var method = ribbonType.GetMethod(
+                "GetNoProjectRestoreText",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int), typeof(string), typeof(string) },
+                modifiers: null);
 
             Assert.NotNull(method);
             Assert.Equal(
-                "请先登录",
-                (string)method.Invoke(null, new object[] { 0, string.Empty, "请先登录" }));
+                "Sign in first",
+                (string)method.Invoke(null, new object[] { 0, string.Empty, "Sign in first" }));
             Assert.Equal(
-                "先选择项目",
+                "Select project",
                 (string)method.Invoke(null, new object[] { 0, string.Empty, string.Empty }));
             Assert.Equal(
-                "先选择项目",
+                "Select project",
                 (string)method.Invoke(null, new object[] { 0, string.Empty, "proj-a-项目A" }));
-            Assert.Null(method.Invoke(null, new object[] { 1, string.Empty, "请先登录" }));
-            Assert.Null(method.Invoke(null, new object[] { 0, "project-1", "请先登录" }));
+            Assert.Null(method.Invoke(null, new object[] { 1, string.Empty, "Sign in first" }));
+            Assert.Null(method.Invoke(null, new object[] { 0, "project-1", "Sign in first" }));
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

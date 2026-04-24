@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using OfficeAgent.Core.Diagnostics;
+using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
@@ -18,6 +19,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly string loginSuccessPath;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
+        private readonly HostLocalizedStrings strings;
         private WebView2 webView;
         private bool hasLoginSucceeded;
 
@@ -27,12 +29,13 @@ namespace OfficeAgent.ExcelAddIn
             this.loginSuccessPath = loginSuccessPath ?? string.Empty;
             this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
             this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
+            strings = Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
 
             FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = true;
             MinimizeBox = true;
             StartPosition = FormStartPosition.CenterScreen;
-            Text = "ISDP - \u767B\u5F55";
+            Text = strings.SsoLoginPopupTitle;
             Size = new System.Drawing.Size(1024, 700);
             MinimumSize = new System.Drawing.Size(600, 400);
 
@@ -46,9 +49,11 @@ namespace OfficeAgent.ExcelAddIn
 
             var loginOkButton = new Button
             {
-                Text = "\u5DF2\u767B\u5F55",
-                Width = 90,
-                Height = 34,
+                Text = strings.SsoLoginConfirmedButtonText,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(10, 6, 10, 6),
+                Margin = new Padding(6, 0, 0, 0),
             };
             loginOkButton.Click += (sender, e) =>
             {
@@ -58,9 +63,11 @@ namespace OfficeAgent.ExcelAddIn
 
             var cancelButton = new Button
             {
-                Text = "\u53D6\u6D88",
-                Width = 90,
-                Height = 34,
+                Text = strings.CancelButtonText,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(10, 6, 10, 6),
+                Margin = new Padding(6, 0, 0, 0),
             };
             cancelButton.Click += (sender, e) =>
             {

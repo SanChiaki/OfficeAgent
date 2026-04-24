@@ -8,6 +8,7 @@ using Newtonsoft.Json.Serialization;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
+using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Storage;
 
@@ -124,7 +125,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "internal_error",
-                    message: "ISDP hit an unexpected error. Check the local log and try again.");
+                    message: GetStrings().BridgeUnexpectedErrorMessage);
             }
 
             return JsonConvert.SerializeObject(response, SerializerSettings);
@@ -144,7 +145,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     type: "bridge.unknown",
                     requestId: string.Empty,
                     code: "malformed_json",
-                    message: "The web message payload was not valid JSON.");
+                    message: GetStrings().BridgeMalformedJsonMessage);
             }
 
             if (request == null ||
@@ -155,7 +156,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     type: request?.Type ?? "bridge.unknown",
                     requestId: request?.RequestId ?? string.Empty,
                     code: "malformed_request",
-                    message: "Web messages must include both type and requestId.");
+                    message: GetStrings().BridgeMalformedRequestMessage);
             }
 
             if (!allowedTypes.Contains(request.Type))
@@ -164,7 +165,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "unknown_message",
-                    message: $"Message type '{request.Type}' is not allowed.");
+                    message: GetStrings().BridgeUnknownMessageTypeMessage(request.Type));
             }
 
             OfficeAgentLog.Info("bridge", "request.received", $"Received {request.Type}.", request.RequestId);
@@ -180,7 +181,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 request.Type,
                                 request.RequestId,
                                 code: "malformed_payload",
-                                message: "bridge.ping does not accept a payload.");
+                                message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.Ping));
                         }
 
                         return Success(
@@ -198,7 +199,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 request.Type,
                                 request.RequestId,
                                 code: "malformed_payload",
-                                message: "bridge.getHostContext does not accept a payload.");
+                                message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetHostContext));
                         }
 
                         return Success(request.Type, request.RequestId, GetHostContextPayload(settingsStore.Load() ?? new AppSettings()));
@@ -209,7 +210,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 request.Type,
                                 request.RequestId,
                                 code: "malformed_payload",
-                                message: "bridge.getSettings does not accept a payload.");
+                                message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetSettings));
                         }
 
                         return Success(request.Type, request.RequestId, settingsStore.Load());
@@ -220,7 +221,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 request.Type,
                                 request.RequestId,
                                 code: "malformed_payload",
-                                message: "bridge.getSessions does not accept a payload.");
+                                message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetSessions));
                         }
 
                         return Success(request.Type, request.RequestId, sessionStore.Load());
@@ -233,7 +234,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 request.Type,
                                 request.RequestId,
                                 code: "malformed_payload",
-                                message: "bridge.getSelectionContext does not accept a payload.");
+                                message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetSelectionContext));
                         }
 
                         return Success(request.Type, request.RequestId, excelContextService.GetCurrentSelectionContext());
@@ -254,13 +255,13 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                             request.Type,
                             request.RequestId,
                             code: "invalid_dispatch",
-                            message: "bridge.login must be routed asynchronously.");
+                            message: GetStrings().BridgeLoginMustBeAsyncMessage);
                     default:
                         return Error(
                             request.Type,
                             request.RequestId,
                             code: "unknown_message",
-                            message: $"Message type '{request.Type}' is not allowed.");
+                            message: GetStrings().BridgeUnknownMessageTypeMessage(request.Type));
                 }
             }
             catch (Exception error)
@@ -270,7 +271,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "internal_error",
-                    message: "ISDP hit an unexpected error. Check the local log and try again.");
+                    message: GetStrings().BridgeUnexpectedErrorMessage);
             }
         }
 
@@ -282,7 +283,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runSkill requires a skill payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.RunSkill, "a skill payload"));
             }
 
             try
@@ -297,7 +298,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runSkill requires a valid skill payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.RunSkill, "a skill payload"));
             }
             catch (ArgumentException error)
             {
@@ -325,7 +326,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runSkill requires a skill payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.RunSkill, "a skill payload"));
             }
 
             try
@@ -341,7 +342,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runSkill requires a valid skill payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.RunSkill, "a skill payload"));
             }
             catch (ArgumentException error)
             {
@@ -369,7 +370,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runAgent requires an agent payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.RunAgent, "an agent payload"));
             }
 
             try
@@ -384,7 +385,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runAgent requires a valid agent payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.RunAgent, "an agent payload"));
             }
             catch (ArgumentException error)
             {
@@ -412,7 +413,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runAgent requires an agent payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.RunAgent, "an agent payload"));
             }
 
             try
@@ -428,7 +429,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.runAgent requires a valid agent payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.RunAgent, "an agent payload"));
             }
             catch (ArgumentException error)
             {
@@ -456,7 +457,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.getLoginStatus does not accept a payload.");
+                    message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetLoginStatus));
             }
 
             var settings = settingsStore.Load();
@@ -491,7 +492,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.logout does not accept a payload.");
+                    message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.Logout));
             }
 
             var ssoDomain = sharedCookies.SsoDomain;
@@ -548,7 +549,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             if (string.IsNullOrWhiteSpace(ssoUrl))
             {
-                return Error(request.Type, request.RequestId, "missing_sso_url", "\u8BF7\u5148\u914D\u7F6E SSO URL\u3002");
+                return Error(request.Type, request.RequestId, "missing_sso_url", GetStrings().BridgeMissingSsoUrlMessage);
             }
 
             try
@@ -562,7 +563,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                         return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
                     }
 
-                    return Success(request.Type, request.RequestId, new LoginResultPayload { Success = false, Error = "\u7528\u6237\u53D6\u6D88\u4E86\u767B\u5F55\u3002" });
+                    return Success(request.Type, request.RequestId, new LoginResultPayload { Success = false, Error = GetStrings().BridgeLoginCanceledMessage });
                 }
             }
             catch (Exception error)
@@ -579,7 +580,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.saveSessions requires a session state payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.SaveSessions, "a session state payload"));
             }
 
             try
@@ -594,7 +595,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.saveSessions requires a valid session state payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.SaveSessions, "a session state payload"));
             }
         }
 
@@ -606,7 +607,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.saveSettings requires a settings payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.SaveSettings, "a settings payload"));
             }
 
             try
@@ -621,7 +622,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.saveSettings requires a valid settings payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.SaveSettings, "a settings payload"));
             }
         }
 
@@ -672,6 +673,11 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             return token == null || token.Type == JTokenType.String || token.Type == JTokenType.Null;
         }
 
+        private HostLocalizedStrings GetStrings(AppSettings settings = null)
+        {
+            return HostLocalizedStrings.ForLocale(getResolvedUiLocale(settings ?? settingsStore.Load() ?? new AppSettings()));
+        }
+
         private WebMessageResponse ExecuteExcelCommand(WebMessageRequest request)
         {
             if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
@@ -680,7 +686,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.executeExcelCommand requires a command payload.");
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.ExecuteExcelCommand, "a command payload"));
             }
 
             try
@@ -700,7 +706,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     request.Type,
                     request.RequestId,
                     code: "malformed_payload",
-                    message: "bridge.executeExcelCommand requires a valid command payload.");
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.ExecuteExcelCommand, "a command payload"));
             }
             catch (ArgumentException error)
             {

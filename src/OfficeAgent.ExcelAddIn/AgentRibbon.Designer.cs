@@ -77,12 +77,12 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.groupProject.Items.Add(this.projectDropDown);
             this.groupProject.Items.Add(this.initializeSheetButton);
-            this.groupProject.Label = "\u9879\u76EE";
+            this.groupProject.Label = "Project";
             this.groupProject.Name = "groupProject";
             // 
             // projectDropDown
             // 
-            this.projectDropDown.Label = "\u5148\u9009\u62E9\u9879\u76EE";
+            this.projectDropDown.Label = "Select project";
             this.projectDropDown.Name = "projectDropDown";
             this.projectDropDown.SizeString = "WWWWWWWWWWWWWWWWWWWW";
             this.projectDropDown.ShowItemLabel = true;
@@ -92,7 +92,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // initializeSheetButton
             // 
-            this.initializeSheetButton.Label = "\u521D\u59CB\u5316\u5F53\u524D\u8868";
+            this.initializeSheetButton.Label = "Initialize sheet";
             this.initializeSheetButton.Name = "initializeSheetButton";
             this.initializeSheetButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.InitializeSheetButton_Click);
             // 
@@ -101,69 +101,69 @@ namespace OfficeAgent.ExcelAddIn
             this.groupTemplate.Items.Add(this.applyTemplateButton);
             this.groupTemplate.Items.Add(this.saveTemplateButton);
             this.groupTemplate.Items.Add(this.saveAsTemplateButton);
-            this.groupTemplate.Label = "\u6A21\u677F";
+            this.groupTemplate.Label = "Template";
             this.groupTemplate.Name = "groupTemplate";
             // 
             // applyTemplateButton
             // 
-            this.applyTemplateButton.Label = "\u5E94\u7528\u6A21\u677F";
+            this.applyTemplateButton.Label = "Apply template";
             this.applyTemplateButton.Name = "applyTemplateButton";
             this.applyTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ApplyTemplateButton_Click);
             // 
             // saveTemplateButton
             // 
-            this.saveTemplateButton.Label = "\u4FDD\u5B58\u6A21\u677F";
+            this.saveTemplateButton.Label = "Save template";
             this.saveTemplateButton.Name = "saveTemplateButton";
             this.saveTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveTemplateButton_Click);
             // 
             // saveAsTemplateButton
             // 
-            this.saveAsTemplateButton.Label = "\u53E6\u5B58\u6A21\u677F";
+            this.saveAsTemplateButton.Label = "Save as template";
             this.saveAsTemplateButton.Name = "saveAsTemplateButton";
             this.saveAsTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveAsTemplateButton_Click);
             // 
             // groupDownload
             // 
             this.groupDownload.Items.Add(this.partialDownloadButton);
-            this.groupDownload.Label = "\u4E0B\u8F7D";
+            this.groupDownload.Label = "Download";
             this.groupDownload.Name = "groupDownload";
             // 
             // fullDownloadButton
             // 
-            this.fullDownloadButton.Label = "\u5168\u91CF\u4E0B\u8F7D";
+            this.fullDownloadButton.Label = "Full download";
             this.fullDownloadButton.Name = "fullDownloadButton";
             this.fullDownloadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.FullDownloadButton_Click);
             // 
             // partialDownloadButton
             // 
-            this.partialDownloadButton.Label = "\u90E8\u5206\u4E0B\u8F7D";
+            this.partialDownloadButton.Label = "Partial download";
             this.partialDownloadButton.Name = "partialDownloadButton";
             this.partialDownloadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.PartialDownloadButton_Click);
             // 
             // groupUpload
             // 
             this.groupUpload.Items.Add(this.partialUploadButton);
-            this.groupUpload.Label = "\u4E0A\u4F20";
+            this.groupUpload.Label = "Upload";
             this.groupUpload.Name = "groupUpload";
             // 
             // fullUploadButton
             // 
-            this.fullUploadButton.Label = "\u5168\u91CF\u4E0A\u4F20";
+            this.fullUploadButton.Label = "Full upload";
             this.fullUploadButton.Name = "fullUploadButton";
             this.fullUploadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.FullUploadButton_Click);
             // 
             // partialUploadButton
             // 
-            this.partialUploadButton.Label = "\u90E8\u5206\u4E0A\u4F20";
+            this.partialUploadButton.Label = "Partial upload";
             this.partialUploadButton.Name = "partialUploadButton";
             this.partialUploadButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.PartialUploadButton_Click);
             //
             // loginButton
             //
             this.group2.Items.Add(this.loginButton);
-            this.group2.Label = "\u8D26\u53F7";
+            this.group2.Label = "Account";
             this.group2.Name = "group2";
-            this.loginButton.Label = "\u767B\u5F55";
+            this.loginButton.Label = "Login";
             this.loginButton.Name = "loginButton";
             this.loginButton.ShowImage = false;
             this.loginButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.LoginButton_Click);

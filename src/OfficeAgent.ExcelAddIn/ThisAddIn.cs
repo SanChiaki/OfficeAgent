@@ -41,6 +41,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
+        internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
 
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
@@ -251,6 +252,12 @@ namespace OfficeAgent.ExcelAddIn
             {
                 return string.Empty;
             }
+        }
+
+        internal Localization.HostLocalizedStrings GetHostLocalizedStrings(AppSettings settings = null)
+        {
+            var resolvedLocale = GetResolvedUiLocale?.Invoke(settings ?? SettingsStore?.Load() ?? new AppSettings()) ?? "en";
+            return Localization.HostLocalizedStrings.ForLocale(resolvedLocale);
         }
 
         private void RestoreWorksheetFocus(ExcelInterop.Range target)
