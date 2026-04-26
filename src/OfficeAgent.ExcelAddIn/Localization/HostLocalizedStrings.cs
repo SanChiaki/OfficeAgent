@@ -17,7 +17,7 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonAgentGroupLabel => "ISDP AI";
 
-        public string RibbonAgentButtonLabel => "ISDP AI";
+        public string RibbonAgentButtonLabel => "Open";
 
         public string RibbonProjectGroupLabel => Locale == "zh" ? "项目" : "Project";
 
@@ -52,17 +52,21 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "初始化当前表完成。"
             : "Initialize sheet completed.";
 
-        public string RibbonDownloadGroupLabel => Locale == "zh" ? "下载" : "Download";
+        public string RibbonDataSyncGroupLabel => Locale == "zh" ? "数据同步" : "Data sync";
 
         public string RibbonPartialDownloadButtonLabel => Locale == "zh" ? "部分下载" : "Partial download";
 
         public string RibbonFullDownloadButtonLabel => Locale == "zh" ? "全量下载" : "Full download";
 
-        public string RibbonUploadGroupLabel => Locale == "zh" ? "上传" : "Upload";
-
         public string RibbonPartialUploadButtonLabel => Locale == "zh" ? "部分上传" : "Partial upload";
 
         public string RibbonFullUploadButtonLabel => Locale == "zh" ? "全量上传" : "Full upload";
+
+        public string RibbonHelpGroupLabel => Locale == "zh" ? "帮助" : "Help";
+
+        public string RibbonDocumentationButtonLabel => Locale == "zh" ? "文档" : "Documentation";
+
+        public string RibbonAboutButtonLabel => Locale == "zh" ? "关于" : "About";
 
         public string RibbonAccountGroupLabel => Locale == "zh" ? "账号" : "Account";
 
@@ -73,6 +77,32 @@ namespace OfficeAgent.ExcelAddIn.Localization
         public string ConfigureSsoUrlFirstMessage => Locale == "zh"
             ? "请先在设置中配置 SSO 地址。"
             : "Configure the SSO URL in Settings first.";
+
+        public string DocumentationOpenFailedMessage(string details)
+        {
+            return Locale == "zh"
+                ? $"无法打开文档页面。\r\n{details}"
+                : $"Could not open the documentation page.\r\n{details}";
+        }
+
+        public string RibbonAboutDialogTitle => Locale == "zh" ? "关于 ISDP" : "About ISDP";
+
+        public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
+
+        public string AboutMessage(string appVersion, string assemblyVersion, string buildConfiguration, string buildTime)
+        {
+            return Locale == "zh"
+                ? "OfficeAgent Excel Add-in\r\n" +
+                    "版本号: " + appVersion + "\r\n" +
+                    "程序集版本: " + assemblyVersion + "\r\n" +
+                    "构建配置: " + buildConfiguration + "\r\n" +
+                    "构建时间: " + buildTime
+                : "OfficeAgent Excel Add-in\r\n" +
+                    "Version: " + appVersion + "\r\n" +
+                    "Assembly version: " + assemblyVersion + "\r\n" +
+                    "Build configuration: " + buildConfiguration + "\r\n" +
+                    "Build time: " + buildTime;
+        }
 
         public string AuthenticationRequiredDefaultMessage => Locale == "zh"
             ? "当前未登录，请先登录"

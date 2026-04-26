@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -18,6 +21,7 @@ namespace OfficeAgent.ExcelAddIn
         private const string ProjectDropDownPlaceholderTag = "__no_project__";
         private const string SyntheticProjectDropDownTagPrefix = "__display__:";
         private static string ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText;
+        private const string DocumentationUrl = "https://github.com/SanChiaki/OfficeAgent";
 
         private readonly Dictionary<string, ProjectOption> projectOptionsByKey =
             new Dictionary<string, ProjectOption>(StringComparer.Ordinal);
@@ -47,6 +51,71 @@ namespace OfficeAgent.ExcelAddIn
         private void LoginButton_Click(object sender, RibbonControlEventArgs e)
         {
             BeginLoginFlow(refreshProjectsAfterSuccess: true);
+        }
+
+        private void DocumentationButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                OpenUrlInDefaultBrowser(DocumentationUrl);
+            }
+            catch (Exception ex)
+            {
+                var strings = GetStrings();
+                MessageBox.Show(
+                    strings.DocumentationOpenFailedMessage(ex.Message),
+                    strings.HostWindowTitle,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void AboutButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            var strings = GetStrings();
+            MessageBox.Show(CreateAboutMessage(), strings.RibbonAboutDialogTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static void OpenUrlInDefaultBrowser(string url)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+
+        private static string CreateAboutMessage()
+        {
+            var assembly = typeof(AgentRibbon).Assembly;
+            var strings = GetStrings();
+            var assemblyVersion = assembly.GetName().Version?.ToString() ?? strings.UnknownText;
+
+            return strings.AboutMessage(
+                VersionInfo.AppVersion,
+                assemblyVersion,
+                GetBuildConfiguration(),
+                GetAssemblyBuildTime(assembly));
+        }
+
+        private static string GetAssemblyBuildTime(Assembly assembly)
+        {
+            var location = assembly.Location;
+            if (string.IsNullOrWhiteSpace(location) || !File.Exists(location))
+            {
+                return GetStrings().UnknownText;
+            }
+
+            return File.GetLastWriteTime(location).ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        private static string GetBuildConfiguration()
+        {
+#if DEBUG
+            return "Debug";
+#else
+            return "Release";
+#endif
         }
 
         internal async void BeginLoginFlow(bool refreshProjectsAfterSuccess)
@@ -610,14 +679,16 @@ namespace OfficeAgent.ExcelAddIn
             applyTemplateButton.Label = strings.RibbonApplyTemplateButtonLabel;
             saveTemplateButton.Label = strings.RibbonSaveTemplateButtonLabel;
             saveAsTemplateButton.Label = strings.RibbonSaveAsTemplateButtonLabel;
-            groupDownload.Label = strings.RibbonDownloadGroupLabel;
+            groupDataSync.Label = strings.RibbonDataSyncGroupLabel;
             fullDownloadButton.Label = strings.RibbonFullDownloadButtonLabel;
             partialDownloadButton.Label = strings.RibbonPartialDownloadButtonLabel;
-            groupUpload.Label = strings.RibbonUploadGroupLabel;
             fullUploadButton.Label = strings.RibbonFullUploadButtonLabel;
             partialUploadButton.Label = strings.RibbonPartialUploadButtonLabel;
             group2.Label = strings.RibbonAccountGroupLabel;
             loginButton.Label = strings.RibbonLoginButtonLabel;
+            groupHelp.Label = strings.RibbonHelpGroupLabel;
+            documentationButton.Label = strings.RibbonDocumentationButtonLabel;
+            aboutButton.Label = strings.RibbonAboutButtonLabel;
             projectDropDown.Label = ProjectDropDownPlaceholderText;
         }
 

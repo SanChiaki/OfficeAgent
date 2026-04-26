@@ -9,7 +9,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
     public sealed class AgentRibbonConfigurationTests
     {
         [Fact]
-        public void TaskPaneButtonDoesNotDependOnRuntimeImageAssignment()
+        public void TaskPaneButtonUsesBuiltInOfficeImage()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -20,9 +20,78 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("this.toggleTaskPaneButton.ShowImage = false;", designerText, StringComparison.Ordinal);
-            Assert.DoesNotContain("RibbonControlSize.RibbonControlSizeLarge", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.toggleTaskPaneButton.ShowImage = false;", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("toggleTaskPaneButton.Image = Properties.Resources.Logo;", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonButtonsUseSemanticBuiltInOfficeImages()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.toggleTaskPaneButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.OfficeImageId = \"TableInsert\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.OfficeImageId = \"FileOpen\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.OfficeImageId = \"FileSave\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.OfficeImageId = \"FileSaveAs\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullDownloadButton.OfficeImageId = \"RefreshAll\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialDownloadButton.OfficeImageId = \"Refresh\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullUploadButton.OfficeImageId = \"FilePublishToSharePoint\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialUploadButton.OfficeImageId = \"FileSendAsAttachment\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.OfficeImageId = \"Lock\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.OfficeImageId = \"FileOpen\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("ShowImage = false;", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonButtonsExplicitlyShowTheirOfficeImages()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.toggleTaskPaneButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullDownloadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialDownloadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullUploadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialUploadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonButtonsUseLargeIconAboveLabelLayout()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.fullUploadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialUploadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -38,7 +107,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void RibbonTabStaysIsdpWhileAgentGroupUsesIsdpAi()
+        public void RibbonTabStaysIsdpWhileAgentGroupUsesOpenButton()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -51,7 +120,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("this.tab1.Label = \"ISDP\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.group1.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.toggleTaskPaneButton.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.Label = \"Open\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.toggleTaskPaneButton.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("Resy AI", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("Resy AI", ribbonCodeText, StringComparison.Ordinal);
         }
@@ -68,34 +138,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.projectDropDown.Label = \"Select project\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.initializeSheetButton.Label = \"Initialize sheet\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupDownload.Label = \"Download\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupUpload.Label = \"Upload\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.group2.Label = \"Account\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.loginButton.Label = \"Login\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.Label = \"Documentation\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
         }
 
         [Fact]
-        public void UploadGroupOmitsFullUploadButton()
+        public void DataSyncGroupContainsPartialDownloadAndUploadOnly()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.Designer.cs"));
 
-            Assert.DoesNotContain("this.groupUpload.Items.Add(this.fullUploadButton);", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupUpload.Items.Add(this.partialUploadButton);", designerText, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void DownloadGroupOmitsFullDownloadButton()
-        {
-            var designerText = File.ReadAllText(ResolveRepositoryPath(
-                "src",
-                "OfficeAgent.ExcelAddIn",
-                "AgentRibbon.Designer.cs"));
-
-            Assert.DoesNotContain("this.groupDownload.Items.Add(this.fullDownloadButton);", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupDownload.Items.Add(this.partialDownloadButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Items.Add(this.partialDownloadButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Items.Add(this.partialUploadButton);", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupDataSync.Items.Add(this.fullDownloadButton);", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupDataSync.Items.Add(this.fullUploadButton);", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupDownload", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupUpload", designerText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -126,7 +191,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void TemplateGroupAppearsAfterProjectGroupAndBeforeDownloadGroup()
+        public void TemplateGroupAppearsAfterProjectGroupAndBeforeDataSyncGroup()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -135,11 +200,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var projectGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupProject);", StringComparison.Ordinal);
             var templateGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupTemplate);", StringComparison.Ordinal);
-            var downloadGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupDownload);", StringComparison.Ordinal);
+            var dataSyncGroupIndex = designerText.IndexOf("this.tab1.Groups.Add(this.groupDataSync);", StringComparison.Ordinal);
 
             Assert.True(projectGroupIndex >= 0);
             Assert.True(templateGroupIndex > projectGroupIndex);
-            Assert.True(downloadGroupIndex > templateGroupIndex);
+            Assert.True(dataSyncGroupIndex > templateGroupIndex);
         }
 
         [Fact]
@@ -153,6 +218,54 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.groupTemplate.Items.Add(this.applyTemplateButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Items.Add(this.saveTemplateButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Items.Add(this.saveAsTemplateButton);", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void HelpGroupContainsDocumentationAndAboutButtons()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.tab1.Groups.Add(this.groupHelp);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Items.Add(this.documentationButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Items.Add(this.aboutButton);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.Label = \"Documentation\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.DocumentationButton_Click);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.AboutButton_Click);", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void DocumentationButtonOpensConfiguredDocumentationUrlInDefaultBrowser()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("private const string DocumentationUrl = \"https://github.com/SanChiaki/OfficeAgent\";", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("private static void OpenUrlInDefaultBrowser(string url)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ProcessStartInfo", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("UseShellExecute = true", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("OpenUrlInDefaultBrowser(DocumentationUrl);", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutButtonShowsVersionAndBuildInformation()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("GetBuildConfiguration()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("File.GetLastWriteTime", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
