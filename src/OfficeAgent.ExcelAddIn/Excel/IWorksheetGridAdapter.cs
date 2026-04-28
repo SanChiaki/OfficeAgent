@@ -6,6 +6,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
     {
         IDisposable BeginBulkOperation();
 
+        void EnsureWorksheetExists(string sheetName);
+
         string GetCellText(string sheetName, int row, int column);
 
         void SetCellText(string sheetName, int row, int column, string value);

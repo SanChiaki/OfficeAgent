@@ -857,6 +857,22 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Null(method.Invoke(null, new object[] { 0, "project-1", "Sign in first" }));
         }
 
+        [Fact]
+        public void ThisAddInTracksPendingCellEditsForWorkbookChangeLog()
+        {
+            var addInCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "ThisAddIn.cs"));
+
+            Assert.Contains("internal WorksheetPendingEditTracker WorksheetPendingEditTracker { get; private set; }", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal IWorksheetChangeLogStore WorksheetChangeLogStore { get; private set; }", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetChangeLogStore = new WorksheetChangeLogStore(worksheetGridAdapter);", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker = new WorksheetPendingEditTracker();", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker.CaptureBeforeValues(sheetName, ReadWorksheetCellValues(target));", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker.MarkChanged(sheetName, ReadWorksheetCellAddresses(target));", addInCodeText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]

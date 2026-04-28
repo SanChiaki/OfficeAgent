@@ -90,6 +90,10 @@
 - Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `ISDP_Setting` changes; the business area should remain untouched.
 - Click `部分下载` / `Partial download` and `部分上传` / `Partial upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
+- Before `部分下载` / `Partial download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
+- Edit one managed non-ID cell, run `部分上传` / `Partial upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
+- Force a `部分上传` / `Partial upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
+- Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
 - Confirm the Ribbon includes a dedicated `模板` / `Template` group with `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template`.
 - Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet` should use the small regular button layout; the other command buttons should remain in the large icon-above-label layout.
 - Confirm the `模板` / `Template` group shows `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template` as large buttons.

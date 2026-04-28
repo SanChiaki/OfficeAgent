@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Microsoft.Office.Core;
@@ -36,12 +37,16 @@ namespace OfficeAgent.ExcelAddIn
         internal IWorksheetMetadataStore WorksheetMetadataStore { get; private set; }
         internal WorksheetSyncService WorksheetSyncService { get; private set; }
         internal WorksheetSyncExecutionService WorksheetSyncExecutionService { get; private set; }
+        internal WorksheetPendingEditTracker WorksheetPendingEditTracker { get; private set; }
+        internal IWorksheetChangeLogStore WorksheetChangeLogStore { get; private set; }
         internal RibbonSyncController RibbonSyncController { get; private set; }
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
         internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
+
+        private const int MaxTrackedRangeCellCount = 10000;
 
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
@@ -103,12 +108,17 @@ namespace OfficeAgent.ExcelAddIn
                 WorksheetMetadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
+            var worksheetGridAdapter = new ExcelWorksheetGridAdapter(Application);
+            WorksheetChangeLogStore = new WorksheetChangeLogStore(worksheetGridAdapter);
+            WorksheetPendingEditTracker = new WorksheetPendingEditTracker();
             WorksheetSyncExecutionService = new WorksheetSyncExecutionService(
                 WorksheetSyncService,
                 WorksheetMetadataStore,
                 new ExcelVisibleSelectionReader(Application),
-                new ExcelWorksheetGridAdapter(Application),
-                new SyncOperationPreviewFactory());
+                worksheetGridAdapter,
+                new SyncOperationPreviewFactory(),
+                WorksheetChangeLogStore,
+                WorksheetPendingEditTracker);
             RibbonSyncController = new RibbonSyncController(
                 WorksheetMetadataStore,
                 WorksheetSyncService,
@@ -164,6 +174,11 @@ namespace OfficeAgent.ExcelAddIn
 
             OfficeAgentLog.Info("excel", "selection.changed", "Excel selection changed.");
 
+            if (ShouldTrackBusinessSheetChange(sheetName) && WorksheetPendingEditTracker != null)
+            {
+                WorksheetPendingEditTracker.CaptureBeforeValues(sheetName, ReadWorksheetCellValues(target));
+            }
+
             if (!string.Equals(lastProjectRefreshSheetName, sheetName, StringComparison.OrdinalIgnoreCase))
             {
                 RibbonSyncController?.RefreshProjectFromSheetMetadata(sheetName);
@@ -195,16 +210,20 @@ namespace OfficeAgent.ExcelAddIn
         private void Application_SheetChange(object sh, ExcelInterop.Range target)
         {
             var sheetName = GetWorksheetName(sh);
-            if (!string.Equals(sheetName, "ISDP_Setting", StringComparison.OrdinalIgnoreCase))
+            if (IsSettingsSheet(sheetName))
             {
+                var metadataStore = WorksheetMetadataStore as OfficeAgent.ExcelAddIn.Excel.WorksheetMetadataStore;
+                metadataStore.InvalidateCache();
+                RibbonSyncController?.InvalidateRefreshState();
+                RibbonTemplateController?.InvalidateRefreshState();
+                lastProjectRefreshSheetName = string.Empty;
                 return;
             }
 
-            var metadataStore = WorksheetMetadataStore as OfficeAgent.ExcelAddIn.Excel.WorksheetMetadataStore;
-            metadataStore.InvalidateCache();
-            RibbonSyncController?.InvalidateRefreshState();
-            RibbonTemplateController?.InvalidateRefreshState();
-            lastProjectRefreshSheetName = string.Empty;
+            if (ShouldTrackBusinessSheetChange(sheetName) && WorksheetPendingEditTracker != null)
+            {
+                WorksheetPendingEditTracker.MarkChanged(sheetName, ReadWorksheetCellAddresses(target));
+            }
         }
 
         private string GetActiveWorksheetName()
@@ -224,6 +243,84 @@ namespace OfficeAgent.ExcelAddIn
         {
             var worksheet = sheet as ExcelInterop.Worksheet;
             return worksheet?.Name ?? string.Empty;
+        }
+
+        private static bool ShouldTrackBusinessSheetChange(string sheetName)
+        {
+            return !IsSettingsSheet(sheetName) && !IsSyncLogSheet(sheetName);
+        }
+
+        private static bool IsSettingsSheet(string sheetName)
+        {
+            return string.Equals(sheetName, "ISDP_Setting", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSyncLogSheet(string sheetName)
+        {
+            return string.Equals(sheetName, "xISDP_Log", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlyList<WorksheetCellValue> ReadWorksheetCellValues(ExcelInterop.Range target)
+        {
+            var result = new List<WorksheetCellValue>();
+            if (target == null || IsRangeTooLarge(target))
+            {
+                return result;
+            }
+
+            foreach (ExcelInterop.Range cell in target.Cells)
+            {
+                if (cell == null)
+                {
+                    continue;
+                }
+
+                result.Add(new WorksheetCellValue
+                {
+                    Row = cell.Row,
+                    Column = cell.Column,
+                    Text = Convert.ToString(cell.Text) ?? string.Empty,
+                });
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyList<WorksheetCellAddress> ReadWorksheetCellAddresses(ExcelInterop.Range target)
+        {
+            var result = new List<WorksheetCellAddress>();
+            if (target == null || IsRangeTooLarge(target))
+            {
+                return result;
+            }
+
+            foreach (ExcelInterop.Range cell in target.Cells)
+            {
+                if (cell == null)
+                {
+                    continue;
+                }
+
+                result.Add(new WorksheetCellAddress
+                {
+                    Row = cell.Row,
+                    Column = cell.Column,
+                });
+            }
+
+            return result;
+        }
+
+        private static bool IsRangeTooLarge(ExcelInterop.Range target)
+        {
+            try
+            {
+                return Convert.ToDouble(target.Cells.CountLarge) > MaxTrackedRangeCellCount;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private string GetExcelUiLocale()

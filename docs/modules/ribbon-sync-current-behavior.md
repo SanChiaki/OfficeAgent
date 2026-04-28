@@ -446,7 +446,55 @@ grouped single 当前支持的运行场景：
 - 在一次部分上传操作内，行号到 `row_id` 的查找结果也会做内存缓存
 - 同一行内多个目标单元格复用同一次 ID 读取，避免重复逐格回查 Excel
 
-### 7.3 当前边界
+### 7.3 同步日志
+
+当前 workbook 内会维护一个可见工作表 `xISDP_Log`，用于记录 Ribbon Sync 造成的近期业务单元格改动。
+
+`xISDP_Log` 固定列为：
+
+- `key`
+- `表头`
+- `修改模式`
+- `修改值`
+- `原始值`
+- `修改时间`
+
+字段含义：
+
+- `key` 是业务行 ID，也就是当前系统约定的 `row_id`
+- `表头` 使用当前 Excel 表头显示文本；双层表头显示为 `父表头/子表头`
+- `修改模式` 固定为 `上传` 或 `下载`
+- `修改值` 是同步动作写入 Excel 或提交给业务系统的新值
+- `原始值` 在下载时取覆盖前 Excel 值，在上传时取用户编辑前 Excel 值
+- `修改时间` 使用本机时间，格式为 `yyyy-MM-dd HH:mm:ss`
+
+保留策略：
+
+- 最多保留最近 2000 条日志
+- 超过 2000 条时删除最旧记录
+- 如果 `xISDP_Log` 不存在，下一次写日志时自动创建
+
+当前不会记录：
+
+- ID 列本身
+- 无 `row_id` 的行
+- 未被当前表头映射识别的非受管单元格
+- 同步前后文本值未变化的单元格
+- 普通手工编辑、初始化当前表、模板操作、`ISDP_Setting` 改动、任务窗格 Agent 写入
+
+上传日志依赖当前 Excel 会话内捕获到的用户编辑前值。插件会在选区变化时缓存待编辑单元格的旧值，并在 `SheetChange` 后标记为 pending；只有 `BatchSave` 成功后才写 `上传` 日志并清除对应 pending 值。如果上传失败，不写日志也不清除 pending 值。
+
+下载日志不依赖 pending 值；插件在覆盖 Excel 单元格前直接读取当前单元格文本作为 `原始值`，写入成功后追加 `下载` 日志。
+
+日志写入失败不会阻断上传 / 下载主流程；失败细节会写入 `%LocalAppData%\\OfficeAgent\\logs\\officeagent.log`。
+
+关键代码：
+
+- [src/OfficeAgent.ExcelAddIn/Excel/WorksheetChangeLogStore.cs](../../src/OfficeAgent.ExcelAddIn/Excel/WorksheetChangeLogStore.cs)
+- [src/OfficeAgent.ExcelAddIn/Excel/WorksheetPendingEditTracker.cs](../../src/OfficeAgent.ExcelAddIn/Excel/WorksheetPendingEditTracker.cs)
+- [src/OfficeAgent.ExcelAddIn/WorksheetSyncExecutionService.cs](../../src/OfficeAgent.ExcelAddIn/WorksheetSyncExecutionService.cs)
+
+### 7.4 当前边界
 
 当前不支持：
 
