@@ -886,6 +886,60 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreparePartialUploadFiltersPreviewAndExecuteUploadSubmitsOnlyIncludedChanges()
+        {
+            var connector = new FakeSystemConnector
+            {
+                SkippedApiFieldKey = "end_12345678",
+                SkipReason = "单据已归档，禁止上传",
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 2, Value = "李四" },
+                    new SelectedVisibleCell { Row = 6, Column = 4, Value = "2026-01-10" },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 2, "李四");
+            grid.SetCell("Sheet1", 6, 4, "2026-01-10");
+
+            var plan = InvokePrepare(service, "PreparePartialUpload", "Sheet1");
+            var preview = ReadPreview(plan);
+
+            Assert.Equal("performance", connector.LastFilterProjectId);
+            Assert.Equal("部分上传将上传 1 个单元格，跳过 1 个单元格。", preview.Summary);
+            var included = Assert.Single(preview.Changes);
+            Assert.Equal("owner_name", included.ApiFieldKey);
+            var skipped = Assert.Single(preview.SkippedChanges);
+            Assert.Equal("end_12345678", skipped.Change.ApiFieldKey);
+            Assert.Equal("单据已归档，禁止上传", skipped.Reason);
+            Assert.Contains("row-1 / end_12345678: 已跳过，单据已归档，禁止上传", preview.Details);
+
+            InvokeExecute(service, "ExecuteUpload", plan);
+
+            Assert.Single(connector.LastBatchSaveChanges);
+            Assert.Equal("owner_name", connector.LastBatchSaveChanges[0].ApiFieldKey);
+        }
+
+        [Fact]
         public void ExecutePartialUploadAppendsWorkbookLogAfterSuccessfulBatchSave()
         {
             var connector = new FakeSystemConnector();
@@ -1657,7 +1711,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             };
         }
 
-        private sealed class FakeSystemConnector : ISystemConnector
+        private sealed class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
         {
             public FakeSystemConnector(string systemKey = "current-business-system")
             {
@@ -1701,6 +1755,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; } = Array.Empty<CellChange>();
 
             public Exception BatchSaveException { get; set; }
+
+            public string SkippedApiFieldKey { get; set; } = string.Empty;
+
+            public string SkipReason { get; set; } = string.Empty;
+
+            public string LastFilterProjectId { get; private set; }
 
             public IReadOnlyList<ProjectOption> GetProjects()
             {
@@ -1787,6 +1847,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
                 LastBatchSaveProjectId = projectId;
                 LastBatchSaveChanges = changes?.ToArray() ?? Array.Empty<CellChange>();
+            }
+
+            public UploadChangeFilterResult FilterUploadChanges(string projectId, IReadOnlyList<CellChange> changes)
+            {
+                LastFilterProjectId = projectId;
+                var changeList = changes ?? Array.Empty<CellChange>();
+
+                return new UploadChangeFilterResult
+                {
+                    IncludedChanges = changeList
+                        .Where(change => !string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .ToArray(),
+                    SkippedChanges = changeList
+                        .Where(change => string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .Select(change => new SkippedCellChange
+                        {
+                            Change = change,
+                            Reason = SkipReason,
+                        })
+                        .ToArray(),
+                };
             }
         }
 

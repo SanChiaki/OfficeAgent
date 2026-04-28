@@ -199,15 +199,16 @@ namespace OfficeAgent.ExcelAddIn
                 readResult = ReadAllCurrentCells(sheetName, context.Binding, context.Schema);
             }
 
+            var preview = BuildUploadPreview("全量上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
                 OperationName = "全量上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
-                Preview = BuildUploadPreview("全量上传", readResult.Changes),
-                LogCandidates = readResult.LogCandidates,
-                UploadedCells = readResult.UploadedCells,
+                Preview = preview,
+                LogCandidates = SelectIncludedLogCandidates(readResult.LogCandidates, preview.Changes),
+                UploadedCells = SelectIncludedUploadedCells(readResult, preview.Changes),
             };
         }
 
@@ -218,15 +219,16 @@ namespace OfficeAgent.ExcelAddIn
             var selection = ResolveCurrentSelection(context.Schema, rowIdAccessor);
             var readResult = ReadSelectionChanges(sheetName, context.Schema, selection, rowIdAccessor);
 
+            var preview = BuildUploadPreview("部分上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
                 OperationName = "部分上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
-                Preview = BuildUploadPreview("部分上传", readResult.Changes),
-                LogCandidates = readResult.LogCandidates,
-                UploadedCells = readResult.UploadedCells,
+                Preview = preview,
+                LogCandidates = SelectIncludedLogCandidates(readResult.LogCandidates, preview.Changes),
+                UploadedCells = SelectIncludedUploadedCells(readResult, preview.Changes),
             };
         }
 
@@ -717,6 +719,7 @@ namespace OfficeAgent.ExcelAddIn
                 Row = row,
                 Column = column.ColumnIndex,
                 RowId = rowId,
+                ApiFieldKey = column.ApiFieldKey,
                 HeaderText = BuildHeaderText(column),
                 NewValue = newValue ?? string.Empty,
                 OldValue = oldValue ?? string.Empty,
@@ -1043,12 +1046,112 @@ namespace OfficeAgent.ExcelAddIn
                 !string.IsNullOrWhiteSpace(valueAccessor.GetValue(definition, row, FieldMappingSemanticRole.ApiFieldKey)));
         }
 
-        private SyncOperationPreview BuildUploadPreview(string operationName, IReadOnlyList<CellChange> changes)
+        private SyncOperationPreview BuildUploadPreview(
+            string operationName,
+            string systemKey,
+            string projectId,
+            IReadOnlyList<CellChange> changes)
         {
-            var preview = previewFactory.CreateUploadPreview(operationName, changes);
+            var filterResult = worksheetSyncService.FilterUploadChanges(systemKey, projectId, changes);
+            var preview = previewFactory.CreateUploadPreview(
+                operationName,
+                filterResult.IncludedChanges,
+                filterResult.SkippedChanges);
             preview.OperationName = operationName;
-            preview.Summary = $"{operationName}将提交 {preview.Changes.Length} 个单元格。";
+            if (preview.SkippedChanges.Length == 0)
+            {
+                preview.Summary = $"{operationName}将提交 {preview.Changes.Length} 个单元格。";
+            }
+
             return preview;
+        }
+
+        private static WorksheetUploadLogCandidate[] SelectIncludedLogCandidates(
+            IReadOnlyList<WorksheetUploadLogCandidate> candidates,
+            IReadOnlyList<CellChange> includedChanges)
+        {
+            var includedCounts = CreateChangeKeyCounts(includedChanges);
+            return (candidates ?? Array.Empty<WorksheetUploadLogCandidate>())
+                .Where(candidate => candidate != null)
+                .Where(candidate => ConsumeChangeKey(
+                    includedCounts,
+                    candidate.RowId,
+                    candidate.ApiFieldKey,
+                    candidate.NewValue))
+                .ToArray();
+        }
+
+        private static WorksheetCellAddress[] SelectIncludedUploadedCells(
+            WorksheetUploadReadResult readResult,
+            IReadOnlyList<CellChange> includedChanges)
+        {
+            var includedCounts = CreateChangeKeyCounts(includedChanges);
+            var sourceChanges = readResult?.Changes ?? Array.Empty<CellChange>();
+            var sourceCells = readResult?.UploadedCells ?? Array.Empty<WorksheetCellAddress>();
+            var result = new List<WorksheetCellAddress>();
+
+            for (var index = 0; index < sourceChanges.Length && index < sourceCells.Length; index++)
+            {
+                var change = sourceChanges[index];
+                if (ConsumeChangeKey(includedCounts, change?.RowId, change?.ApiFieldKey, change?.NewValue))
+                {
+                    result.Add(sourceCells[index]);
+                }
+            }
+
+            return result.ToArray();
+        }
+
+        private static Dictionary<string, int> CreateChangeKeyCounts(IReadOnlyList<CellChange> changes)
+        {
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var change in changes ?? Array.Empty<CellChange>())
+            {
+                if (change == null)
+                {
+                    continue;
+                }
+
+                var key = CreateChangeKey(change.RowId, change.ApiFieldKey, change.NewValue);
+                result.TryGetValue(key, out var count);
+                result[key] = count + 1;
+            }
+
+            return result;
+        }
+
+        private static bool ConsumeChangeKey(
+            IDictionary<string, int> counts,
+            string rowId,
+            string apiFieldKey,
+            string newValue)
+        {
+            if (counts == null)
+            {
+                return false;
+            }
+
+            var key = CreateChangeKey(rowId, apiFieldKey, newValue);
+            if (!counts.TryGetValue(key, out var count) || count <= 0)
+            {
+                return false;
+            }
+
+            if (count == 1)
+            {
+                counts.Remove(key);
+            }
+            else
+            {
+                counts[key] = count - 1;
+            }
+
+            return true;
+        }
+
+        private static string CreateChangeKey(string rowId, string apiFieldKey, string newValue)
+        {
+            return $"{rowId ?? string.Empty}\u001F{apiFieldKey ?? string.Empty}\u001F{newValue ?? string.Empty}";
         }
 
         private static string BuildHeaderText(WorksheetColumnBinding column)
@@ -1306,6 +1409,8 @@ namespace OfficeAgent.ExcelAddIn
         public int Column { get; set; }
 
         public string RowId { get; set; } = string.Empty;
+
+        public string ApiFieldKey { get; set; } = string.Empty;
 
         public string HeaderText { get; set; } = string.Empty;
 

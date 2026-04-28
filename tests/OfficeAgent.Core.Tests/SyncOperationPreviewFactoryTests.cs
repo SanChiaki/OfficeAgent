@@ -27,5 +27,30 @@ namespace OfficeAgent.Core.Tests
             Assert.Equal(4, preview.Changes.Length);
             Assert.Equal("row-4", preview.Changes[3].RowId);
         }
+
+        [Fact]
+        public void CreateUploadPreviewSummarizesIncludedAndSkippedChanges()
+        {
+            var factory = new SyncOperationPreviewFactory();
+            var changes = new[]
+            {
+                new CellChange { RowId = "row-1", ApiFieldKey = "owner_name", OldValue = "A", NewValue = "B" },
+            };
+            var skippedChanges = new[]
+            {
+                new SkippedCellChange
+                {
+                    Change = new CellChange { RowId = "row-2", ApiFieldKey = "status", OldValue = "open", NewValue = "closed" },
+                    Reason = "单据已归档，禁止上传",
+                },
+            };
+
+            var preview = factory.CreateUploadPreview("部分上传", changes, skippedChanges);
+
+            Assert.Equal("部分上传将上传 1 个单元格，跳过 1 个单元格。", preview.Summary);
+            Assert.Same(changes[0], preview.Changes[0]);
+            Assert.Same(skippedChanges[0], preview.SkippedChanges[0]);
+            Assert.Contains("row-2 / status: 已跳过，单据已归档，禁止上传", preview.Details);
+        }
     }
 }

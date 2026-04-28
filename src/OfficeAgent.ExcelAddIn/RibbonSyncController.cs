@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -267,7 +268,9 @@ namespace OfficeAgent.ExcelAddIn
                 var preview = plan.Preview ?? new SyncOperationPreview();
                 if (preview.Changes.Length == 0)
                 {
-                    dialogService.ShowInfo(strings.FormatUploadNoChangesMessage(plan.OperationName));
+                    dialogService.ShowInfo(preview.SkippedChanges.Length == 0
+                        ? strings.FormatUploadNoChangesMessage(plan.OperationName)
+                        : BuildUploadPreviewInfoMessage(strings, plan.OperationName, preview));
                     return;
                 }
 
@@ -277,7 +280,7 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 executionService.ExecuteUpload(plan);
-                dialogService.ShowInfo(strings.FormatUploadCompletedMessage(plan.OperationName, preview.Changes.Length));
+                dialogService.ShowInfo(BuildUploadCompletionMessage(strings, plan.OperationName, preview));
             }
             catch (AuthenticationRequiredException ex)
             {
@@ -287,6 +290,48 @@ namespace OfficeAgent.ExcelAddIn
             {
                 dialogService.ShowError(ex.Message);
             }
+        }
+
+        private static string BuildUploadPreviewInfoMessage(
+            HostLocalizedStrings strings,
+            string operationName,
+            SyncOperationPreview preview)
+        {
+            var builder = new StringBuilder();
+            var summary = preview?.Summary ?? string.Empty;
+            builder.AppendLine(string.IsNullOrWhiteSpace(summary)
+                ? strings.FormatUploadNoChangesMessage(operationName)
+                : summary);
+
+            foreach (var detail in preview?.Details ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    builder.AppendLine(detail);
+                }
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static string BuildUploadCompletionMessage(
+            HostLocalizedStrings strings,
+            string operationName,
+            SyncOperationPreview preview)
+        {
+            var builder = new StringBuilder(strings.FormatUploadCompletedMessage(
+                operationName,
+                preview?.Changes?.Length ?? 0));
+
+            var skippedCount = preview?.SkippedChanges?.Length ?? 0;
+            if (skippedCount > 0)
+            {
+                builder
+                    .AppendLine()
+                    .Append(strings.SkippedCellCountLine(skippedCount));
+            }
+
+            return builder.ToString();
         }
 
         private bool EnsureProjectSelected()

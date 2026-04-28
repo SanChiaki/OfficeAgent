@@ -122,6 +122,32 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void FilterUploadChangesUsesConnectorFilterWhenAvailable()
+        {
+            var connector = new FakeSystemConnector
+            {
+                SkippedApiFieldKey = "status",
+                SkipReason = "单据已归档，禁止上传",
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = CreateService(connector, metadataStore);
+            var changes = new[]
+            {
+                new CellChange { SheetName = "Sheet1", RowId = "row-1", ApiFieldKey = "owner_name", NewValue = "李四" },
+                new CellChange { SheetName = "Sheet1", RowId = "row-1", ApiFieldKey = "status", NewValue = "已完成" },
+            };
+
+            var result = service.FilterUploadChanges("current-business-system", "performance", changes);
+
+            Assert.Equal("performance", connector.LastFilterProjectId);
+            Assert.Single(result.IncludedChanges);
+            Assert.Equal("owner_name", result.IncludedChanges[0].ApiFieldKey);
+            var skipped = Assert.Single(result.SkippedChanges);
+            Assert.Equal("status", skipped.Change.ApiFieldKey);
+            Assert.Equal("单据已归档，禁止上传", skipped.Reason);
+        }
+
+        [Fact]
         public void InitializeSheetUsesConnectorMatchingProjectSystemKey()
         {
             var connectorA = new FakeSystemConnector("system-a");
@@ -158,7 +184,7 @@ namespace OfficeAgent.Core.Tests
                 new SyncOperationPreviewFactory());
         }
 
-        private sealed class FakeSystemConnector : ISystemConnector
+        private sealed class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
         {
             public FakeSystemConnector(string systemKey = "current-business-system")
             {
@@ -231,6 +257,12 @@ namespace OfficeAgent.Core.Tests
 
             public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; } = Array.Empty<CellChange>();
 
+            public string SkippedApiFieldKey { get; set; } = string.Empty;
+
+            public string SkipReason { get; set; } = string.Empty;
+
+            public string LastFilterProjectId { get; private set; }
+
             public IReadOnlyList<ProjectOption> GetProjects()
             {
                 return Array.Empty<ProjectOption>();
@@ -285,6 +317,26 @@ namespace OfficeAgent.Core.Tests
             {
                 LastBatchSaveProjectId = projectId;
                 LastBatchSaveChanges = changes;
+            }
+
+            public UploadChangeFilterResult FilterUploadChanges(string projectId, IReadOnlyList<CellChange> changes)
+            {
+                LastFilterProjectId = projectId;
+
+                return new UploadChangeFilterResult
+                {
+                    IncludedChanges = (changes ?? Array.Empty<CellChange>())
+                        .Where(change => !string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .ToArray(),
+                    SkippedChanges = (changes ?? Array.Empty<CellChange>())
+                        .Where(change => string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .Select(change => new SkippedCellChange
+                        {
+                            Change = change,
+                            Reason = SkipReason,
+                        })
+                        .ToArray(),
+                };
             }
 
             private static SheetFieldMappingRow CreateMappingRow(

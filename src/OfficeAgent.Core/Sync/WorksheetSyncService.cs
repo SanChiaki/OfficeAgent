@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 
@@ -98,6 +99,33 @@ namespace OfficeAgent.Core.Sync
         public void Upload(string systemKey, string projectId, IReadOnlyList<CellChange> changes)
         {
             GetRequiredConnector(systemKey).BatchSave(projectId, changes);
+        }
+
+        public UploadChangeFilterResult FilterUploadChanges(
+            string systemKey,
+            string projectId,
+            IReadOnlyList<CellChange> changes)
+        {
+            var changeList = changes ?? Array.Empty<CellChange>();
+            var connector = GetRequiredConnector(systemKey);
+            if (connector is IUploadChangeFilter filter)
+            {
+                var result = filter.FilterUploadChanges(projectId, changeList);
+                if (result != null)
+                {
+                    return new UploadChangeFilterResult
+                    {
+                        IncludedChanges = result.IncludedChanges ?? Array.Empty<CellChange>(),
+                        SkippedChanges = result.SkippedChanges ?? Array.Empty<SkippedCellChange>(),
+                    };
+                }
+            }
+
+            return new UploadChangeFilterResult
+            {
+                IncludedChanges = changeList.ToArray(),
+                SkippedChanges = Array.Empty<SkippedCellChange>(),
+            };
         }
 
         private ISystemConnector GetRequiredConnector(string systemKey)

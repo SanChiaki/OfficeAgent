@@ -417,7 +417,9 @@ grouped single 当前支持的运行场景：
 1. 从 `DataStartRow` 开始扫描工作表
 2. 只处理有 ID 的行
 3. 对每个非 ID 列生成一个 `CellChange`
-4. 把所有 `CellChange` 发给 `BatchSave`
+4. 如果当前业务连接器实现了上传过滤扩展点，则先过滤 `CellChange`
+5. 上传确认弹窗显示实际上传单元格数、跳过单元格数，以及部分跳过原因
+6. 只把实际上传的 `CellChange` 发给 `BatchSave`
 
 性能细节：
 
@@ -433,7 +435,16 @@ grouped single 当前支持的运行场景：
 2. 自动回找每个目标单元格所在行的 ID
 3. 自动回找该列对应的 `ApiFieldKey`
 4. 每个单元格生成一个 `CellChange`
-5. 调用 `BatchSave`
+5. 如果当前业务连接器实现了上传过滤扩展点，则先过滤 `CellChange`
+6. 上传确认弹窗显示实际上传单元格数、跳过单元格数，以及部分跳过原因
+7. 只把实际上传的 `CellChange` 调用 `BatchSave`
+
+上传过滤说明：
+
+- 过滤发生在确认弹窗之前，因此用户看到的实际上传数量和最终提交内容一致
+- `SyncOperationPreview.Changes` 只包含实际上传项
+- 被跳过的单元格会保存在 `SyncOperationPreview.SkippedChanges`，每项包含原始 `CellChange` 和跳过原因
+- 未实现上传过滤扩展点的业务连接器保持现有行为：所有解析出的 `CellChange` 都进入上传预览和提交
 
 认证失败行为：
 

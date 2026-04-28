@@ -517,6 +517,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.DoesNotContain("没有可提交的单元格。", controllerText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void BuildUploadPreviewInfoMessageIncludesSkippedReasonsWhenNothingWillUpload()
+        {
+            var preview = new SyncOperationPreview
+            {
+                Summary = "部分上传将上传 0 个单元格，跳过 1 个单元格。",
+                Details = new[] { "row-1 / status: 已跳过，单据已归档，禁止上传" },
+                Changes = Array.Empty<CellChange>(),
+                SkippedChanges = new[]
+                {
+                    new SkippedCellChange
+                    {
+                        Change = new CellChange { RowId = "row-1", ApiFieldKey = "status" },
+                        Reason = "单据已归档，禁止上传",
+                    },
+                },
+            };
+
+            var message = InvokeBuildUploadPreviewInfoMessage("部分上传", preview);
+
+            Assert.Contains("部分上传将上传 0 个单元格，跳过 1 个单元格。", message);
+            Assert.Contains("row-1 / status: 已跳过，单据已归档，禁止上传", message);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
@@ -753,6 +777,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
 
             return (string)formatMethod.Invoke(null, new object[] { projectId, displayName });
+        }
+
+        private static string InvokeBuildUploadPreviewInfoMessage(string operationName, SyncOperationPreview preview)
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
+            var stringsType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Localization.HostLocalizedStrings", throwOnError: true);
+            var strings = stringsType
+                .GetMethod("ForLocale", BindingFlags.Static | BindingFlags.Public)
+                .Invoke(null, new object[] { "zh" });
+            var method = controllerType.GetMethod(
+                "BuildUploadPreviewInfoMessage",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.BuildUploadPreviewInfoMessage was not found.");
+            }
+
+            return (string)method.Invoke(null, new[] { strings, operationName, preview });
         }
 
         private sealed class FakeSystemConnector : ISystemConnector

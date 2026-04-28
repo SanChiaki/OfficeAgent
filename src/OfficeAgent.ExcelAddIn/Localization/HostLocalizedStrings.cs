@@ -166,6 +166,13 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 : $"Submitted cells: {cellCount}";
         }
 
+        public string SkippedCellCountLine(int cellCount)
+        {
+            return Locale == "zh"
+                ? $"跳过单元格数：{cellCount}"
+                : $"Skipped cells: {cellCount}";
+        }
+
         public string OverwriteDirtyCellsLine(int dirtyCount)
         {
             return Locale == "zh"
