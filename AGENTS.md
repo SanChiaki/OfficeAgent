@@ -16,14 +16,14 @@ OfficeAgent, branded as Resy AI, is an Excel VSTO add-in with a WebView2-hosted 
 - `dotnet test tests/OfficeAgent.Infrastructure.Tests/OfficeAgent.Infrastructure.Tests.csproj`
 - `dotnet test tests/OfficeAgent.ExcelAddIn.Tests/OfficeAgent.ExcelAddIn.Tests.csproj`
 - `dotnet test tests/OfficeAgent.IntegrationTests/OfficeAgent.IntegrationTests.csproj`
-- `pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1` for frontend + add-in + MSI + offline `OfficeAgent.Setup.exe` builds.
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1` for frontend + add-in + MSI + offline `X-ISDP.Setup.exe` builds.
 - `cd tests/mock-server && npm install && npm start` for mock services.
 
 Recommended development flow:
 
 - Frontend-only changes: run `cd src/OfficeAgent.Frontend && npm run build`, then reopen the task pane.
 - Add-in / Ribbon / Excel interop changes: run `pwsh -NoProfile -ExecutionPolicy Bypass -File eng/Dev-RefreshExcelAddIn.ps1 -CloseExcel`, then reopen Excel from the normal user launch path. This rebuild also refreshes the local `OfficeAgent.ExcelAddIn` Excel registration to the repo `bin/Debug` manifest.
-- Installer validation only: stage the offline prerequisite installers under `installer/OfficeAgent.SetupBundle/prereqs/`, run `pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1`, then validate `artifacts/installer/OfficeAgent.Setup.exe`.
+- Installer validation only: stage the offline prerequisite installers under `installer/OfficeAgent.SetupBundle/prereqs/`, run `pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1`, then validate `artifacts/installer/X-ISDP.Setup.exe`.
 
 ## Coding Style & Naming Conventions
 C# uses 4-space indentation, PascalCase for public members, `I`-prefixed interfaces, camelCase private fields, and new-line braces for namespaces, classes, and methods. Prefer `string.Equals(..., StringComparison.Ordinal)` over `==`. Preserve the UI thread only where COM interop requires it. TypeScript uses 2-space indentation, single quotes, semicolons, trailing commas, type-only imports, and functional components such as `export function App() {}`. Avoid barrel exports, routing libraries, and CSS-in-JS.

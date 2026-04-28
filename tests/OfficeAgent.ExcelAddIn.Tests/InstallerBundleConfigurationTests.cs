@@ -18,8 +18,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("vstor_redist.exe", bundleWxsText, StringComparison.Ordinal);
             Assert.DoesNotContain("MicrosoftEdgeWebView2RuntimeInstallerX86.exe", bundleWxsText, StringComparison.Ordinal);
             Assert.DoesNotContain("MicrosoftEdgeWebView2RuntimeInstallerX64.exe", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("OfficeAgent.Setup-x86.msi", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("OfficeAgent.Setup-x64.msi", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup-x86.msi", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup-x64.msi", bundleWxsText, StringComparison.Ordinal);
             Assert.Contains("Compressed=\"yes\"", bundleWxsText, StringComparison.Ordinal);
         }
 
@@ -31,7 +31,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.Setup",
                 "build.ps1");
 
-            Assert.Contains("OfficeAgent.Setup.exe", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup.exe", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup-x86.msi", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup-x64.msi", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("OfficeAgent.SetupBundle", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Bal.wixext", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Util.wixext", buildScriptText, StringComparison.Ordinal);
@@ -63,6 +65,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "{F1B5D7A5-8D1A-4F84-8F6A-8F92B9A6F9D0}",
                 bundleWxsText,
                 StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void InstallerAuthoringUsesXIsdpDisplayNames()
+        {
+            var productWxsText = ReadRepositoryFile(
+                "installer",
+                "OfficeAgent.Setup",
+                "Product.wxs");
+            var bundleWxsText = ReadRepositoryFile(
+                "installer",
+                "OfficeAgent.SetupBundle",
+                "Bundle.wxs");
+
+            Assert.Contains("Name=\"X-ISDP\"", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("<SummaryInformation Description=\"X-ISDP VSTO add-in for Excel\" />", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("<Feature Id=\"OfficeAgentFeature\" Title=\"X-ISDP\" Level=\"1\">", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("Name=\"X-ISDP\"", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("DisplayName=\"X-ISDP (x86)\"", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("DisplayName=\"X-ISDP (x64)\"", bundleWxsText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -165,10 +187,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var agentsText = ReadRepositoryFile("AGENTS.md");
             var checklistText = ReadRepositoryFile("docs", "vsto-manual-test-checklist.md");
+            var deploymentNotesText = ReadRepositoryFile("docs", "vsto-deployment-notes.md");
+            var releaseNotesText = ReadRepositoryFile("docs", "vsto-release-notes.md");
+            var customIconsGuideText = ReadRepositoryFile("docs", "ribbon-button-custom-icons-guide.md");
+            var bundleReadmeText = ReadRepositoryFile(
+                "installer",
+                "OfficeAgent.SetupBundle",
+                "README.md");
 
-            Assert.Contains("OfficeAgent.Setup.exe", agentsText, StringComparison.Ordinal);
-            Assert.Contains("OfficeAgent.Setup.exe", checklistText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup.exe", agentsText, StringComparison.Ordinal);
+            Assert.Contains("X-ISDP.Setup.exe", checklistText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/X-ISDP.Setup-x86.msi", deploymentNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/X-ISDP.Setup-x64.msi", deploymentNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/X-ISDP.Setup-x86.msi", releaseNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/X-ISDP.Setup-x64.msi", releaseNotesText, StringComparison.Ordinal);
+            Assert.Contains("# X-ISDP Setup Bundle", bundleReadmeText, StringComparison.Ordinal);
+            Assert.Contains("`X-ISDP` tab", customIconsGuideText, StringComparison.Ordinal);
             Assert.Contains("vstor_redist.exe", checklistText, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "artifacts/installer/OfficeAgent.Setup",
+                deploymentNotesText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "artifacts/installer/OfficeAgent.Setup",
+                releaseNotesText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "`ISDP` tab",
+                customIconsGuideText,
+                StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "installs WebView2 Runtime",
                 checklistText,

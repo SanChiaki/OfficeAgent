@@ -3,11 +3,11 @@
 ## Installer
 
 - Confirm `installer/OfficeAgent.SetupBundle/prereqs/` contains `vstor_redist.exe` before starting the build.
-- Run `installer/OfficeAgent.Setup/build.ps1` and confirm `artifacts/installer/OfficeAgent.Setup.exe`, `artifacts/installer/OfficeAgent.Setup-x86.msi`, and `artifacts/installer/OfficeAgent.Setup-x64.msi` are created.
-- Run `OfficeAgent.Setup.exe` on a machine missing the VSTO runtime and confirm it installs VSTO Runtime and then installs OfficeAgent.
-- Run `OfficeAgent.Setup.exe` on a machine missing the WebView2 runtime and confirm it still installs OfficeAgent without attempting to install WebView2.
-- Run `OfficeAgent.Setup.exe` on a machine with the VSTO runtime already installed and confirm it skips the VSTO installer.
-- Run `OfficeAgent.Setup.exe` twice on the same machine and confirm the second run does not reinstall VSTO and falls through to normal OfficeAgent maintenance behavior.
+- Run `installer/OfficeAgent.Setup/build.ps1` and confirm `artifacts/installer/X-ISDP.Setup.exe`, `artifacts/installer/X-ISDP.Setup-x86.msi`, and `artifacts/installer/X-ISDP.Setup-x64.msi` are created.
+- Run `X-ISDP.Setup.exe` on a machine missing the VSTO runtime and confirm it installs VSTO Runtime and then installs X-ISDP.
+- Run `X-ISDP.Setup.exe` on a machine missing the WebView2 runtime and confirm it still installs X-ISDP without attempting to install WebView2.
+- Run `X-ISDP.Setup.exe` on a machine with the VSTO runtime already installed and confirm it skips the VSTO installer.
+- Run `X-ISDP.Setup.exe` twice on the same machine and confirm the second run does not reinstall VSTO and falls through to normal X-ISDP maintenance behavior.
 - Choose the MSI that matches the target Excel bitness only for direct enterprise distribution or debugging. Do not install the x86 package for x64 Excel or the x64 package for x86 Excel.
 - Install the direct MSI under a standard user profile.
 - Confirm files are deployed under `%LocalAppData%\\OfficeAgent\\ExcelAddIn`.

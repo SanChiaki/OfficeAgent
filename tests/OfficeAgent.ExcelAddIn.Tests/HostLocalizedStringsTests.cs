@@ -27,6 +27,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh")]
+        [InlineData("en")]
+        public void ForLocaleUsesXIsdpAsHostAndRibbonName(string locale)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal("X-ISDP", GetString(strings, "HostWindowTitle"));
+            Assert.Equal("X-ISDP", GetString(strings, "RibbonTabLabel"));
+        }
+
+        [Theory]
         [InlineData("", "en")]
         [InlineData("de", "en")]
         [InlineData("zh-CN", "en")]

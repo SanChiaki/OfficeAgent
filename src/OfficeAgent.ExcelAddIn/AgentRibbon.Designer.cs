@@ -59,7 +59,7 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.Groups.Add(this.groupDataSync);
             this.tab1.Groups.Add(this.group2);
             this.tab1.Groups.Add(this.groupHelp);
-            this.tab1.Label = "ISDP";
+            this.tab1.Label = "X-ISDP";
             this.tab1.Name = "tab1";
             // 
             // group1

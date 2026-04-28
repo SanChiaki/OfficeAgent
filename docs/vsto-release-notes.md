@@ -13,8 +13,8 @@
 
 ## Packaging outputs
 
-- `artifacts/installer/OfficeAgent.Setup-x86.msi`
-- `artifacts/installer/OfficeAgent.Setup-x64.msi`
+- `artifacts/installer/X-ISDP.Setup-x86.msi`
+- `artifacts/installer/X-ISDP.Setup-x64.msi`
 
 ## Verification summary
 

@@ -3,8 +3,8 @@
 ## Packaging outputs
 
 - `installer/OfficeAgent.Setup/build.ps1` builds two MSI packages:
-  - `artifacts/installer/OfficeAgent.Setup-x86.msi`
-  - `artifacts/installer/OfficeAgent.Setup-x64.msi`
+  - `artifacts/installer/X-ISDP.Setup-x86.msi`
+  - `artifacts/installer/X-ISDP.Setup-x64.msi`
 - Deploy the MSI that matches the target Excel bitness.
 
 ## Runtime prerequisites
