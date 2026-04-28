@@ -1,8 +1,11 @@
+using System;
+
 namespace OfficeAgent.Core.Models
 {
     public sealed class AppSettings
     {
         public const string DefaultBaseUrl = "https://api.example.com";
+        public const string DefaultUiLanguageOverride = "system";
 
         public string ApiKey { get; set; } = string.Empty;
 
@@ -11,6 +14,8 @@ namespace OfficeAgent.Core.Models
         public string BusinessBaseUrl { get; set; } = string.Empty;
 
         public string Model { get; set; } = "gpt-5-mini";
+
+        public string UiLanguageOverride { get; set; } = DefaultUiLanguageOverride;
 
         public string SsoUrl { get; set; } = string.Empty;
 
@@ -35,6 +40,32 @@ namespace OfficeAgent.Core.Models
             }
 
             return value.Trim().TrimEnd('/');
+        }
+
+        public static string NormalizeUiLanguageOverride(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return DefaultUiLanguageOverride;
+            }
+
+            var normalized = value.Trim();
+            if (string.Equals(normalized, "system", StringComparison.OrdinalIgnoreCase))
+            {
+                return DefaultUiLanguageOverride;
+            }
+
+            if (string.Equals(normalized, "zh", StringComparison.OrdinalIgnoreCase))
+            {
+                return "zh";
+            }
+
+            if (string.Equals(normalized, "en", StringComparison.OrdinalIgnoreCase))
+            {
+                return "en";
+            }
+
+            return DefaultUiLanguageOverride;
         }
     }
 }

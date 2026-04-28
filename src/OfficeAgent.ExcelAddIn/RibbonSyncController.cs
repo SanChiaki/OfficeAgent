@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -264,7 +265,9 @@ namespace OfficeAgent.ExcelAddIn
                 var preview = plan.Preview ?? new SyncOperationPreview();
                 if (preview.Changes.Length == 0)
                 {
-                    dialogService.ShowInfo($"{plan.OperationName}没有可提交的单元格。");
+                    dialogService.ShowInfo(preview.SkippedChanges.Length == 0
+                        ? $"{plan.OperationName}没有可提交的单元格。"
+                        : BuildUploadPreviewInfoMessage(plan.OperationName, preview));
                     return;
                 }
 
@@ -274,7 +277,7 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 executionService.ExecuteUpload(plan);
-                dialogService.ShowInfo($"{plan.OperationName}完成。\r\n提交单元格数：{preview.Changes.Length}");
+                dialogService.ShowInfo(BuildUploadCompletionMessage(plan.OperationName, preview));
             }
             catch (AuthenticationRequiredException ex)
             {
@@ -284,6 +287,42 @@ namespace OfficeAgent.ExcelAddIn
             {
                 dialogService.ShowError(ex.Message);
             }
+        }
+
+        private static string BuildUploadPreviewInfoMessage(string operationName, SyncOperationPreview preview)
+        {
+            var builder = new StringBuilder();
+            var summary = preview?.Summary ?? string.Empty;
+            builder.AppendLine(string.IsNullOrWhiteSpace(summary)
+                ? $"{operationName}没有可提交的单元格。"
+                : summary);
+
+            foreach (var detail in preview?.Details ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    builder.AppendLine(detail);
+                }
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static string BuildUploadCompletionMessage(string operationName, SyncOperationPreview preview)
+        {
+            var builder = new StringBuilder()
+                .AppendLine($"{operationName}完成。")
+                .Append($"提交单元格数：{preview?.Changes?.Length ?? 0}");
+
+            var skippedCount = preview?.SkippedChanges?.Length ?? 0;
+            if (skippedCount > 0)
+            {
+                builder
+                    .AppendLine()
+                    .Append($"跳过单元格数：{skippedCount}");
+            }
+
+            return builder.ToString();
         }
 
         private bool EnsureProjectSelected()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -28,6 +29,8 @@ namespace OfficeAgent.ExcelAddIn
         public string SystemKey { get; set; } = string.Empty;
         public string ProjectId { get; set; } = string.Empty;
         public SyncOperationPreview Preview { get; set; } = new SyncOperationPreview();
+        public WorksheetUploadLogCandidate[] LogCandidates { get; set; } = Array.Empty<WorksheetUploadLogCandidate>();
+        public WorksheetCellAddress[] UploadedCells { get; set; } = Array.Empty<WorksheetCellAddress>();
     }
 
     internal sealed class WorksheetSyncExecutionService
@@ -42,6 +45,8 @@ namespace OfficeAgent.ExcelAddIn
         private readonly WorksheetHeaderMatcher headerMatcher;
         private readonly FieldMappingValueAccessor valueAccessor;
         private readonly ExcelUploadValueNormalizer uploadValueNormalizer;
+        private readonly IWorksheetChangeLogStore changeLogStore;
+        private readonly WorksheetPendingEditTracker pendingEditTracker;
 
         public WorksheetSyncExecutionService(
             WorksheetSyncService worksheetSyncService,
@@ -49,12 +54,33 @@ namespace OfficeAgent.ExcelAddIn
             IWorksheetSelectionReader selectionReader,
             IWorksheetGridAdapter gridAdapter,
             SyncOperationPreviewFactory previewFactory)
+            : this(
+                worksheetSyncService,
+                metadataStore,
+                selectionReader,
+                gridAdapter,
+                previewFactory,
+                null,
+                null)
+        {
+        }
+
+        public WorksheetSyncExecutionService(
+            WorksheetSyncService worksheetSyncService,
+            IWorksheetMetadataStore metadataStore,
+            IWorksheetSelectionReader selectionReader,
+            IWorksheetGridAdapter gridAdapter,
+            SyncOperationPreviewFactory previewFactory,
+            IWorksheetChangeLogStore changeLogStore,
+            WorksheetPendingEditTracker pendingEditTracker)
         {
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
             _ = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.selectionReader = selectionReader ?? throw new ArgumentNullException(nameof(selectionReader));
             this.gridAdapter = gridAdapter ?? throw new ArgumentNullException(nameof(gridAdapter));
             this.previewFactory = previewFactory ?? throw new ArgumentNullException(nameof(previewFactory));
+            this.changeLogStore = changeLogStore;
+            this.pendingEditTracker = pendingEditTracker;
             selectionResolver = new WorksheetSelectionResolver();
             layoutService = new WorksheetSchemaLayoutService();
             segmentBuilder = new WorksheetColumnSegmentBuilder();
@@ -167,19 +193,22 @@ namespace OfficeAgent.ExcelAddIn
         public WorksheetUploadPlan PrepareFullUpload(string sheetName)
         {
             var context = ResolveMatchedSheetContext(sheetName);
-            CellChange[] changes;
+            WorksheetUploadReadResult readResult;
             using (gridAdapter.BeginBulkOperation())
             {
-                changes = ReadAllCurrentCells(sheetName, context.Binding, context.Schema);
+                readResult = ReadAllCurrentCells(sheetName, context.Binding, context.Schema);
             }
 
+            var preview = BuildUploadPreview("全量上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
                 OperationName = "全量上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
-                Preview = BuildUploadPreview("全量上传", changes),
+                Preview = preview,
+                LogCandidates = SelectIncludedLogCandidates(readResult.LogCandidates, preview.Changes),
+                UploadedCells = SelectIncludedUploadedCells(readResult, preview.Changes),
             };
         }
 
@@ -188,15 +217,18 @@ namespace OfficeAgent.ExcelAddIn
             var context = ResolveMatchedSheetContext(sheetName);
             var rowIdAccessor = CreateCachedRowIdAccessor(sheetName, context.Schema);
             var selection = ResolveCurrentSelection(context.Schema, rowIdAccessor);
-            var changes = ReadSelectionChanges(sheetName, context.Schema, selection, rowIdAccessor);
+            var readResult = ReadSelectionChanges(sheetName, context.Schema, selection, rowIdAccessor);
 
+            var preview = BuildUploadPreview("部分上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
                 OperationName = "部分上传",
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
-                Preview = BuildUploadPreview("部分上传", changes),
+                Preview = preview,
+                LogCandidates = SelectIncludedLogCandidates(readResult.LogCandidates, preview.Changes),
+                UploadedCells = SelectIncludedUploadedCells(readResult, preview.Changes),
             };
         }
 
@@ -214,6 +246,8 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             worksheetSyncService.Upload(plan.SystemKey, plan.ProjectId, changes);
+            AppendChangeLogEntries(BuildUploadLogEntries(plan.LogCandidates));
+            ClearPendingUploadedCells(plan);
         }
 
         private SheetExecutionContext ResolveFullDownloadContext(string sheetName)
@@ -401,6 +435,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             var binding = plan.Binding;
             var columns = plan.RuntimeColumns ?? Array.Empty<WorksheetRuntimeColumn>();
+            var logEntries = BuildFullDownloadLogEntries(plan);
 
             using (gridAdapter.BeginBulkOperation())
             {
@@ -419,6 +454,8 @@ namespace OfficeAgent.ExcelAddIn
 
                 WriteFullDataRows(plan.SheetName, binding.DataStartRow, columns, plan.Rows);
             }
+
+            AppendChangeLogEntries(logEntries);
         }
 
         private void WriteFullDataRows(
@@ -486,7 +523,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void WritePartialCells(WorksheetDownloadPlan plan)
         {
-            var writeBatches = BuildPartialWriteBatches(plan);
+            var writeBatches = BuildPartialWriteBatches(plan, out var writeCells);
             if (writeBatches.Count == 0)
             {
                 return;
@@ -499,9 +536,13 @@ namespace OfficeAgent.ExcelAddIn
                     gridAdapter.WriteRangeValues(plan.SheetName, batch.StartRow, batch.StartColumn, batch.Values);
                 }
             }
+
+            AppendChangeLogEntries(BuildDownloadLogEntries(writeCells));
         }
 
-        private List<PartialWorksheetWriteBatch> BuildPartialWriteBatches(WorksheetDownloadPlan plan)
+        private List<PartialWorksheetWriteBatch> BuildPartialWriteBatches(
+            WorksheetDownloadPlan plan,
+            out List<PartialWorksheetWriteCell> writeCells)
         {
             var columnsByIndex = (plan.Schema?.Columns ?? Array.Empty<WorksheetColumnBinding>())
                 .ToDictionary(column => column.ColumnIndex, column => column);
@@ -509,7 +550,7 @@ namespace OfficeAgent.ExcelAddIn
                 .Where(row => !string.IsNullOrWhiteSpace(GetRowId(plan.Schema, row)))
                 .ToDictionary(row => GetRowId(plan.Schema, row), row => row, StringComparer.Ordinal);
             var rowIdAccessor = CreateCachedRowIdAccessor(plan.SheetName, plan.Schema);
-            var writeCells = new List<PartialWorksheetWriteCell>();
+            writeCells = new List<PartialWorksheetWriteCell>();
 
             foreach (var targetCell in plan.Selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
             {
@@ -524,11 +565,16 @@ namespace OfficeAgent.ExcelAddIn
                     continue;
                 }
 
+                var value = GetRowValue(row, column.ApiFieldKey);
                 writeCells.Add(new PartialWorksheetWriteCell
                 {
                     Row = targetCell.Row,
                     Column = targetCell.Column,
-                    Value = GetRowValue(row, column.ApiFieldKey),
+                    RowId = rowId,
+                    HeaderText = BuildHeaderText(column),
+                    IsIdColumn = column.IsIdColumn,
+                    OldValue = gridAdapter.GetCellText(plan.SheetName, targetCell.Row, targetCell.Column),
+                    Value = value,
                 });
             }
 
@@ -574,6 +620,157 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             return batches;
+        }
+
+        private WorksheetChangeLogEntry[] BuildFullDownloadLogEntries(WorksheetDownloadPlan plan)
+        {
+            var binding = plan?.Binding;
+            var columns = (plan?.RuntimeColumns ?? Array.Empty<WorksheetRuntimeColumn>())
+                .Where(column => column != null && !column.IsIdColumn)
+                .ToArray();
+            var rows = plan?.Rows ?? Array.Empty<IDictionary<string, object>>();
+            if (binding == null || columns.Length == 0 || rows.Count == 0)
+            {
+                return Array.Empty<WorksheetChangeLogEntry>();
+            }
+
+            var entries = new List<WorksheetChangeLogEntry>();
+            for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+            {
+                var row = rows[rowIndex];
+                var rowId = GetRowId(plan.Schema, row);
+                if (string.IsNullOrWhiteSpace(rowId))
+                {
+                    continue;
+                }
+
+                foreach (var column in columns)
+                {
+                    var oldValue = gridAdapter.GetCellText(plan.SheetName, binding.DataStartRow + rowIndex, column.ColumnIndex);
+                    var newValue = GetRowValue(row, column.ApiFieldKey);
+                    if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    entries.Add(new WorksheetChangeLogEntry
+                    {
+                        Key = rowId,
+                        HeaderText = BuildHeaderText(column),
+                        ChangeMode = "下载",
+                        NewValue = newValue,
+                        OldValue = oldValue,
+                    });
+                }
+            }
+
+            return entries.ToArray();
+        }
+
+        private static WorksheetChangeLogEntry[] BuildDownloadLogEntries(IEnumerable<PartialWorksheetWriteCell> writeCells)
+        {
+            return (writeCells ?? Enumerable.Empty<PartialWorksheetWriteCell>())
+                .Where(cell => cell != null && !cell.IsIdColumn)
+                .Where(cell => !string.IsNullOrWhiteSpace(cell.RowId))
+                .Select(cell => new
+                {
+                    Cell = cell,
+                    NewValue = Convert.ToString(cell.Value) ?? string.Empty,
+                })
+                .Where(item => !string.Equals(item.Cell.OldValue ?? string.Empty, item.NewValue, StringComparison.Ordinal))
+                .Select(item => new WorksheetChangeLogEntry
+                {
+                    Key = item.Cell.RowId,
+                    HeaderText = item.Cell.HeaderText,
+                    ChangeMode = "下载",
+                    NewValue = item.NewValue,
+                    OldValue = item.Cell.OldValue ?? string.Empty,
+                })
+                .ToArray();
+        }
+
+        private WorksheetUploadLogCandidate TryCreateUploadLogCandidate(
+            string sheetName,
+            int row,
+            WorksheetColumnBinding column,
+            string rowId,
+            string newValue)
+        {
+            if (pendingEditTracker == null ||
+                column == null ||
+                column.IsIdColumn ||
+                string.IsNullOrWhiteSpace(rowId))
+            {
+                return null;
+            }
+
+            if (!pendingEditTracker.TryGetOriginalValue(sheetName, row, column.ColumnIndex, out var oldValue))
+            {
+                return null;
+            }
+
+            if (string.Equals(oldValue ?? string.Empty, newValue ?? string.Empty, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return new WorksheetUploadLogCandidate
+            {
+                Row = row,
+                Column = column.ColumnIndex,
+                RowId = rowId,
+                ApiFieldKey = column.ApiFieldKey,
+                HeaderText = BuildHeaderText(column),
+                NewValue = newValue ?? string.Empty,
+                OldValue = oldValue ?? string.Empty,
+            };
+        }
+
+        private static WorksheetChangeLogEntry[] BuildUploadLogEntries(
+            IReadOnlyList<WorksheetUploadLogCandidate> candidates)
+        {
+            return (candidates ?? Array.Empty<WorksheetUploadLogCandidate>())
+                .Where(candidate => candidate != null)
+                .Select(candidate => new WorksheetChangeLogEntry
+                {
+                    Key = candidate.RowId,
+                    HeaderText = candidate.HeaderText,
+                    ChangeMode = "上传",
+                    NewValue = candidate.NewValue,
+                    OldValue = candidate.OldValue,
+                })
+                .ToArray();
+        }
+
+        private void ClearPendingUploadedCells(WorksheetUploadPlan plan)
+        {
+            if (pendingEditTracker == null || plan == null)
+            {
+                return;
+            }
+
+            pendingEditTracker.Clear(plan.SheetName, plan.UploadedCells);
+        }
+
+        private void AppendChangeLogEntries(IReadOnlyList<WorksheetChangeLogEntry> entries)
+        {
+            if (changeLogStore == null || entries == null || entries.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                changeLogStore.Append(entries);
+            }
+            catch (Exception exception)
+            {
+                OfficeAgentLog.Error(
+                    "ribbon-sync",
+                    "change-log.append.failed",
+                    "Failed to append workbook change log entries.",
+                    exception);
+            }
         }
 
         private static List<PartialWorksheetWriteRowSegment> BuildPartialRowSegments(IEnumerable<PartialWorksheetWriteCell> writeCells)
@@ -665,19 +862,21 @@ namespace OfficeAgent.ExcelAddIn
             return selectionResolver.Resolve(schema, visibleCells, rowIdAccessor);
         }
 
-        private CellChange[] ReadAllCurrentCells(string sheetName, SheetBinding binding, WorksheetSchema schema)
+        private WorksheetUploadReadResult ReadAllCurrentCells(string sheetName, SheetBinding binding, WorksheetSchema schema)
         {
             var idColumn = GetIdColumn(schema);
             if (idColumn == null)
             {
-                return Array.Empty<CellChange>();
+                return WorksheetUploadReadResult.Empty;
             }
 
             var result = new List<CellChange>();
+            var logCandidates = new List<WorksheetUploadLogCandidate>();
+            var uploadedCells = new List<WorksheetCellAddress>();
             var lastUsedRow = gridAdapter.GetLastUsedRow(sheetName);
             if (lastUsedRow < binding.DataStartRow)
             {
-                return Array.Empty<CellChange>();
+                return WorksheetUploadReadResult.Empty;
             }
 
             var columns = (schema.Columns ?? Array.Empty<WorksheetColumnBinding>())
@@ -686,7 +885,7 @@ namespace OfficeAgent.ExcelAddIn
                 .ToArray();
             if (columns.Length == 0)
             {
-                return Array.Empty<CellChange>();
+                return WorksheetUploadReadResult.Empty;
             }
 
             var segments = ReadUploadSegments(sheetName, binding.DataStartRow, lastUsedRow, columns);
@@ -703,18 +902,31 @@ namespace OfficeAgent.ExcelAddIn
 
                 foreach (var column in nonIdColumns)
                 {
+                    var newValue = ReadUploadCellValue(sheetName, row, column.ColumnIndex, rowOffset, segments);
                     result.Add(new CellChange
                     {
                         SheetName = sheetName,
                         RowId = rowId,
                         ApiFieldKey = column.ApiFieldKey,
                         OldValue = string.Empty,
-                        NewValue = ReadUploadCellValue(sheetName, row, column.ColumnIndex, rowOffset, segments),
+                        NewValue = newValue,
                     });
+                    uploadedCells.Add(new WorksheetCellAddress { Row = row, Column = column.ColumnIndex });
+
+                    var logCandidate = TryCreateUploadLogCandidate(sheetName, row, column, rowId, newValue);
+                    if (logCandidate != null)
+                    {
+                        logCandidates.Add(logCandidate);
+                    }
                 }
             }
 
-            return result.ToArray();
+            return new WorksheetUploadReadResult
+            {
+                Changes = result.ToArray(),
+                LogCandidates = logCandidates.ToArray(),
+                UploadedCells = uploadedCells.ToArray(),
+            };
         }
 
         private WorksheetUploadReadSegment[] ReadUploadSegments(
@@ -744,7 +956,7 @@ namespace OfficeAgent.ExcelAddIn
                 .ToArray();
         }
 
-        private CellChange[] ReadSelectionChanges(
+        private WorksheetUploadReadResult ReadSelectionChanges(
             string sheetName,
             WorksheetSchema schema,
             ResolvedSelection selection,
@@ -753,6 +965,8 @@ namespace OfficeAgent.ExcelAddIn
             var columnsByIndex = (schema?.Columns ?? Array.Empty<WorksheetColumnBinding>())
                 .ToDictionary(column => column.ColumnIndex, column => column);
             var result = new List<CellChange>();
+            var logCandidates = new List<WorksheetUploadLogCandidate>();
+            var uploadedCells = new List<WorksheetCellAddress>();
 
             foreach (var targetCell in selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
             {
@@ -767,17 +981,30 @@ namespace OfficeAgent.ExcelAddIn
                     continue;
                 }
 
+                var newValue = gridAdapter.GetCellText(sheetName, targetCell.Row, targetCell.Column);
                 result.Add(new CellChange
                 {
                     SheetName = sheetName,
                     RowId = rowId,
                     ApiFieldKey = column.ApiFieldKey,
                     OldValue = string.Empty,
-                    NewValue = gridAdapter.GetCellText(sheetName, targetCell.Row, targetCell.Column),
+                    NewValue = newValue,
                 });
+                uploadedCells.Add(new WorksheetCellAddress { Row = targetCell.Row, Column = targetCell.Column });
+
+                var logCandidate = TryCreateUploadLogCandidate(sheetName, targetCell.Row, column, rowId, newValue);
+                if (logCandidate != null)
+                {
+                    logCandidates.Add(logCandidate);
+                }
             }
 
-            return result.ToArray();
+            return new WorksheetUploadReadResult
+            {
+                Changes = result.ToArray(),
+                LogCandidates = logCandidates.ToArray(),
+                UploadedCells = uploadedCells.ToArray(),
+            };
         }
 
         private static IReadOnlyList<string> GetRequestedFieldKeys(IReadOnlyList<WorksheetRuntimeColumn> columns)
@@ -819,12 +1046,169 @@ namespace OfficeAgent.ExcelAddIn
                 !string.IsNullOrWhiteSpace(valueAccessor.GetValue(definition, row, FieldMappingSemanticRole.ApiFieldKey)));
         }
 
-        private SyncOperationPreview BuildUploadPreview(string operationName, IReadOnlyList<CellChange> changes)
+        private SyncOperationPreview BuildUploadPreview(
+            string operationName,
+            string systemKey,
+            string projectId,
+            IReadOnlyList<CellChange> changes)
         {
-            var preview = previewFactory.CreateUploadPreview(operationName, changes);
+            var filterResult = worksheetSyncService.FilterUploadChanges(systemKey, projectId, changes);
+            var preview = previewFactory.CreateUploadPreview(
+                operationName,
+                filterResult.IncludedChanges,
+                filterResult.SkippedChanges);
             preview.OperationName = operationName;
-            preview.Summary = $"{operationName}将提交 {preview.Changes.Length} 个单元格。";
+            if (preview.SkippedChanges.Length == 0)
+            {
+                preview.Summary = $"{operationName}将提交 {preview.Changes.Length} 个单元格。";
+            }
+
             return preview;
+        }
+
+        private static WorksheetUploadLogCandidate[] SelectIncludedLogCandidates(
+            IReadOnlyList<WorksheetUploadLogCandidate> candidates,
+            IReadOnlyList<CellChange> includedChanges)
+        {
+            var includedCounts = CreateChangeKeyCounts(includedChanges);
+            return (candidates ?? Array.Empty<WorksheetUploadLogCandidate>())
+                .Where(candidate => candidate != null)
+                .Where(candidate => ConsumeChangeKey(
+                    includedCounts,
+                    candidate.RowId,
+                    candidate.ApiFieldKey,
+                    candidate.NewValue))
+                .ToArray();
+        }
+
+        private static WorksheetCellAddress[] SelectIncludedUploadedCells(
+            WorksheetUploadReadResult readResult,
+            IReadOnlyList<CellChange> includedChanges)
+        {
+            var includedCounts = CreateChangeKeyCounts(includedChanges);
+            var sourceChanges = readResult?.Changes ?? Array.Empty<CellChange>();
+            var sourceCells = readResult?.UploadedCells ?? Array.Empty<WorksheetCellAddress>();
+            var result = new List<WorksheetCellAddress>();
+
+            for (var index = 0; index < sourceChanges.Length && index < sourceCells.Length; index++)
+            {
+                var change = sourceChanges[index];
+                if (ConsumeChangeKey(includedCounts, change?.RowId, change?.ApiFieldKey, change?.NewValue))
+                {
+                    result.Add(sourceCells[index]);
+                }
+            }
+
+            return result.ToArray();
+        }
+
+        private static Dictionary<string, int> CreateChangeKeyCounts(IReadOnlyList<CellChange> changes)
+        {
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var change in changes ?? Array.Empty<CellChange>())
+            {
+                if (change == null)
+                {
+                    continue;
+                }
+
+                var key = CreateChangeKey(change.RowId, change.ApiFieldKey, change.NewValue);
+                result.TryGetValue(key, out var count);
+                result[key] = count + 1;
+            }
+
+            return result;
+        }
+
+        private static bool ConsumeChangeKey(
+            IDictionary<string, int> counts,
+            string rowId,
+            string apiFieldKey,
+            string newValue)
+        {
+            if (counts == null)
+            {
+                return false;
+            }
+
+            var key = CreateChangeKey(rowId, apiFieldKey, newValue);
+            if (!counts.TryGetValue(key, out var count) || count <= 0)
+            {
+                return false;
+            }
+
+            if (count == 1)
+            {
+                counts.Remove(key);
+            }
+            else
+            {
+                counts[key] = count - 1;
+            }
+
+            return true;
+        }
+
+        private static string CreateChangeKey(string rowId, string apiFieldKey, string newValue)
+        {
+            return $"{rowId ?? string.Empty}\u001F{apiFieldKey ?? string.Empty}\u001F{newValue ?? string.Empty}";
+        }
+
+        private static string BuildHeaderText(WorksheetColumnBinding column)
+        {
+            if (column == null)
+            {
+                return string.Empty;
+            }
+
+            var parent = column.ParentHeaderText ?? string.Empty;
+            var child = column.ChildHeaderText ?? string.Empty;
+            if (column.ColumnKind == WorksheetColumnKind.ActivityProperty &&
+                !string.IsNullOrWhiteSpace(parent) &&
+                !string.IsNullOrWhiteSpace(child))
+            {
+                return $"{parent}/{child}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(child))
+            {
+                return child;
+            }
+
+            return !string.IsNullOrWhiteSpace(parent)
+                ? parent
+                : column.ApiFieldKey ?? string.Empty;
+        }
+
+        private static string BuildHeaderText(WorksheetRuntimeColumn column)
+        {
+            if (column == null)
+            {
+                return string.Empty;
+            }
+
+            var parent = column.ParentDisplayText ?? string.Empty;
+            var child = column.ChildDisplayText ?? string.Empty;
+            if (IsActivityProperty(column.HeaderType) &&
+                !string.IsNullOrWhiteSpace(parent) &&
+                !string.IsNullOrWhiteSpace(child))
+            {
+                return $"{parent}/{child}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(column.DisplayText))
+            {
+                return column.DisplayText;
+            }
+
+            if (!string.IsNullOrWhiteSpace(child))
+            {
+                return child;
+            }
+
+            return !string.IsNullOrWhiteSpace(parent)
+                ? parent
+                : column.ApiFieldKey ?? string.Empty;
         }
 
         private Func<int, string> CreateCachedRowIdAccessor(string sheetName, WorksheetSchema schema)
@@ -1007,10 +1391,42 @@ namespace OfficeAgent.ExcelAddIn
         public string[,] NumberFormats { get; set; }
     }
 
+    internal sealed class WorksheetUploadReadResult
+    {
+        public static readonly WorksheetUploadReadResult Empty = new WorksheetUploadReadResult();
+
+        public CellChange[] Changes { get; set; } = Array.Empty<CellChange>();
+
+        public WorksheetUploadLogCandidate[] LogCandidates { get; set; } = Array.Empty<WorksheetUploadLogCandidate>();
+
+        public WorksheetCellAddress[] UploadedCells { get; set; } = Array.Empty<WorksheetCellAddress>();
+    }
+
+    internal sealed class WorksheetUploadLogCandidate
+    {
+        public int Row { get; set; }
+
+        public int Column { get; set; }
+
+        public string RowId { get; set; } = string.Empty;
+
+        public string ApiFieldKey { get; set; } = string.Empty;
+
+        public string HeaderText { get; set; } = string.Empty;
+
+        public string NewValue { get; set; } = string.Empty;
+
+        public string OldValue { get; set; } = string.Empty;
+    }
+
     internal sealed class PartialWorksheetWriteCell
     {
         public int Row { get; set; }
         public int Column { get; set; }
+        public string RowId { get; set; } = string.Empty;
+        public string HeaderText { get; set; } = string.Empty;
+        public bool IsIdColumn { get; set; }
+        public string OldValue { get; set; } = string.Empty;
         public object Value { get; set; }
     }
 

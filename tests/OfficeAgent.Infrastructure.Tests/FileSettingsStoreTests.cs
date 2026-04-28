@@ -26,10 +26,11 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("https://api.example.com", settings.BaseUrl);
             Assert.Equal(string.Empty, settings.BusinessBaseUrl);
             Assert.Equal("gpt-5-mini", settings.Model);
+            Assert.Equal("system", settings.UiLanguageOverride);
         }
 
         [Fact]
-        public void SaveRoundTripsProtectedApiKey()
+        public void SaveRoundTripsProtectedApiKeyAndUiLanguageOverride()
         {
             var settingsPath = Path.Combine(tempDirectory, "settings.json");
             var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
@@ -40,6 +41,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 BaseUrl = "https://api.internal.example",
                 BusinessBaseUrl = "https://business.internal.example",
                 Model = "gpt-5-mini",
+                UiLanguageOverride = "zh",
             });
 
             var persistedJson = File.ReadAllText(settingsPath);
@@ -49,6 +51,8 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("secret-token", loaded.ApiKey);
             Assert.Equal("https://api.internal.example", loaded.BaseUrl);
             Assert.Equal("https://business.internal.example", loaded.BusinessBaseUrl);
+            Assert.Equal("zh", loaded.UiLanguageOverride);
+            Assert.Contains("\"uiLanguageOverride\": \"zh\"", persistedJson);
         }
 
         [Fact]
@@ -69,6 +73,38 @@ namespace OfficeAgent.Infrastructure.Tests
 
             Assert.Equal("https://api.internal.example", loaded.BaseUrl);
             Assert.Equal("https://business.internal.example", loaded.BusinessBaseUrl);
+        }
+
+        [Fact]
+        public void LoadNormalizesInvalidUiLanguageOverrideToSystem()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(
+                settingsPath,
+                "{\n  \"encryptedApiKey\": \"\",\n  \"baseUrl\": \"https://api.internal.example\",\n  \"model\": \"gpt-5-mini\",\n  \"uiLanguageOverride\": \"de\"\n}");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            var settings = store.Load();
+
+            Assert.Equal("system", settings.UiLanguageOverride);
+        }
+
+        [Fact]
+        public void SaveNormalizesInvalidUiLanguageOverrideToSystem()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            store.Save(new OfficeAgent.Core.Models.AppSettings
+            {
+                ApiKey = "secret-token",
+                UiLanguageOverride = "de",
+            });
+
+            var loaded = store.Load();
+
+            Assert.Equal("system", loaded.UiLanguageOverride);
         }
 
         [Fact]

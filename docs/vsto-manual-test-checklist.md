@@ -63,10 +63,10 @@
 - Open `ISDP_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.
-- Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing `先选择项目`.
-- Save a workbook with `ISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows `先选择项目` unless `SheetBindings` 里存在 `ISDP_Setting` 这条显式绑定记录。
-- Switch from a bound business sheet to `ISDP_Setting` and confirm the Ribbon dropdown clears back to `先选择项目` when `ISDP_Setting` itself has no binding.
-- Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows `先选择项目`.
+- Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing the localized placeholder (`先选择项目` / `Select project`).
+- Save a workbook with `ISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows the localized placeholder (`先选择项目` / `Select project`) unless `SheetBindings` 里存在 `ISDP_Setting` 这条显式绑定记录。
+- Switch from a bound business sheet to `ISDP_Setting` and confirm the Ribbon dropdown clears back to the localized placeholder (`先选择项目` / `Select project`) when `ISDP_Setting` itself has no binding.
+- Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows the localized placeholder (`先选择项目` / `Select project`).
 - Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon dropdown plus download/upload behavior always follow the active workbook's own `ISDP_Setting` metadata.
 - On a sheet that already has binding metadata, switch to another project and confirm the layout dialog defaults reuse the current sheet's saved layout values.
 - Increase Windows or Office UI font scaling, reopen the project layout dialog, and confirm all labels, inputs, and buttons remain fully visible without overlap.
@@ -74,15 +74,20 @@
 - Cancel the layout dialog while switching projects and confirm both `ISDP_Setting` binding data and Ribbon dropdown project stay unchanged.
 - After switching to another project and confirming the dialog, verify old `SheetFieldMappings` are cleared; before clicking `初始化当前表`, running download/upload should report that the current sheet is not initialized.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
-- Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows `请先登录`.
-- Configure the project API to return an empty array and confirm the project dropdown shows `无可用项目`.
+- Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized status (`请先登录` / `Sign in first`).
+- Configure the project API to return an empty array and confirm the project dropdown shows the localized status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` on a sheet that already contains business cells and confirm only `ISDP_Setting` changes; the business area should remain untouched.
 - Click `部分下载` and `部分上传` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
-- Confirm the Ribbon includes a dedicated `模板` group with `应用模板`, `保存模板`, and `另存模板`.
+- Before `部分下载`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
+- Edit one managed non-ID cell, run `部分上传`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
+- Force a `部分上传` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
+- Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
+- Confirm the Ribbon follows the Excel UI language: Chinese Excel shows `项目`, `模板`, `数据同步`, `账号`, `帮助`; English Excel shows `Project`, `Template`, `Data sync`, `Account`, `Help`.
+- Confirm the Ribbon includes a dedicated `模板` / `Template` group with `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template`.
 - Confirm all Ribbon buttons display Office built-in icons that match their action semantics, with each button using the large icon-above-label layout.
 - Confirm the `ISDP AI` group button is labeled `Open`.
-- Confirm the Ribbon includes one `数据同步` group containing `部分下载` and `部分上传`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
-- Confirm the Ribbon includes a `帮助` group with `文档` and `关于`; `文档` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` shows version and build information.
+- Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `部分下载` / `Partial download` and `部分上传` / `Partial upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
+- Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
 - In the same project, save two different local templates and confirm `应用模板` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
 - Manually edit `ISDP_Setting` field mapping text after applying a template, click `保存模板`, then reapply that template and confirm the edited mapping is preserved.

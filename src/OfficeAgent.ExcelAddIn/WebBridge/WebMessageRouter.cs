@@ -640,6 +640,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             return token != null && token.Type == JTokenType.String;
         }
 
+
         private WebMessageResponse ExecuteExcelCommand(WebMessageRequest request)
         {
             if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)

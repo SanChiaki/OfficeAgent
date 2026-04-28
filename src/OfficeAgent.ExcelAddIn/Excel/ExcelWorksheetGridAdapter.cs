@@ -17,6 +17,44 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return new BulkOperationScope(application);
         }
 
+        public void EnsureWorksheetExists(string sheetName)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            var activeSheet = application.ActiveSheet as ExcelInterop.Worksheet;
+            try
+            {
+                var workbook = GetWorkbook();
+                if (FindWorksheet(workbook, sheetName) != null)
+                {
+                    return;
+                }
+
+                var lastSheet = workbook.Worksheets[workbook.Worksheets.Count] as ExcelInterop.Worksheet;
+                var worksheet = workbook.Worksheets.Add(After: lastSheet) as ExcelInterop.Worksheet;
+                if (worksheet == null)
+                {
+                    throw new InvalidOperationException($"Worksheet '{sheetName}' could not be created.");
+                }
+
+                worksheet.Name = sheetName;
+            }
+            finally
+            {
+                try
+                {
+                    activeSheet?.Activate();
+                }
+                catch
+                {
+                    // Ignore focus restoration failures and keep worksheet creation successful.
+                }
+            }
+        }
+
         public string GetCellText(string sheetName, int row, int column)
         {
             var worksheet = GetWorksheet(sheetName);
@@ -327,10 +365,31 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 throw new ArgumentException("Sheet name is required.", nameof(sheetName));
             }
 
+            var worksheet = FindWorksheet(GetWorkbook(), sheetName);
+            if (worksheet != null)
+            {
+                return worksheet;
+            }
+
+            throw new InvalidOperationException($"Worksheet '{sheetName}' was not found.");
+        }
+
+        private ExcelInterop.Workbook GetWorkbook()
+        {
             var workbook = application.ActiveWorkbook;
             if (workbook == null)
             {
                 throw new InvalidOperationException("Excel workbook is not available.");
+            }
+
+            return workbook;
+        }
+
+        private static ExcelInterop.Worksheet FindWorksheet(ExcelInterop.Workbook workbook, string sheetName)
+        {
+            if (workbook == null)
+            {
+                return null;
             }
 
             for (var index = 1; index <= workbook.Worksheets.Count; index++)
@@ -343,7 +402,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 }
             }
 
-            throw new InvalidOperationException($"Worksheet '{sheetName}' was not found.");
+            return null;
         }
 
         private sealed class BulkOperationScope : IDisposable

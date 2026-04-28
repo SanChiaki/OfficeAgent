@@ -254,7 +254,25 @@ Ribbon 点击链路：
 
 也就是说，真实系统如果只有“整行更新”接口，需要在连接器内部把这些单元格改动聚合成目标系统所需 payload，不要把这个复杂度上推到 Excel 层。
 
-### 4.7 认证失败异常约定
+### 4.7 上传过滤
+
+如果真实业务系统需要按业务规则跳过部分单元格，不要只在 `BatchSave()` 里静默过滤。当前推荐做法是让真实连接器额外实现 `IUploadChangeFilter`：
+
+- `FilterUploadChanges(projectId, changes)` 返回实际上传项和跳过项
+- 实际上传项进入 `SyncOperationPreview.Changes`，确认后才会传给 `BatchSave()`
+- 跳过项进入 `SyncOperationPreview.SkippedChanges`，每项包含原始 `CellChange` 和跳过原因
+- 上传确认弹窗会显示实际上传数量、跳过数量和部分跳过原因
+
+这保证了用户确认时看到的内容和最终提交给业务系统的内容一致。
+
+过滤规则可以是连接器内置逻辑、本地配置、`ISDP_Setting` 派生规则，或业务接口下发的字段 / 行状态规则。典型规则包括：
+
+- 按 `ApiFieldKey` 跳过只读字段
+- 按 `RowId` 对应的单据状态跳过已归档、已锁定、流程结束的数据
+- 按 `NewValue` 跳过空值、默认值或业务系统不接受的值
+- 调业务接口校验权限后跳过不可编辑字段
+
+### 4.8 认证失败异常约定
 
 当前 Ribbon Sync 的登录引导是“异常类型驱动”的，而不是“HTTP 状态码驱动”的。
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -156,6 +157,48 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(new[] { "start_12345678" }, connector.LastFindFieldKeys);
             Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 6, 3));
             Assert.Equal("旧结束时间", grid.GetCell("Sheet1", 6, 4));
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadAppendsWorkbookLogForChangedCells()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-02-01", "2026-02-09") };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 3, Value = "旧开始时间" },
+                },
+            };
+            var (service, grid, logStore, _) = CreateServiceWithChangeLog(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 3, "旧开始时间");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            var entry = Assert.Single(logStore.Entries);
+            Assert.Equal("row-1", entry.Key);
+            Assert.Equal("测试活动111/开始时间", entry.HeaderText);
+            Assert.Equal("下载", entry.ChangeMode);
+            Assert.Equal("2026-02-01", entry.NewValue);
+            Assert.Equal("旧开始时间", entry.OldValue);
         }
 
         [Fact]
@@ -843,6 +886,145 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreparePartialUploadFiltersPreviewAndExecuteUploadSubmitsOnlyIncludedChanges()
+        {
+            var connector = new FakeSystemConnector
+            {
+                SkippedApiFieldKey = "end_12345678",
+                SkipReason = "单据已归档，禁止上传",
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 2, Value = "李四" },
+                    new SelectedVisibleCell { Row = 6, Column = 4, Value = "2026-01-10" },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 2, "李四");
+            grid.SetCell("Sheet1", 6, 4, "2026-01-10");
+
+            var plan = InvokePrepare(service, "PreparePartialUpload", "Sheet1");
+            var preview = ReadPreview(plan);
+
+            Assert.Equal("performance", connector.LastFilterProjectId);
+            Assert.Equal("部分上传将上传 1 个单元格，跳过 1 个单元格。", preview.Summary);
+            var included = Assert.Single(preview.Changes);
+            Assert.Equal("owner_name", included.ApiFieldKey);
+            var skipped = Assert.Single(preview.SkippedChanges);
+            Assert.Equal("end_12345678", skipped.Change.ApiFieldKey);
+            Assert.Equal("单据已归档，禁止上传", skipped.Reason);
+            Assert.Contains("row-1 / end_12345678: 已跳过，单据已归档，禁止上传", preview.Details);
+
+            InvokeExecute(service, "ExecuteUpload", plan);
+
+            Assert.Single(connector.LastBatchSaveChanges);
+            Assert.Equal("owner_name", connector.LastBatchSaveChanges[0].ApiFieldKey);
+        }
+
+        [Fact]
+        public void ExecutePartialUploadAppendsWorkbookLogAfterSuccessfulBatchSave()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 4, Value = "2026-01-10" },
+                },
+            };
+            var (service, grid, logStore, pendingEditTracker) = CreateServiceWithChangeLog(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 4, "2026-01-10");
+            SeedPendingOriginalValue(pendingEditTracker, "Sheet1", 6, 4, "2026-01-05");
+
+            var plan = InvokePrepare(service, "PreparePartialUpload", "Sheet1");
+            InvokeExecute(service, "ExecuteUpload", plan);
+
+            var entry = Assert.Single(logStore.Entries);
+            Assert.Equal("row-1", entry.Key);
+            Assert.Equal("测试活动111/结束时间", entry.HeaderText);
+            Assert.Equal("上传", entry.ChangeMode);
+            Assert.Equal("2026-01-10", entry.NewValue);
+            Assert.Equal("2026-01-05", entry.OldValue);
+            Assert.False(TryGetPendingOriginalValue(pendingEditTracker, "Sheet1", 6, 4, out _));
+        }
+
+        [Fact]
+        public void ExecutePartialUploadDoesNotAppendLogOrClearPendingValueWhenBatchSaveFails()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BatchSaveException = new InvalidOperationException("save failed"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 6, Column = 4, Value = "2026-01-10" },
+                },
+            };
+            var (service, grid, logStore, pendingEditTracker) = CreateServiceWithChangeLog(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 4, "2026-01-10");
+            SeedPendingOriginalValue(pendingEditTracker, "Sheet1", 6, 4, "2026-01-05");
+
+            var plan = InvokePrepare(service, "PreparePartialUpload", "Sheet1");
+
+            Assert.Throws<TargetInvocationException>(() => InvokeExecute(service, "ExecuteUpload", plan));
+            Assert.Empty(logStore.Entries);
+            Assert.True(TryGetPendingOriginalValue(pendingEditTracker, "Sheet1", 6, 4, out var value));
+            Assert.Equal("2026-01-05", value);
+        }
+
+        [Fact]
         public void PreparePartialUploadResolvesGroupedSingleOwnerNameFromTwoRowHeader()
         {
             var connector = new FakeSystemConnector();
@@ -1091,6 +1273,67 @@ namespace OfficeAgent.ExcelAddIn.Tests
             return (service, grid);
         }
 
+        private static (object Service, FakeWorksheetGridAdapter Grid, FakeWorksheetChangeLogStore LogStore, object PendingEditTracker) CreateServiceWithChangeLog(
+            FakeSystemConnector connector,
+            IWorksheetMetadataStore metadataStore,
+            FakeWorksheetSelectionReader selectionReader)
+        {
+            return CreateServiceWithChangeLog(new[] { connector }, metadataStore, selectionReader);
+        }
+
+        private static (object Service, FakeWorksheetGridAdapter Grid, FakeWorksheetChangeLogStore LogStore, object PendingEditTracker) CreateServiceWithChangeLog(
+            IReadOnlyList<FakeSystemConnector> connectors,
+            IWorksheetMetadataStore metadataStore,
+            FakeWorksheetSelectionReader selectionReader)
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var serviceType = assembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
+            var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
+            var logStoreInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetChangeLogStore", throwOnError: true);
+            var pendingEditTrackerType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetPendingEditTracker", throwOnError: true);
+            var grid = new FakeWorksheetGridAdapter(gridInterface);
+            var logStore = new FakeWorksheetChangeLogStore(logStoreInterface);
+            var pendingEditTracker = Activator.CreateInstance(pendingEditTrackerType);
+            var syncService = new WorksheetSyncService(
+                new SystemConnectorRegistry(connectors.Cast<ISystemConnector>().ToArray()),
+                metadataStore,
+                new WorksheetChangeTracker(),
+                new SyncOperationPreviewFactory());
+
+            var ctor = serviceType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(WorksheetSyncService),
+                    typeof(IWorksheetMetadataStore),
+                    typeof(IWorksheetSelectionReader),
+                    gridInterface,
+                    typeof(SyncOperationPreviewFactory),
+                    logStoreInterface,
+                    pendingEditTrackerType,
+                },
+                modifiers: null);
+
+            if (ctor == null)
+            {
+                throw new InvalidOperationException("WorksheetSyncExecutionService change-log constructor was not found.");
+            }
+
+            var service = ctor.Invoke(new object[]
+            {
+                syncService,
+                metadataStore,
+                selectionReader,
+                grid.GetTransparentProxy(),
+                new SyncOperationPreviewFactory(),
+                logStore.GetTransparentProxy(),
+                pendingEditTracker,
+            });
+
+            return (service, grid, logStore, pendingEditTracker);
+        }
+
         private static ScopedWorksheetMetadataAdapter CreateScopedMetadataAdapter()
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
@@ -1159,6 +1402,50 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 grid.SetCell(sheetName, row + 1, 3, "开始时间");
                 grid.SetCell(sheetName, row + 1, 4, "结束时间");
             }
+        }
+
+        private static void SeedPendingOriginalValue(object pendingEditTracker, string sheetName, int row, int column, string value)
+        {
+            var assembly = pendingEditTracker.GetType().Assembly;
+            var cellValueType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetCellValue", throwOnError: true);
+            var cellAddressType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetCellAddress", throwOnError: true);
+
+            var cellValues = Array.CreateInstance(cellValueType, 1);
+            var cellValue = Activator.CreateInstance(cellValueType);
+            SetProperty(cellValue, "Row", row);
+            SetProperty(cellValue, "Column", column);
+            SetProperty(cellValue, "Text", value);
+            cellValues.SetValue(cellValue, 0);
+
+            var cellAddresses = Array.CreateInstance(cellAddressType, 1);
+            var cellAddress = Activator.CreateInstance(cellAddressType);
+            SetProperty(cellAddress, "Row", row);
+            SetProperty(cellAddress, "Column", column);
+            cellAddresses.SetValue(cellAddress, 0);
+
+            pendingEditTracker.GetType()
+                .GetMethod("CaptureBeforeValues")
+                .Invoke(pendingEditTracker, new object[] { sheetName, cellValues });
+            pendingEditTracker.GetType()
+                .GetMethod("MarkChanged")
+                .Invoke(pendingEditTracker, new object[] { sheetName, cellAddresses });
+        }
+
+        private static bool TryGetPendingOriginalValue(object pendingEditTracker, string sheetName, int row, int column, out string value)
+        {
+            var args = new object[] { sheetName, row, column, null };
+            var result = (bool)pendingEditTracker.GetType()
+                .GetMethod("TryGetOriginalValue")
+                .Invoke(pendingEditTracker, args);
+            value = Convert.ToString(args[3]) ?? string.Empty;
+            return result;
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            target.GetType()
+                .GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .SetValue(target, value);
         }
 
         private static object InvokePrepare(object service, string methodName, string sheetName)
@@ -1424,7 +1711,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             };
         }
 
-        private sealed class FakeSystemConnector : ISystemConnector
+        private sealed class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
         {
             public FakeSystemConnector(string systemKey = "current-business-system")
             {
@@ -1466,6 +1753,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public string LastBatchSaveProjectId { get; private set; }
 
             public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; } = Array.Empty<CellChange>();
+
+            public Exception BatchSaveException { get; set; }
+
+            public string SkippedApiFieldKey { get; set; } = string.Empty;
+
+            public string SkipReason { get; set; } = string.Empty;
+
+            public string LastFilterProjectId { get; private set; }
 
             public IReadOnlyList<ProjectOption> GetProjects()
             {
@@ -1545,9 +1840,106 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
             {
+                if (BatchSaveException != null)
+                {
+                    throw BatchSaveException;
+                }
+
                 LastBatchSaveProjectId = projectId;
                 LastBatchSaveChanges = changes?.ToArray() ?? Array.Empty<CellChange>();
             }
+
+            public UploadChangeFilterResult FilterUploadChanges(string projectId, IReadOnlyList<CellChange> changes)
+            {
+                LastFilterProjectId = projectId;
+                var changeList = changes ?? Array.Empty<CellChange>();
+
+                return new UploadChangeFilterResult
+                {
+                    IncludedChanges = changeList
+                        .Where(change => !string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .ToArray(),
+                    SkippedChanges = changeList
+                        .Where(change => string.Equals(change.ApiFieldKey, SkippedApiFieldKey, StringComparison.Ordinal))
+                        .Select(change => new SkippedCellChange
+                        {
+                            Change = change,
+                            Reason = SkipReason,
+                        })
+                        .ToArray(),
+                };
+            }
+        }
+
+        private sealed class FakeWorksheetChangeLogStore : RealProxy
+        {
+            private readonly Type interfaceType;
+
+            public FakeWorksheetChangeLogStore(Type interfaceType)
+                : base(interfaceType)
+            {
+                this.interfaceType = interfaceType;
+            }
+
+            public List<ChangeLogRecord> Entries { get; } = new List<ChangeLogRecord>();
+
+            public override IMessage Invoke(IMessage msg)
+            {
+                var call = (IMethodCallMessage)msg;
+
+                switch (call.MethodName)
+                {
+                    case "GetType":
+                        return new ReturnMessage(interfaceType, null, 0, call.LogicalCallContext, call);
+                    case "GetHashCode":
+                        return new ReturnMessage(GetHashCode(), null, 0, call.LogicalCallContext, call);
+                    case "ToString":
+                        return new ReturnMessage(nameof(FakeWorksheetChangeLogStore), null, 0, call.LogicalCallContext, call);
+                    case "Append":
+                        Append((IEnumerable)call.InArgs[0]);
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    default:
+                        throw new NotSupportedException(call.MethodName);
+                }
+            }
+
+            public new object GetTransparentProxy()
+            {
+                return base.GetTransparentProxy();
+            }
+
+            private void Append(IEnumerable entries)
+            {
+                foreach (var entry in entries ?? Array.Empty<object>())
+                {
+                    Entries.Add(new ChangeLogRecord
+                    {
+                        Key = ReadString(entry, "Key"),
+                        HeaderText = ReadString(entry, "HeaderText"),
+                        ChangeMode = ReadString(entry, "ChangeMode"),
+                        NewValue = ReadString(entry, "NewValue"),
+                        OldValue = ReadString(entry, "OldValue"),
+                    });
+                }
+            }
+
+            private static string ReadString(object target, string propertyName)
+            {
+                return Convert.ToString(target.GetType().GetProperty(propertyName).GetValue(target)) ?? string.Empty;
+            }
+        }
+
+        private sealed class ChangeLogRecord
+        {
+            public string Key { get; set; } = string.Empty;
+
+            public string HeaderText { get; set; } = string.Empty;
+
+            public string ChangeMode { get; set; } = string.Empty;
+
+            public string NewValue { get; set; } = string.Empty;
+
+            public string OldValue { get; set; } = string.Empty;
         }
 
         private sealed class FakeWorksheetMetadataStore : IWorksheetMetadataStore

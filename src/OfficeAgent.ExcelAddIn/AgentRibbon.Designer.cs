@@ -81,12 +81,12 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.groupProject.Items.Add(this.projectDropDown);
             this.groupProject.Items.Add(this.initializeSheetButton);
-            this.groupProject.Label = "\u9879\u76EE";
+            this.groupProject.Label = "Project";
             this.groupProject.Name = "groupProject";
             // 
             // projectDropDown
             // 
-            this.projectDropDown.Label = "\u5148\u9009\u62E9\u9879\u76EE";
+            this.projectDropDown.Label = "Select project";
             this.projectDropDown.Name = "projectDropDown";
             this.projectDropDown.SizeString = "WWWWWWWWWWWWWWWWWWWW";
             this.projectDropDown.ShowItemLabel = true;
@@ -96,7 +96,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // initializeSheetButton
             // 
-            this.initializeSheetButton.Label = "\u521D\u59CB\u5316\u5F53\u524D\u8868";
+            this.initializeSheetButton.Label = "Initialize sheet";
             this.initializeSheetButton.Name = "initializeSheetButton";
             this.initializeSheetButton.OfficeImageId = "TableInsert";
             this.initializeSheetButton.ShowImage = true;
@@ -108,12 +108,12 @@ namespace OfficeAgent.ExcelAddIn
             this.groupTemplate.Items.Add(this.applyTemplateButton);
             this.groupTemplate.Items.Add(this.saveTemplateButton);
             this.groupTemplate.Items.Add(this.saveAsTemplateButton);
-            this.groupTemplate.Label = "\u6A21\u677F";
+            this.groupTemplate.Label = "Template";
             this.groupTemplate.Name = "groupTemplate";
             // 
             // applyTemplateButton
             // 
-            this.applyTemplateButton.Label = "\u5E94\u7528\u6A21\u677F";
+            this.applyTemplateButton.Label = "Apply template";
             this.applyTemplateButton.Name = "applyTemplateButton";
             this.applyTemplateButton.OfficeImageId = "FileOpen";
             this.applyTemplateButton.ShowImage = true;
@@ -122,7 +122,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // saveTemplateButton
             // 
-            this.saveTemplateButton.Label = "\u4FDD\u5B58\u6A21\u677F";
+            this.saveTemplateButton.Label = "Save template";
             this.saveTemplateButton.Name = "saveTemplateButton";
             this.saveTemplateButton.OfficeImageId = "FileSave";
             this.saveTemplateButton.ShowImage = true;
@@ -131,7 +131,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // saveAsTemplateButton
             // 
-            this.saveAsTemplateButton.Label = "\u53E6\u5B58\u6A21\u677F";
+            this.saveAsTemplateButton.Label = "Save as template";
             this.saveAsTemplateButton.Name = "saveAsTemplateButton";
             this.saveAsTemplateButton.OfficeImageId = "FileSaveAs";
             this.saveAsTemplateButton.ShowImage = true;
@@ -142,12 +142,12 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.groupDataSync.Items.Add(this.partialDownloadButton);
             this.groupDataSync.Items.Add(this.partialUploadButton);
-            this.groupDataSync.Label = "\u6570\u636E\u540C\u6B65";
+            this.groupDataSync.Label = "Data sync";
             this.groupDataSync.Name = "groupDataSync";
             // 
             // fullDownloadButton
             // 
-            this.fullDownloadButton.Label = "\u5168\u91CF\u4E0B\u8F7D";
+            this.fullDownloadButton.Label = "Full download";
             this.fullDownloadButton.Name = "fullDownloadButton";
             this.fullDownloadButton.OfficeImageId = "RefreshAll";
             this.fullDownloadButton.ShowImage = true;
@@ -156,7 +156,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // partialDownloadButton
             // 
-            this.partialDownloadButton.Label = "\u90E8\u5206\u4E0B\u8F7D";
+            this.partialDownloadButton.Label = "Partial download";
             this.partialDownloadButton.Name = "partialDownloadButton";
             this.partialDownloadButton.OfficeImageId = "Refresh";
             this.partialDownloadButton.ShowImage = true;
@@ -165,7 +165,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // fullUploadButton
             // 
-            this.fullUploadButton.Label = "\u5168\u91CF\u4E0A\u4F20";
+            this.fullUploadButton.Label = "Full upload";
             this.fullUploadButton.Name = "fullUploadButton";
             this.fullUploadButton.OfficeImageId = "FilePublishToSharePoint";
             this.fullUploadButton.ShowImage = true;
@@ -174,7 +174,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // partialUploadButton
             // 
-            this.partialUploadButton.Label = "\u90E8\u5206\u4E0A\u4F20";
+            this.partialUploadButton.Label = "Partial upload";
             this.partialUploadButton.Name = "partialUploadButton";
             this.partialUploadButton.OfficeImageId = "FileSendAsAttachment";
             this.partialUploadButton.ShowImage = true;
@@ -184,9 +184,9 @@ namespace OfficeAgent.ExcelAddIn
             // loginButton
             //
             this.group2.Items.Add(this.loginButton);
-            this.group2.Label = "\u8D26\u53F7";
+            this.group2.Label = "Account";
             this.group2.Name = "group2";
-            this.loginButton.Label = "\u767B\u5F55";
+            this.loginButton.Label = "Login";
             this.loginButton.Name = "loginButton";
             this.loginButton.OfficeImageId = "Lock";
             this.loginButton.ShowImage = true;
@@ -197,12 +197,12 @@ namespace OfficeAgent.ExcelAddIn
             //
             this.groupHelp.Items.Add(this.documentationButton);
             this.groupHelp.Items.Add(this.aboutButton);
-            this.groupHelp.Label = "\u5E2E\u52A9";
+            this.groupHelp.Label = "Help";
             this.groupHelp.Name = "groupHelp";
             //
             // documentationButton
             //
-            this.documentationButton.Label = "\u6587\u6863";
+            this.documentationButton.Label = "Documentation";
             this.documentationButton.Name = "documentationButton";
             this.documentationButton.OfficeImageId = "FileOpen";
             this.documentationButton.ShowImage = true;
@@ -211,7 +211,7 @@ namespace OfficeAgent.ExcelAddIn
             //
             // aboutButton
             //
-            this.aboutButton.Label = "\u5173\u4E8E";
+            this.aboutButton.Label = "About";
             this.aboutButton.Name = "aboutButton";
             this.aboutButton.OfficeImageId = "Info";
             this.aboutButton.ShowImage = true;

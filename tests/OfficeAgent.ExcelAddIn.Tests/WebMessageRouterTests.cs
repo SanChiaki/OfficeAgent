@@ -125,7 +125,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("https://business.internal.example", settingsAfter.BusinessBaseUrl);
         }
 
-        [Fact]
         public void GetSettingsRejectsEmptyObjectPayload()
         {
             var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));

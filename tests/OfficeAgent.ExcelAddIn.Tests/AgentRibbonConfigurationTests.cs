@@ -127,6 +127,52 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void RibbonDesignerUsesEnglishSafeDefaultsForLocalizedControls()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            Assert.Contains("this.groupProject.Label = \"Project\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.projectDropDown.Label = \"Select project\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.Label = \"Initialize sheet\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.Label = \"Apply template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.Label = \"Save template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.Label = \"Save as template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialDownloadButton.Label = \"Partial download\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialUploadButton.Label = \"Partial upload\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.group2.Label = \"Account\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.Label = \"Login\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.Label = \"Documentation\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RibbonAppliesLocalizedLabelsFromHostStringsAtRuntime()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("ApplyLocalizedLabels();", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("tab1.Label = strings.RibbonTabLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("groupProject.Label = strings.RibbonProjectGroupLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("projectDropDown.Label = ProjectDropDownPlaceholderText;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("initializeSheetButton.Label = strings.RibbonInitializeSheetButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("groupDataSync.Label = strings.RibbonDataSyncGroupLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("partialDownloadButton.Label = strings.RibbonPartialDownloadButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("partialUploadButton.Label = strings.RibbonPartialUploadButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("groupHelp.Label = strings.RibbonHelpGroupLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("documentationButton.Label = strings.RibbonDocumentationButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("aboutButton.Label = strings.RibbonAboutButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void DataSyncGroupContainsPartialDownloadAndUploadOnly()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
@@ -134,7 +180,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.Designer.cs"));
 
-            Assert.Contains("this.groupDataSync.Label = \"\\u6570\\u636E\\u540C\\u6B65\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupDataSync.Items.Add(this.partialDownloadButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupDataSync.Items.Add(this.partialUploadButton);", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.groupDataSync.Items.Add(this.fullDownloadButton);", designerText, StringComparison.Ordinal);
@@ -209,11 +255,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "AgentRibbon.Designer.cs"));
 
             Assert.Contains("this.tab1.Groups.Add(this.groupHelp);", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupHelp.Label = \"\\u5E2E\\u52A9\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupHelp.Items.Add(this.documentationButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupHelp.Items.Add(this.aboutButton);", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.documentationButton.Label = \"\\u6587\\u6863\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.aboutButton.Label = \"\\u5173\\u4E8E\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.documentationButton.Label = \"Documentation\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.DocumentationButton_Click);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.aboutButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.AboutButton_Click);", designerText, StringComparison.Ordinal);
         }
@@ -278,13 +324,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Fact]
         public void ProjectLoadingMarksDropdownAsLoginRequiredWhenAuthenticationFails()
         {
-            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
-                "AgentRibbon.cs"));
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
+            var method = ribbonType.GetMethod(
+                "GetNoProjectRestoreText",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int), typeof(string), typeof(string) },
+                modifiers: null);
 
-            Assert.Contains("SetProjectDropDownStatus(\"请先登录\")", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("ExecuteLoginFlow", ribbonCodeText, StringComparison.Ordinal);
+            Assert.NotNull(method);
+            Assert.Equal("请先登录", (string)method.Invoke(null, new object[] { 0, string.Empty, "请先登录" }));
+            Assert.Equal("Sign in first", (string)method.Invoke(null, new object[] { 0, string.Empty, "Sign in first" }));
         }
 
         [Fact]
@@ -317,25 +373,41 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Fact]
         public void EmptyProjectListsWarnUserInsteadOfStayingSilentlyEmpty()
         {
-            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
-                "AgentRibbon.cs"));
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var stringsType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Localization.HostLocalizedStrings", throwOnError: true);
+            var forLocale = stringsType.GetMethod("ForLocale", BindingFlags.Public | BindingFlags.Static);
+            var zhStrings = forLocale.Invoke(null, new object[] { "zh" });
+            var enStrings = forLocale.Invoke(null, new object[] { "en" });
+            var messageProperty = stringsType.GetProperty("ProjectListEmptyWarningMessage");
 
-            Assert.Contains("if (projectOptionsByKey.Count == 0)", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("未获取到任何可用项目", ribbonCodeText, StringComparison.Ordinal);
+            Assert.NotNull(messageProperty);
+            Assert.Contains("未获取到任何可用项目", (string)messageProperty.GetValue(zhStrings), StringComparison.Ordinal);
+            Assert.Contains("no projects are available", (string)messageProperty.GetValue(enStrings), StringComparison.Ordinal);
         }
 
         [Fact]
         public void ProjectLoadingUsesDedicatedStatusItemsInsteadOfRibbonLabelOnly()
         {
-            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
-                "AgentRibbon.cs"));
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var stringsType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Localization.HostLocalizedStrings", throwOnError: true);
+            var forLocale = stringsType.GetMethod("ForLocale", BindingFlags.Public | BindingFlags.Static);
+            var zhStrings = forLocale.Invoke(null, new object[] { "zh" });
+            var enStrings = forLocale.Invoke(null, new object[] { "en" });
 
-            Assert.Contains("SetProjectDropDownStatus(\"请先登录\")", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("SetProjectDropDownStatus(\"无可用项目\")", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Equal("请先登录", stringsType.GetProperty("ProjectDropDownLoginRequiredText").GetValue(zhStrings));
+            Assert.Equal("无可用项目", stringsType.GetProperty("ProjectDropDownNoAvailableProjectsText").GetValue(zhStrings));
+            Assert.Equal("Sign in first", stringsType.GetProperty("ProjectDropDownLoginRequiredText").GetValue(enStrings));
+            Assert.Equal("No projects available", stringsType.GetProperty("ProjectDropDownNoAvailableProjectsText").GetValue(enStrings));
         }
 
         [Fact]
@@ -352,12 +424,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Fact]
         public void PopulateProjectDropDownSetsPlaceholderTextBeforeAnyProjectIsChosen()
         {
-            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
                 "src",
                 "OfficeAgent.ExcelAddIn",
-                "AgentRibbon.cs"));
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var stringsType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Localization.HostLocalizedStrings", throwOnError: true);
+            var forLocale = stringsType.GetMethod("ForLocale", BindingFlags.Public | BindingFlags.Static);
+            var zhStrings = forLocale.Invoke(null, new object[] { "zh" });
+            var enStrings = forLocale.Invoke(null, new object[] { "en" });
 
-            Assert.Contains("SetProjectDropDownText(\"先选择项目\");", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Equal("先选择项目", stringsType.GetProperty("ProjectDropDownPlaceholderText").GetValue(zhStrings));
+            Assert.Equal("Select project", stringsType.GetProperty("ProjectDropDownPlaceholderText").GetValue(enStrings));
         }
 
         [Fact]
@@ -646,6 +725,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ThisAddInTracksPendingCellEditsForWorkbookChangeLog()
+        {
+            var addInCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "ThisAddIn.cs"));
+
+            Assert.Contains("internal WorksheetPendingEditTracker WorksheetPendingEditTracker { get; private set; }", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal IWorksheetChangeLogStore WorksheetChangeLogStore { get; private set; }", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetChangeLogStore = new WorksheetChangeLogStore(worksheetGridAdapter);", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker = new WorksheetPendingEditTracker();", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker.CaptureBeforeValues(sheetName, ReadWorksheetCellValues(target));", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("WorksheetPendingEditTracker.MarkChanged(sheetName, ReadWorksheetCellAddresses(target));", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("IsSyncLogSheet(sheetName)", addInCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void ThisAddInRefreshesRibbonProjectWhenActiveSheetChanges()
         {
             var addInCodeText = File.ReadAllText(ResolveRepositoryPath(
@@ -699,6 +795,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("Globals.Ribbons", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("BindToControllersAndRefresh()", addInCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ThisAddInResolvesHostLocaleFromExcelUiLanguage()
+        {
+            var addInCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "ThisAddIn.cs"));
+
+            Assert.Contains("new UiLocaleResolver(GetExcelUiLocale)", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal Func<AppSettings, string> GetResolvedUiLocale", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal Localization.HostLocalizedStrings HostLocalizedStrings", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("LanguageID[MsoAppLanguageID.msoLanguageIDUI]", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("CultureInfo.GetCultureInfo(languageId).Name", addInCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -766,16 +877,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.NotNull(method);
             Assert.Equal(
-                "请先登录",
-                (string)method.Invoke(null, new object[] { 0, string.Empty, "请先登录" }));
+                "Sign in first",
+                (string)method.Invoke(null, new object[] { 0, string.Empty, "Sign in first" }));
             Assert.Equal(
-                "先选择项目",
+                "无可用项目",
+                (string)method.Invoke(null, new object[] { 0, string.Empty, "无可用项目" }));
+            Assert.Equal(
+                "Select project",
                 (string)method.Invoke(null, new object[] { 0, string.Empty, string.Empty }));
             Assert.Equal(
-                "先选择项目",
+                "Select project",
                 (string)method.Invoke(null, new object[] { 0, string.Empty, "proj-a-项目A" }));
-            Assert.Null(method.Invoke(null, new object[] { 1, string.Empty, "请先登录" }));
-            Assert.Null(method.Invoke(null, new object[] { 0, "project-1", "请先登录" }));
+            Assert.Null(method.Invoke(null, new object[] { 1, string.Empty, "Sign in first" }));
+            Assert.Null(method.Invoke(null, new object[] { 0, "project-1", "Sign in first" }));
         }
 
         private static string ResolveRepositoryPath(params string[] segments)
