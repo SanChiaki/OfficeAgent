@@ -1,6 +1,6 @@
 # Ribbon Button Custom Icons Guide
 
-日期：2026-04-26
+日期：2026-04-28
 
 本文说明后续如何把 Excel Ribbon 按钮的 Office 内置图标替换为项目自己的图片文件。
 
@@ -28,7 +28,7 @@ this.partialDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize
 
 - 使用透明背景 PNG。
 - 大按钮优先准备 `32x32` 图片。
-- 小按钮如果以后启用，准备 `16x16` 图片。
+- 常规小按钮优先准备 `16x16` 图片；当前 `Initialize sheet` 使用常规小按钮布局。
 - 同一组按钮应保持统一线宽、色彩和留白。
 - 不要使用本机绝对路径作为运行时图片路径，图片应随 add-in 编译发布。
 
@@ -108,7 +108,6 @@ private static void SetRibbonImage(RibbonButton button, System.Drawing.Image ima
     button.OfficeImageId = string.Empty;
     button.Image = image;
     button.ShowImage = true;
-    button.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
 }
 ```
 
@@ -117,7 +116,7 @@ private static void SetRibbonImage(RibbonButton button, System.Drawing.Image ima
 - `OfficeImageId` 和 `Image` 不要同时作为同一个按钮的图标来源。
 - 设置自定义图片时，应清空 `OfficeImageId`。
 - 保留 `ShowImage = true`。
-- 当前 Ribbon 使用大按钮布局，应保留 `RibbonControlSizeLarge`，这样仍是上方图标、下方文字。
+- 不要在图片替换 helper 中统一覆盖 `ControlSize`。Designer 负责维护每个按钮的布局：`Initialize sheet` 是 `RibbonControlSizeRegular`；其余命令按钮仍是 `RibbonControlSizeLarge`。
 - `ApplyCustomRibbonImages` 不应设置 `button.Label`、Ribbon group `Label` 或项目下拉框文本；这些文本仍由 `ApplyLocalizedLabels()` 和 `HostLocalizedStrings` 管理。
 
 ## 6. Designer 文件处理原则
@@ -144,7 +143,7 @@ private static void SetRibbonImage(RibbonButton button, System.Drawing.Image ima
 测试重点从 “包含指定 `OfficeImageId`” 改为：
 
 - 按钮仍然 `ShowImage = true`
-- 按钮仍然使用 `RibbonControlSizeLarge`
+- 按钮保留各自配置的 `ControlSize`：`Initialize sheet` 为 `RibbonControlSizeRegular`，其余命令按钮为 `RibbonControlSizeLarge`
 - `AgentRibbon.cs` 中存在集中赋值方法
 - 每个按钮都绑定了对应的 `Properties.Resources.Ribbon...` 图片
 - 不再依赖 `OfficeImageId` 作为最终图标来源
@@ -169,7 +168,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File eng/Dev-RefreshExcelAddIn.ps1 -Clo
 
 - `ISDP` tab 能正常显示。
 - 每个目标按钮显示自定义图片。
-- 按钮仍是上方图标、下方文字。
+- `Initialize sheet` 仍是常规小按钮布局；其余命令按钮仍是上方图标、下方文字。
+- `Apply template`、`Save template`、`Save as template` 仍是大按钮。
 - 图片没有被拉伸、裁切、模糊或出现白底。
 - 中文 Excel 下显示 `项目`、`数据同步`、`文档`、`关于`；英文 Excel 下显示 `Project`、`Data sync`、`Documentation`、`About`。
 - `Open`、`部分下载` / `Partial download`、`部分上传` / `Partial upload`、`文档` / `Documentation`、`关于` / `About` 等按钮点击行为不变。
@@ -215,15 +215,16 @@ file:///D:/Workspace/demos/office-agent/src/OfficeAgent.ExcelAddIn/bin/Debug/Off
 - `button.OfficeImageId` 是否仍占用图标来源。
 - 资源图片格式是否为正常 PNG / BMP。
 
-### 图标位置不是上图标下文字
+### 图标位置或按钮大小不符合预期
 
 检查：
 
 ```csharp
+button.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
 button.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
 ```
 
-大按钮布局才会按 Office Ribbon 的常规方式显示为上方图标、下方文字。
+`Initialize sheet` 应保持 `RibbonControlSizeRegular`。其余命令按钮应保持 `RibbonControlSizeLarge`，大按钮布局才会按 Office Ribbon 的常规方式显示为上方图标、下方文字。不要为了替换图片在 helper 中统一覆盖所有按钮的 `ControlSize`。
 
 ### 英文 Excel 里又显示中文按钮名
 
@@ -231,7 +232,7 @@ button.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLa
 
 - `AgentRibbon_Load` 是否仍调用 `ApplyLocalizedLabels()`。
 - 项目下拉框是否仍调用 `SetProjectDropDownText(ProjectDropDownPlaceholderText)`，而不是 `SetProjectDropDownText("先选择项目")`。
-- `ApplyCustomRibbonImages` 是否只设置 `OfficeImageId`、`Image`、`ShowImage` 和 `ControlSize`，没有设置任何 `Label`。
+- `ApplyCustomRibbonImages` 是否只设置 `OfficeImageId`、`Image` 和 `ShowImage`，没有设置任何 `Label` 或统一覆盖 `ControlSize`。
 - `AgentRibbon.Designer.cs` 中本地化控件是否仍保持英文兜底标签。
 - `HostLocalizedStrings` 是否仍包含对应中文和英文标签。
 

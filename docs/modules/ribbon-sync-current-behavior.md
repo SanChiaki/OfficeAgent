@@ -1,6 +1,6 @@
 # Ribbon Sync Current Behavior
 
-日期：2026-04-24
+日期：2026-04-28
 
 状态：已实现并可联调。当前只注册了 `current-business-system`，但内部已经落地 `ISystemConnectorRegistry + systemKey` 路由，可继续扩展到多个业务系统。
 
@@ -57,7 +57,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 - 中文 Excel：`项目`、`模板`、`数据同步`、`账号`、`帮助`、`先选择项目`、`请先登录`
 - 英文 Excel：`Project`、`Template`、`Data sync`、`Account`、`Help`、`Select project`、`Sign in first`
 
-所有 Ribbon 按钮都使用 Office 内置 `imageMso` 图标，并按按钮语义选择图标。按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方；项目下拉框仍然只显示当前项目或状态文本。
+所有 Ribbon 按钮都使用 Office 内置 `imageMso` 图标，并按按钮语义选择图标。`初始化当前表` / `Initialize sheet` 使用 Office 常规小按钮布局；其余命令按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方。项目下拉框仍然只显示当前项目或状态文本。
 
 如果后续要把 Office 内置图标替换为项目自带图片，按 [Ribbon Button Custom Icons Guide](../ribbon-button-custom-icons-guide.md) 操作。
 

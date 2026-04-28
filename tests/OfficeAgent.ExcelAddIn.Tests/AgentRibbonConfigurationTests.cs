@@ -73,7 +73,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void RibbonButtonsUseLargeIconAboveLabelLayout()
+        public void RibbonButtonsUseConfiguredLargeOrSmallLayouts()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -81,7 +81,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "AgentRibbon.Designer.cs"));
 
             Assert.Contains("this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
@@ -218,6 +218,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.groupTemplate.Items.Add(this.applyTemplateButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Items.Add(this.saveTemplateButton);", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Items.Add(this.saveAsTemplateButton);", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("templateActionsBox", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("templateSaveButtonsBox", designerText, StringComparison.Ordinal);
         }
 
         [Fact]

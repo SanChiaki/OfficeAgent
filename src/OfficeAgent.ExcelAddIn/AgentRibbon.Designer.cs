@@ -100,7 +100,7 @@ namespace OfficeAgent.ExcelAddIn
             this.initializeSheetButton.Name = "initializeSheetButton";
             this.initializeSheetButton.OfficeImageId = "TableInsert";
             this.initializeSheetButton.ShowImage = true;
-            this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.initializeSheetButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.InitializeSheetButton_Click);
             // 
             // groupTemplate
