@@ -50,14 +50,33 @@ jobs:
       - name: Run integration tests
         run: dotnet test tests/OfficeAgent.IntegrationTests/OfficeAgent.IntegrationTests.csproj --verbosity minimal
 
+      - name: Stage VSTO runtime redistributable
+        shell: pwsh
+        run: |
+          $prereqRoot = Join-Path $env:GITHUB_WORKSPACE 'installer/OfficeAgent.SetupBundle/prereqs'
+          New-Item -ItemType Directory -Force -Path $prereqRoot | Out-Null
+
+          $vstoInstaller = Join-Path $prereqRoot 'vstor_redist.exe'
+          $vstoUrl = 'https://download.microsoft.com/download/5/d/2/5d24f8f8-efbb-4b63-aa33-3785e3104713/vstor_redist.exe'
+          $expectedHash = 'CFE1A40BBE4A50022DB2164ABDB0154984E2CECB761A23CDC81CB5754F6E0A18'
+
+          Invoke-WebRequest -Uri $vstoUrl -OutFile $vstoInstaller
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $vstoInstaller).Hash.ToUpperInvariant()
+
+          if ($actualHash -ne $expectedHash) {
+            throw "Unexpected vstor_redist.exe SHA256. Expected $expectedHash, got $actualHash."
+          }
+
       - name: Build installer
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File "installer/OfficeAgent.Setup/build.ps1"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File "installer/OfficeAgent.Setup/build.ps1"
 
-      - name: Upload MSI artifacts
+      - name: Upload installer artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: OfficeAgent-MSI-${{ github.sha }}
-          path: artifacts/installer/*.msi
+          name: xISDP-Installer-${{ github.sha }}
+          path: |
+            artifacts/installer/*.exe
+            artifacts/installer/*.msi
           retention-days: 30

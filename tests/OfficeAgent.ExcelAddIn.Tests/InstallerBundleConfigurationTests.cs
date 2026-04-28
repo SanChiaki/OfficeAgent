@@ -149,6 +149,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void BuildMsiWorkflowStagesVstoRuntimeBeforeBuildingInstaller()
+        {
+            var workflowText = ReadRepositoryFile(".github", "workflows", "build-msi.yml");
+
+            var stageIndex = workflowText.IndexOf("Stage VSTO runtime redistributable", StringComparison.Ordinal);
+            var buildIndex = workflowText.IndexOf("Build installer", StringComparison.Ordinal);
+
+            Assert.True(stageIndex >= 0, "Expected the MSI workflow to stage the VSTO runtime redistributable.");
+            Assert.True(buildIndex > stageIndex, "Expected the VSTO runtime redistributable to be staged before the installer build.");
+            Assert.Contains("vstor_redist.exe", workflowText, StringComparison.Ordinal);
+            Assert.Contains(
+                "download.microsoft.com/download/5/d/2/5d24f8f8-efbb-4b63-aa33-3785e3104713/vstor_redist.exe",
+                workflowText,
+                StringComparison.Ordinal);
+            Assert.Contains("Get-FileHash", workflowText, StringComparison.Ordinal);
+            Assert.Contains(
+                "CFE1A40BBE4A50022DB2164ABDB0154984E2CECB761A23CDC81CB5754F6E0A18",
+                workflowText,
+                StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/*.exe", workflowText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void DirectMsiProductRetainsPrerequisiteBlockMessagesAndAllowsBundleBypass()
         {
             var productWxsText = ReadRepositoryFile(
