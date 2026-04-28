@@ -59,13 +59,13 @@ namespace OfficeAgent.ExcelAddIn
             this.tab1.Groups.Add(this.groupDataSync);
             this.tab1.Groups.Add(this.group2);
             this.tab1.Groups.Add(this.groupHelp);
-            this.tab1.Label = "X-ISDP";
+            this.tab1.Label = "xISDP";
             this.tab1.Name = "tab1";
             // 
             // group1
             // 
             this.group1.Items.Add(this.toggleTaskPaneButton);
-            this.group1.Label = "ISDP AI";
+            this.group1.Label = "xISDP AI";
             this.group1.Name = "groupAgent";
             // 
             // toggleTaskPaneButton

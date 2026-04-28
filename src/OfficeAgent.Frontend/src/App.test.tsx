@@ -415,7 +415,7 @@ describe('App shell', () => {
     expect(await screen.findByRole('heading', { name: /未命名会话/i })).toBeInTheDocument();
   });
 
-  it('uses ISDP AI as the fallback panel title before sessions load', async () => {
+  it('uses xISDP AI as the fallback panel title before sessions load', async () => {
     const sessionsDeferred = createDeferred<{
       activeSessionId: string;
       sessions: Array<{
@@ -430,7 +430,7 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/ISDP AI/i, { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByText(/xISDP AI/i, { selector: 'h1' })).toBeInTheDocument();
 
     sessionsDeferred.resolve({
       activeSessionId: 'loaded-session',

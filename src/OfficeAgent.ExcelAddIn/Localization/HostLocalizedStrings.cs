@@ -11,11 +11,11 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string Locale { get; }
 
-        public string HostWindowTitle => "X-ISDP";
+        public string HostWindowTitle => "xISDP";
 
-        public string RibbonTabLabel => "X-ISDP";
+        public string RibbonTabLabel => "xISDP";
 
-        public string RibbonAgentGroupLabel => "ISDP AI";
+        public string RibbonAgentGroupLabel => "xISDP AI";
 
         public string RibbonAgentButtonLabel => "Open";
 
@@ -85,7 +85,7 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 : $"Could not open the documentation page.\r\n{details}";
         }
 
-        public string RibbonAboutDialogTitle => Locale == "zh" ? "关于 X-ISDP" : "About X-ISDP";
+        public string RibbonAboutDialogTitle => Locale == "zh" ? "关于 xISDP" : "About xISDP";
 
         public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
 
@@ -116,7 +116,7 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string CancelButtonText => Locale == "zh" ? "取消" : "Cancel";
 
-        public string SsoLoginPopupTitle => Locale == "zh" ? "X-ISDP - 登录" : "X-ISDP - Sign in";
+        public string SsoLoginPopupTitle => Locale == "zh" ? "xISDP - 登录" : "xISDP - Sign in";
 
         public string SsoLoginConfirmedButtonText => Locale == "zh" ? "已登录" : "I've signed in";
 

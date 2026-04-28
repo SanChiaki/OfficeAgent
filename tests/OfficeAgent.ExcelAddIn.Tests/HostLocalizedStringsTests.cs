@@ -29,12 +29,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Theory]
         [InlineData("zh")]
         [InlineData("en")]
-        public void ForLocaleUsesXIsdpAsHostAndRibbonName(string locale)
+        public void ForLocaleUsesXisdpAsHostAndRibbonName(string locale)
         {
             var strings = CreateStrings(locale);
 
-            Assert.Equal("X-ISDP", GetString(strings, "HostWindowTitle"));
-            Assert.Equal("X-ISDP", GetString(strings, "RibbonTabLabel"));
+            Assert.Equal("xISDP", GetString(strings, "HostWindowTitle"));
+            Assert.Equal("xISDP", GetString(strings, "RibbonTabLabel"));
+            Assert.Equal("xISDP AI", GetString(strings, "RibbonAgentGroupLabel"));
         }
 
         [Theory]

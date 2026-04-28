@@ -166,7 +166,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File eng/Dev-RefreshExcelAddIn.ps1 -Clo
 
 打开 Excel 后确认：
 
-- `X-ISDP` tab 能正常显示。
+- `xISDP` tab 能正常显示。
 - 每个目标按钮显示自定义图片。
 - `Initialize sheet` 仍是常规小按钮布局；其余命令按钮仍是上方图标、下方文字。
 - `Apply template`、`Save template`、`Save as template` 仍是大按钮。

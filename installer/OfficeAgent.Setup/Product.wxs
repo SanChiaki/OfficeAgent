@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-    Name="X-ISDP"
+    Name="xISDP"
     Manufacturer="OfficeAgent"
     Version="$(var.ProductVersion)"
     UpgradeCode="4C90D0E4-7407-4F6C-8A52-1DCA5E3F8A7B"
     Scope="perUser">
-    <SummaryInformation Description="X-ISDP VSTO add-in for Excel" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of X-ISDP is already installed." />
+    <SummaryInformation Description="xISDP VSTO add-in for Excel" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of xISDP is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Launch
       Condition="Installed OR SKIPVSTORUNTIMECHECK = 1 OR VSTORUNTIMEVERSION OR VSTORUNTIMEWOW6432VERSION OR VSTORUNTIMEINSTALL = 1 OR VSTORUNTIMEWOW6432INSTALL = 1"
-      Message="X-ISDP requires the Microsoft Visual Studio Tools for Office Runtime 4.0 or later. Install the VSTO runtime, then run this installer again." />
+      Message="xISDP requires the Microsoft Visual Studio Tools for Office Runtime 4.0 or later. Install the VSTO runtime, then run this installer again." />
     <Launch
       Condition="Installed OR SKIPWEBVIEW2CHECK = 1 OR WEBVIEW2RUNTIMEWOW6432 OR WEBVIEW2RUNTIMENATIVE OR WEBVIEW2RUNTIMEUSER"
-      Message="X-ISDP requires the Microsoft Edge WebView2 Runtime. Install the Evergreen Runtime or your offline enterprise package, then run this installer again." />
+      Message="xISDP requires the Microsoft Edge WebView2 Runtime. Install the Evergreen Runtime or your offline enterprise package, then run this installer again." />
     <InstallUISequence>
       <AppSearch Before="LaunchConditions" />
     </InstallUISequence>
@@ -64,7 +64,7 @@
       </Directory>
     </StandardDirectory>
 
-    <Feature Id="OfficeAgentFeature" Title="X-ISDP" Level="1">
+    <Feature Id="OfficeAgentFeature" Title="xISDP" Level="1">
       <ComponentGroupRef Id="AddInPayload" />
       <ComponentGroupRef Id="FrontendPayload" />
       <ComponentGroupRef Id="FrontendAssetPayload" />
@@ -146,8 +146,8 @@
         Key="Software\Microsoft\Office\Excel\Addins\OfficeAgent.ExcelAddIn"
         ForceCreateOnInstall="yes"
         ForceDeleteOnUninstall="yes">
-        <RegistryValue Name="Description" Type="string" Value="X-ISDP Excel Add-in" KeyPath="yes" />
-        <RegistryValue Name="FriendlyName" Type="string" Value="X-ISDP" />
+        <RegistryValue Name="Description" Type="string" Value="xISDP Excel Add-in" KeyPath="yes" />
+        <RegistryValue Name="FriendlyName" Type="string" Value="xISDP" />
         <RegistryValue Name="LoadBehavior" Type="integer" Value="3" />
         <RegistryValue Name="Manifest" Type="string" Value="file:///[#filOfficeAgentExcelAddInVsto]|vstolocal" />
       </RegistryKey>

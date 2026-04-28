@@ -107,7 +107,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void RibbonTabUsesXIsdpWhileAgentGroupUsesOpenButton()
+        public void RibbonTabAndAgentGroupUseXisdpBrandingWhileAgentButtonUsesOpen()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -118,13 +118,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("this.tab1.Label = \"X-ISDP\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.group1.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.tab1.Label = \"xISDP\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.group1.Label = \"xISDP AI\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.toggleTaskPaneButton.Label = \"Open\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.tab1.Label = \"X-ISDP\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.tab1.Label = \"ISDP\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.group1.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.toggleTaskPaneButton.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("Resy AI", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("Resy AI", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TaskPaneTitleUsesXisdpAiBranding()
+        {
+            var taskPaneControllerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "TaskPane",
+                "TaskPaneController.cs"));
+
+            Assert.Contains("addIn.CustomTaskPanes.Add(hostControl, \"xISDP AI\")", taskPaneControllerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("addIn.CustomTaskPanes.Add(hostControl, \"ISDP AI\")", taskPaneControllerText, StringComparison.Ordinal);
         }
 
         [Fact]

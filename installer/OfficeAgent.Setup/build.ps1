@@ -39,8 +39,8 @@ $outputRoot = Join-Path $repoRoot "artifacts\\installer"
 $bundleRoot = Join-Path $repoRoot "installer\\OfficeAgent.SetupBundle"
 $bundleSource = Join-Path $bundleRoot "Bundle.wxs"
 $bundlePrereqRoot = Join-Path $bundleRoot "prereqs"
-$offlineSetupPath = Join-Path $outputRoot "X-ISDP.Setup.exe"
-$offlineSetupWixPdbPath = Join-Path $outputRoot "X-ISDP.Setup.wixpdb"
+$offlineSetupPath = Join-Path $outputRoot "xISDP.Setup.exe"
+$offlineSetupWixPdbPath = Join-Path $outputRoot "xISDP.Setup.wixpdb"
 $toolsManifestPath = Join-Path $repoRoot ".config\\dotnet-tools.json"
 $wixSource = Join-Path $PSScriptRoot "Product.wxs"
 $msbuild = Select-MsBuildExe
@@ -97,8 +97,8 @@ function Build-MsiForArchitecture {
         throw "Unsupported architecture '$Architecture'. Expected x86 or x64."
     }
 
-    $msiPath = Join-Path $outputRoot ("X-ISDP.Setup-{0}.msi" -f $normalizedArchitecture)
-    $wixPdbPath = Join-Path $outputRoot ("X-ISDP.Setup-{0}.wixpdb" -f $normalizedArchitecture)
+    $msiPath = Join-Path $outputRoot ("xISDP.Setup-{0}.msi" -f $normalizedArchitecture)
+    $wixPdbPath = Join-Path $outputRoot ("xISDP.Setup-{0}.wixpdb" -f $normalizedArchitecture)
     if (Test-Path $msiPath) {
         Remove-Item -Force $msiPath
     }
@@ -209,8 +209,8 @@ Copy-Item -Recurse -Force (Join-Path $frontendDist "*") $frontendPayload
 
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 @(
-    (Join-Path $outputRoot "X-ISDP.Setup.msi"),
-    (Join-Path $outputRoot "X-ISDP.Setup.wixpdb")
+    (Join-Path $outputRoot "xISDP.Setup.msi"),
+    (Join-Path $outputRoot "xISDP.Setup.wixpdb")
 ) | ForEach-Object {
     if (Test-Path $_) {
         Remove-Item -Force $_
@@ -224,8 +224,8 @@ foreach ($architecture in $Architectures) {
     $builtMsiPaths += Build-MsiForArchitecture -Architecture $architecture -ProductVersion $productVersion
 }
 
-Assert-FileExists -Path (Join-Path $outputRoot "X-ISDP.Setup-x86.msi") -Description "x86 X-ISDP MSI"
-Assert-FileExists -Path (Join-Path $outputRoot "X-ISDP.Setup-x64.msi") -Description "x64 X-ISDP MSI"
+Assert-FileExists -Path (Join-Path $outputRoot "xISDP.Setup-x86.msi") -Description "x86 xISDP MSI"
+Assert-FileExists -Path (Join-Path $outputRoot "xISDP.Setup-x64.msi") -Description "x64 xISDP MSI"
 
 if (Test-Path $offlineSetupPath) {
     Remove-Item -Force $offlineSetupPath

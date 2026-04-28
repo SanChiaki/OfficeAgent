@@ -3,11 +3,11 @@
 ## Installer
 
 - Confirm `installer/OfficeAgent.SetupBundle/prereqs/` contains `vstor_redist.exe` before starting the build.
-- Run `installer/OfficeAgent.Setup/build.ps1` and confirm `artifacts/installer/X-ISDP.Setup.exe`, `artifacts/installer/X-ISDP.Setup-x86.msi`, and `artifacts/installer/X-ISDP.Setup-x64.msi` are created.
-- Run `X-ISDP.Setup.exe` on a machine missing the VSTO runtime and confirm it installs VSTO Runtime and then installs X-ISDP.
-- Run `X-ISDP.Setup.exe` on a machine missing the WebView2 runtime and confirm it still installs X-ISDP without attempting to install WebView2.
-- Run `X-ISDP.Setup.exe` on a machine with the VSTO runtime already installed and confirm it skips the VSTO installer.
-- Run `X-ISDP.Setup.exe` twice on the same machine and confirm the second run does not reinstall VSTO and falls through to normal X-ISDP maintenance behavior.
+- Run `installer/OfficeAgent.Setup/build.ps1` and confirm `artifacts/installer/xISDP.Setup.exe`, `artifacts/installer/xISDP.Setup-x86.msi`, and `artifacts/installer/xISDP.Setup-x64.msi` are created.
+- Run `xISDP.Setup.exe` on a machine missing the VSTO runtime and confirm it installs VSTO Runtime and then installs xISDP.
+- Run `xISDP.Setup.exe` on a machine missing the WebView2 runtime and confirm it still installs xISDP without attempting to install WebView2.
+- Run `xISDP.Setup.exe` on a machine with the VSTO runtime already installed and confirm it skips the VSTO installer.
+- Run `xISDP.Setup.exe` twice on the same machine and confirm the second run does not reinstall VSTO and falls through to normal xISDP maintenance behavior.
 - Choose the MSI that matches the target Excel bitness only for direct enterprise distribution or debugging. Do not install the x86 package for x64 Excel or the x64 package for x86 Excel.
 - Install the direct MSI under a standard user profile.
 - Confirm files are deployed under `%LocalAppData%\\OfficeAgent\\ExcelAddIn`.
@@ -93,7 +93,7 @@
 - Confirm the Ribbon includes a dedicated `模板` / `Template` group with `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template`.
 - Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet` should use the small regular button layout; the other command buttons should remain in the large icon-above-label layout.
 - Confirm the `模板` / `Template` group shows `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template` as large buttons.
-- Confirm the `ISDP AI` group button is labeled `Open`.
+- Confirm the `xISDP AI` group button is labeled `Open`.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `部分下载` / `Partial download` and `部分上传` / `Partial upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
 - In the same project, save two different local templates and confirm `应用模板` / `Apply template` can list both.

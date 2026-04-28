@@ -72,15 +72,15 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
-        public void ProductWxsUsesXIsdpProductName()
+        public void ProductWxsUsesXisdpProductName()
         {
             var document = LoadInstallerAuthoring();
             var package = document.Root?.Element(WixNamespace + "Package");
 
             Assert.NotNull(package);
-            Assert.Equal("X-ISDP", package?.Attribute("Name")?.Value);
+            Assert.Equal("xISDP", package?.Attribute("Name")?.Value);
             Assert.Equal(
-                "X-ISDP VSTO add-in for Excel",
+                "xISDP VSTO add-in for Excel",
                 package?.Element(WixNamespace + "SummaryInformation")?.Attribute("Description")?.Value);
         }
 

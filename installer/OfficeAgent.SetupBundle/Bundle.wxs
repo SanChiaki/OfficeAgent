@@ -3,7 +3,7 @@
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Bundle
-    Name="X-ISDP"
+    Name="xISDP"
     Manufacturer="OfficeAgent"
     Version="$(var.ProductVersion)"
     UpgradeCode="A83D3E4A-FE0B-4A49-82A7-6528D0908AA5"
@@ -66,8 +66,8 @@
 
       <MsiPackage
         Id="OfficeAgentMsiX86"
-        DisplayName="X-ISDP (x86)"
-        SourceFile="X-ISDP.Setup-x86.msi"
+        DisplayName="xISDP (x86)"
+        SourceFile="xISDP.Setup-x86.msi"
         Visible="no"
         Vital="yes"
         Compressed="yes"
@@ -78,8 +78,8 @@
 
       <MsiPackage
         Id="OfficeAgentMsiX64"
-        DisplayName="X-ISDP (x64)"
-        SourceFile="X-ISDP.Setup-x64.msi"
+        DisplayName="xISDP (x64)"
+        SourceFile="xISDP.Setup-x64.msi"
         Visible="no"
         Vital="yes"
         Compressed="yes"

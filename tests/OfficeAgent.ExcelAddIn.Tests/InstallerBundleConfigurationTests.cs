@@ -18,8 +18,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("vstor_redist.exe", bundleWxsText, StringComparison.Ordinal);
             Assert.DoesNotContain("MicrosoftEdgeWebView2RuntimeInstallerX86.exe", bundleWxsText, StringComparison.Ordinal);
             Assert.DoesNotContain("MicrosoftEdgeWebView2RuntimeInstallerX64.exe", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("X-ISDP.Setup-x86.msi", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("X-ISDP.Setup-x64.msi", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup-x86.msi", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup-x64.msi", bundleWxsText, StringComparison.Ordinal);
             Assert.Contains("Compressed=\"yes\"", bundleWxsText, StringComparison.Ordinal);
         }
 
@@ -31,9 +31,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.Setup",
                 "build.ps1");
 
-            Assert.Contains("X-ISDP.Setup.exe", buildScriptText, StringComparison.Ordinal);
-            Assert.Contains("X-ISDP.Setup-x86.msi", buildScriptText, StringComparison.Ordinal);
-            Assert.Contains("X-ISDP.Setup-x64.msi", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup.exe", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup-x86.msi", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup-x64.msi", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("OfficeAgent.SetupBundle", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Bal.wixext", buildScriptText, StringComparison.Ordinal);
             Assert.Contains("WixToolset.Util.wixext", buildScriptText, StringComparison.Ordinal);
@@ -68,7 +68,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void InstallerAuthoringUsesXIsdpDisplayNames()
+        public void InstallerAuthoringUsesXisdpDisplayNames()
         {
             var productWxsText = ReadRepositoryFile(
                 "installer",
@@ -79,12 +79,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.SetupBundle",
                 "Bundle.wxs");
 
-            Assert.Contains("Name=\"X-ISDP\"", productWxsText, StringComparison.Ordinal);
-            Assert.Contains("<SummaryInformation Description=\"X-ISDP VSTO add-in for Excel\" />", productWxsText, StringComparison.Ordinal);
-            Assert.Contains("<Feature Id=\"OfficeAgentFeature\" Title=\"X-ISDP\" Level=\"1\">", productWxsText, StringComparison.Ordinal);
-            Assert.Contains("Name=\"X-ISDP\"", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("DisplayName=\"X-ISDP (x86)\"", bundleWxsText, StringComparison.Ordinal);
-            Assert.Contains("DisplayName=\"X-ISDP (x64)\"", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("Name=\"xISDP\"", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("<SummaryInformation Description=\"xISDP VSTO add-in for Excel\" />", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("<Feature Id=\"OfficeAgentFeature\" Title=\"xISDP\" Level=\"1\">", productWxsText, StringComparison.Ordinal);
+            Assert.Contains("Name=\"xISDP\"", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("DisplayName=\"xISDP (x86)\"", bundleWxsText, StringComparison.Ordinal);
+            Assert.Contains("DisplayName=\"xISDP (x64)\"", bundleWxsText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -195,14 +195,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.SetupBundle",
                 "README.md");
 
-            Assert.Contains("X-ISDP.Setup.exe", agentsText, StringComparison.Ordinal);
-            Assert.Contains("X-ISDP.Setup.exe", checklistText, StringComparison.Ordinal);
-            Assert.Contains("artifacts/installer/X-ISDP.Setup-x86.msi", deploymentNotesText, StringComparison.Ordinal);
-            Assert.Contains("artifacts/installer/X-ISDP.Setup-x64.msi", deploymentNotesText, StringComparison.Ordinal);
-            Assert.Contains("artifacts/installer/X-ISDP.Setup-x86.msi", releaseNotesText, StringComparison.Ordinal);
-            Assert.Contains("artifacts/installer/X-ISDP.Setup-x64.msi", releaseNotesText, StringComparison.Ordinal);
-            Assert.Contains("# X-ISDP Setup Bundle", bundleReadmeText, StringComparison.Ordinal);
-            Assert.Contains("`X-ISDP` tab", customIconsGuideText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup.exe", agentsText, StringComparison.Ordinal);
+            Assert.Contains("xISDP.Setup.exe", checklistText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/xISDP.Setup-x86.msi", deploymentNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/xISDP.Setup-x64.msi", deploymentNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/xISDP.Setup-x86.msi", releaseNotesText, StringComparison.Ordinal);
+            Assert.Contains("artifacts/installer/xISDP.Setup-x64.msi", releaseNotesText, StringComparison.Ordinal);
+            Assert.Contains("# xISDP Setup Bundle", bundleReadmeText, StringComparison.Ordinal);
+            Assert.Contains("`xISDP` tab", customIconsGuideText, StringComparison.Ordinal);
             Assert.Contains("vstor_redist.exe", checklistText, StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "artifacts/installer/OfficeAgent.Setup",
@@ -213,7 +213,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 releaseNotesText,
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
+                "artifacts/installer/X-ISDP.Setup",
+                deploymentNotesText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "artifacts/installer/X-ISDP.Setup",
+                releaseNotesText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
                 "`ISDP` tab",
+                customIconsGuideText,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "`X-ISDP` tab",
                 customIconsGuideText,
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
