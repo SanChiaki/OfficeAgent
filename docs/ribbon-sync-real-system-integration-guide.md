@@ -266,12 +266,126 @@ Ribbon 点击链路：
 
 这保证了用户确认时看到的内容和最终提交给业务系统的内容一致。
 
+接口位置：
+
+- [src/OfficeAgent.Core/Services/IUploadChangeFilter.cs](../src/OfficeAgent.Core/Services/IUploadChangeFilter.cs)
+- [src/OfficeAgent.Core/Models/UploadChangeFilterResult.cs](../src/OfficeAgent.Core/Models/UploadChangeFilterResult.cs)
+- [src/OfficeAgent.Core/Models/SkippedCellChange.cs](../src/OfficeAgent.Core/Models/SkippedCellChange.cs)
+
+调用时机：
+
+1. Excel 层先把全量上传或部分上传解析成 `CellChange[]`
+2. `WorksheetSyncService.FilterUploadChanges(systemKey, projectId, changes)` 找到当前 `systemKey` 对应连接器
+3. 如果连接器实现了 `IUploadChangeFilter`，调用连接器的 `FilterUploadChanges(projectId, changes)`
+4. 过滤结果生成上传预览
+5. 用户确认后，只把 `IncludedChanges` 传给 `BatchSave(projectId, changes)`
+
+如果连接器没有实现 `IUploadChangeFilter`，当前默认行为是所有 `CellChange` 都进入上传。也就是说，上传过滤是可选扩展点，不会影响没有过滤需求的系统。
+
+`CellChange` 已经包含过滤常用字段：
+
+- `SheetName`
+- `RowId`
+- `ApiFieldKey`
+- `OldValue`
+- `NewValue`
+
+建议把过滤器只用于“包含 / 跳过”的业务判断，不要在过滤器里改写 `NewValue` 或把一个 `CellChange` 拆成多个变更。如果真实接口需要格式归一化、字段映射或按行聚合，优先放在 `BatchSave()` 内部处理；这样 Excel 预览、上传日志和实际提交内容的对应关系更稳定。
+
+返回约定：
+
+- `IncludedChanges`：实际允许上传的原始 `CellChange`
+- `SkippedChanges`：被跳过的项，每项都应保留原始 `CellChange`
+- `SkippedCellChange.Reason`：面向最终用户展示的原因，应简短、可读，不要包含接口 token、内部异常栈或敏感字段
+- 如果确实没有过滤需求，可以不实现 `IUploadChangeFilter`
+- 如果已经实现过滤器，不要返回 `null` 数组；用 `Array.Empty<CellChange>()` 或 `Array.Empty<SkippedCellChange>()` 表达空集合
+
+示例只展示过滤器核心逻辑，`ISystemConnector` 其他成员和 `LoadRowStates` 里的真实接口调用按实际系统补齐：
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
+
+public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChangeFilter
+{
+    private static readonly HashSet<string> ReadOnlyFields = new HashSet<string>(
+        StringComparer.Ordinal)
+    {
+        "created_at",
+        "approved_at",
+    };
+
+    public UploadChangeFilterResult FilterUploadChanges(
+        string projectId,
+        IReadOnlyList<CellChange> changes)
+    {
+        var included = new List<CellChange>();
+        var skipped = new List<SkippedCellChange>();
+        var changeList = changes ?? Array.Empty<CellChange>();
+        var rowStates = LoadRowStates(
+            projectId,
+            changeList.Select(change => change.RowId).Distinct().ToArray());
+
+        foreach (var change in changeList)
+        {
+            if (ReadOnlyFields.Contains(change.ApiFieldKey))
+            {
+                skipped.Add(new SkippedCellChange
+                {
+                    Change = change,
+                    Reason = "字段只读，禁止上传",
+                });
+                continue;
+            }
+
+            if (rowStates.TryGetValue(change.RowId, out var rowState) && rowState.IsArchived)
+            {
+                skipped.Add(new SkippedCellChange
+                {
+                    Change = change,
+                    Reason = "单据已归档，禁止上传",
+                });
+                continue;
+            }
+
+            included.Add(change);
+        }
+
+        return new UploadChangeFilterResult
+        {
+            IncludedChanges = included.ToArray(),
+            SkippedChanges = skipped.ToArray(),
+        };
+    }
+
+    // ISystemConnector 其他成员省略。
+}
+```
+
 过滤规则可以是连接器内置逻辑、本地配置、`xISDP_Setting` 派生规则，或业务接口下发的字段 / 行状态规则。典型规则包括：
 
 - 按 `ApiFieldKey` 跳过只读字段
 - 按 `RowId` 对应的单据状态跳过已归档、已锁定、流程结束的数据
 - 按 `NewValue` 跳过空值、默认值或业务系统不接受的值
 - 调业务接口校验权限后跳过不可编辑字段
+
+如果过滤规则需要调用真实业务接口，建议注意：
+
+- 尽量按本次上传涉及的 `RowId` / `ApiFieldKey` 批量查询权限或状态，避免每个单元格一次 HTTP 请求
+- `401/403` 仍应转换成 `AuthenticationRequiredException`，这样 Ribbon 会走统一登录引导
+- 普通业务校验失败如果对应某些单元格不可上传，优先转成 `SkippedChanges + Reason`
+- 真正无法继续判断的系统异常可以直接抛出，Ribbon 会中止本次上传并显示错误
+
+用户可见行为：
+
+- 全部允许上传：确认弹窗显示实际上传数量，`BatchSave()` 收到全部变更
+- 部分跳过：确认弹窗显示实际上传数量和跳过数量，确认后只提交允许上传的变更
+- 全部跳过：不会弹上传确认，也不会调用 `BatchSave()`；用户会看到跳过数量和部分跳过原因
+- 上传成功后的完成提示会显示实际上传数量；如果存在跳过项，会额外显示跳过数量
+- 上传日志只记录实际提交且 `BatchSave()` 成功的单元格，不记录被过滤跳过的单元格
 
 ### 4.8 认证失败异常约定
 
@@ -479,11 +593,15 @@ Ribbon 点击链路：
 - `FieldMappingTableDefinition` 定义测试
 - `BuildFieldMappingSeed` 测试
 - `BatchSave` payload 测试
+- 如果连接器实现 `IUploadChangeFilter`，补过滤规则测试，覆盖全部允许、部分跳过、全部跳过和跳过原因
 
 可参考：
 
 - [tests/OfficeAgent.Infrastructure.Tests/CurrentBusinessSystemConnectorTests.cs](../tests/OfficeAgent.Infrastructure.Tests/CurrentBusinessSystemConnectorTests.cs)
 - [tests/OfficeAgent.Infrastructure.Tests/CurrentBusinessFieldMappingSeedBuilderTests.cs](../tests/OfficeAgent.Infrastructure.Tests/CurrentBusinessFieldMappingSeedBuilderTests.cs)
+- [tests/OfficeAgent.Core.Tests/WorksheetSyncServiceTests.cs](../tests/OfficeAgent.Core.Tests/WorksheetSyncServiceTests.cs)
+- [tests/OfficeAgent.ExcelAddIn.Tests/WorksheetSyncExecutionServiceTests.cs](../tests/OfficeAgent.ExcelAddIn.Tests/WorksheetSyncExecutionServiceTests.cs)
+- [tests/OfficeAgent.ExcelAddIn.Tests/RibbonSyncControllerTests.cs](../tests/OfficeAgent.ExcelAddIn.Tests/RibbonSyncControllerTests.cs)
 
 ### 集成测试
 
@@ -509,6 +627,8 @@ Ribbon 点击链路：
 - 全量下载能按配置行号落位
 - 已有表头场景下，全量下载不会重写已识别表头
 - 部分上传 / 部分下载在不包含 ID / 表头的选区里仍能正确定位
+- 如果启用了上传过滤，确认弹窗、完成提示和实际 `BatchSave()` 请求里的上传数量一致
+- 如果本次上传全部被过滤跳过，应确认不会调用 `BatchSave()`，并且提示里能看到跳过原因
 
 ## 11. 最小交付标准
 
@@ -521,6 +641,12 @@ Ribbon 点击链路：
 5. 全量上传可用
 6. 部分上传可用
 7. 至少有一套连接器级集成测试
+
+如果真实系统有上传过滤规则，还应额外满足：
+
+1. 过滤规则能返回实际上传项和跳过项
+2. 跳过原因能在 Ribbon 提示中被用户看懂
+3. `BatchSave()` 只收到实际允许上传的单元格
 
 ## 12. 当前最建议的结论
 
