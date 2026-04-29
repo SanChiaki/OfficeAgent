@@ -54,11 +54,11 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonDataSyncGroupLabel => Locale == "zh" ? "数据同步" : "Data sync";
 
-        public string RibbonPartialDownloadButtonLabel => Locale == "zh" ? "部分下载" : "Partial download";
+        public string RibbonPartialDownloadButtonLabel => Locale == "zh" ? "下载" : "Download";
 
         public string RibbonFullDownloadButtonLabel => Locale == "zh" ? "全量下载" : "Full download";
 
-        public string RibbonPartialUploadButtonLabel => Locale == "zh" ? "部分上传" : "Partial upload";
+        public string RibbonPartialUploadButtonLabel => Locale == "zh" ? "上传" : "Upload";
 
         public string RibbonFullUploadButtonLabel => Locale == "zh" ? "全量上传" : "Full upload";
 

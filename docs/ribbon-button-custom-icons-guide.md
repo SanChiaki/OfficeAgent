@@ -172,7 +172,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File eng/Dev-RefreshExcelAddIn.ps1 -Clo
 - `Apply template`、`Save template`、`Save as template` 仍是大按钮。
 - 图片没有被拉伸、裁切、模糊或出现白底。
 - 中文 Excel 下显示 `项目`、`数据同步`、`文档`、`关于`；英文 Excel 下显示 `Project`、`Data sync`、`Documentation`、`About`。
-- `Open`、`部分下载` / `Partial download`、`部分上传` / `Partial upload`、`文档` / `Documentation`、`关于` / `About` 等按钮点击行为不变。
+- `Open`、`下载` / `Download`、`上传` / `Upload`、`文档` / `Documentation`、`关于` / `About` 等按钮点击行为不变。
 - `关于` / `About` 仍显示版本号、程序集版本、构建配置和构建时间。
 - `文档` / `Documentation` 仍用默认浏览器打开配置的文档 URL。
 

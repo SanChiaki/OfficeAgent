@@ -156,7 +156,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // partialDownloadButton
             // 
-            this.partialDownloadButton.Label = "Partial download";
+            this.partialDownloadButton.Label = "Download";
             this.partialDownloadButton.Name = "partialDownloadButton";
             this.partialDownloadButton.OfficeImageId = "Refresh";
             this.partialDownloadButton.ShowImage = true;
@@ -174,7 +174,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // partialUploadButton
             // 
-            this.partialUploadButton.Label = "Partial upload";
+            this.partialUploadButton.Label = "Upload";
             this.partialUploadButton.Name = "partialUploadButton";
             this.partialUploadButton.OfficeImageId = "FileSendAsAttachment";
             this.partialUploadButton.ShowImage = true;

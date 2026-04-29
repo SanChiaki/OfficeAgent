@@ -67,7 +67,7 @@
 - Run the Ribbon Sync checks twice: once under Chinese Excel (`zh-*` UI) and once under English Excel (any non-`zh-*` UI).
 - In Chinese Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
 - In English Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
-- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `应用模板` / `Apply template`, `保存模板` / `Save template`, `另存模板` / `Save as template`, `部分下载` / `Partial download`, `部分上传` / `Partial upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
+- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `应用模板` / `Apply template`, `保存模板` / `Save template`, `另存模板` / `Save as template`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `ISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
@@ -89,16 +89,16 @@
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized sign-in-required status (`请先登录` / `Sign in first`).
 - Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `ISDP_Setting` changes; the business area should remain untouched.
-- Click `部分下载` / `Partial download` and `部分上传` / `Partial upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
-- Before `部分下载` / `Partial download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
-- Edit one managed non-ID cell, run `部分上传` / `Partial upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
-- Force a `部分上传` / `Partial upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
+- Click `下载` / `Download` and `上传` / `Upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
+- Before `下载` / `Download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
+- Edit one managed non-ID cell, run `上传` / `Upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
+- Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
 - Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
 - Confirm the Ribbon includes a dedicated `模板` / `Template` group with `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template`.
 - Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet` should use the small regular button layout; the other command buttons should remain in the large icon-above-label layout.
 - Confirm the `模板` / `Template` group shows `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template` as large buttons.
 - Confirm the `xISDP AI` group button is labeled `Open`.
-- Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `部分下载` / `Partial download` and `部分上传` / `Partial upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
+- Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
 - In the same project, save two different local templates and confirm `应用模板` / `Apply template` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
@@ -108,9 +108,9 @@
 - Open an older workbook that has no `TemplateBindings` section and confirm download, upload, and initialize still work.
 - Edit `ISDP_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run the hidden full-download path and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run the hidden full-download path and confirm the plugin refreshes data cells without rewriting those existing headers.
-- Modify `Excel L1` or `Excel L2` in `SheetFieldMappings`, update the matching Excel header text manually, then run `部分下载` / `Partial download` or `部分上传` / `Partial upload` and confirm the column still resolves by current header text.
-- Set one `single` mapping row to use both `Excel L1` and `Excel L2`, keep `HeaderRowCount = 2`, prepare matching grouped headers on the sheet, then run `部分下载` / `Partial download` and confirm the grouped-single column resolves and only the selected child cells are refreshed.
-- Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `部分上传` / `Partial upload`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
+- Modify `Excel L1` or `Excel L2` in `SheetFieldMappings`, update the matching Excel header text manually, then run `下载` / `Download` or `上传` / `Upload` and confirm the column still resolves by current header text.
+- Set one `single` mapping row to use both `Excel L1` and `Excel L2`, keep `HeaderRowCount = 2`, prepare matching grouped headers on the sheet, then run `下载` / `Download` and confirm the grouped-single column resolves and only the selected child cells are refreshed.
+- Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `上传` / `Upload`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
 - Clear the worksheet header area, keep the grouped-single metadata in `ISDP_Setting`, then run the hidden full-download path and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
 - Verify the task pane button and login button still work after the Ribbon Sync controls are added.

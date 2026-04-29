@@ -155,6 +155,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.initializeSheetButton.Label = \"Initialize sheet\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialDownloadButton.Label = \"Download\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.partialUploadButton.Label = \"Upload\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.partialDownloadButton.Label = \"Partial download\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.partialUploadButton.Label = \"Partial upload\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.group2.Label = \"Account\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.loginButton.Label = \"Login\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);

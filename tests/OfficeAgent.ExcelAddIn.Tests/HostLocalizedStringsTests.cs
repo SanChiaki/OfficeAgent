@@ -39,6 +39,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "下载", "上传")]
+        [InlineData("en", "Download", "Upload")]
+        public void ForLocaleReturnsExpectedRibbonSyncButtonLabels(
+            string locale,
+            string expectedDownloadLabel,
+            string expectedUploadLabel)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedDownloadLabel, GetString(strings, "RibbonPartialDownloadButtonLabel"));
+            Assert.Equal(expectedUploadLabel, GetString(strings, "RibbonPartialUploadButtonLabel"));
+        }
+
+        [Theory]
         [InlineData("", "en")]
         [InlineData("de", "en")]
         [InlineData("zh-CN", "en")]
@@ -109,6 +123,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(expectedDownloadCompletedMessage, (string)downloadCompletedMethod.Invoke(strings, new object[] { operationName, 3, 4 }));
             Assert.Equal(expectedUploadNoChangesMessage, (string)uploadNoChangesMethod.Invoke(strings, new object[] { "全量上传" }));
             Assert.Equal(expectedUploadCompletedMessage, (string)uploadCompletedMethod.Invoke(strings, new object[] { "全量上传", 2 }));
+        }
+
+        [Theory]
+        [InlineData("zh", "部分下载", "下载")]
+        [InlineData("zh", "部分上传", "上传")]
+        [InlineData("en", "部分下载", "Download")]
+        [InlineData("en", "部分上传", "Upload")]
+        public void ForLocaleLocalizesPartialSyncOperationsToVisibleButtonLabels(
+            string locale,
+            string operationName,
+            string expectedLocalizedOperationName)
+        {
+            var strings = CreateStrings(locale);
+            var localizeMethod = strings.GetType().GetMethod("LocalizeSyncOperationName", BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.NotNull(localizeMethod);
+            Assert.Equal(expectedLocalizedOperationName, (string)localizeMethod.Invoke(strings, new object[] { operationName }));
         }
 
         private static object CreateStrings(string locale)
