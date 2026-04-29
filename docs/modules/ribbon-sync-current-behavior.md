@@ -251,7 +251,9 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 认证失败行为：
 
-- 如果初始化过程中底层业务接口返回 `401/403`，不会继续显示普通错误，而是弹出 `当前未登录，请先登录` 提示框
+- 如果初始化过程中底层业务接口返回 `401/403`，不会继续显示普通错误，而是弹出本地化未登录提示框：
+  - 中文：`当前未登录，请先登录` + `点我登录`
+  - 英文：`You're not signed in. Sign in first.` + `Sign in`
 - 用户点击本地化登录按钮后会触发 Ribbon 登录流程
 - 本次初始化不会自动重试；登录成功后需要用户重新点击 `初始化当前表`
 
@@ -568,6 +570,7 @@ grouped single 当前支持的运行场景：
 - Ribbon 不会直接根据底层 HTTP 状态码判断“未登录”；项目下拉框和同步动作都只认 `AuthenticationRequiredException`
 - `SystemConnectorRegistry` 只聚合连接器项目列表并透传异常，不会把普通异常翻译成“未登录”
 - 因此任意 `ISystemConnector` 的 `GetProjects()`、`BuildFieldMappingSeed()`、`Find()`、`BatchSave()` 在遇到登录失效或无权限场景时，都应把至少 `401/403` 统一转换成 `AuthenticationRequiredException("当前未登录，请先登录")`
+- Ribbon 登录提示弹窗不会直接显示 `AuthenticationRequiredException.Message`；用户可见文案由当前宿主 UI 语言决定。异常消息主要用于连接器合同、诊断日志和普通异常区分。
 - 如果连接器改为抛普通 `InvalidOperationException`、`HttpRequestException` 或其他异常，项目列表会显示 `项目加载失败`，同步动作也会显示普通错误，不会弹出 `点我登录`
 
 当前 mock 文档：

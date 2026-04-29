@@ -126,7 +126,7 @@ Ribbon 点击链路：
 - 项目接口返回有效列表时，下拉框显示 `ProjectId-displayName` 形式的项目条目
 - 重选当前已绑定的同一个 `systemKey + projectId` 时是 no-op：不会弹出布局对话框，也不会重写 `SheetBindings`
 - 项目接口返回 `401 Unauthorized` 或 `403 Forbidden` 时，Ribbon 会显示 `请先登录`
-- 当项目接口因未登录返回 `401/403` 时，会弹出 `当前未登录，请先登录` 提示框，用户可点击 `点我登录` 直接触发 Ribbon 登录；登录成功后会立即重载项目列表
+- 当项目接口因未登录返回 `401/403` 时，会弹出本地化未登录提示框；中文 UI 显示 `当前未登录，请先登录` + `点我登录`，英文 UI 显示 `You're not signed in. Sign in first.` + `Sign in`。用户可直接触发 Ribbon 登录；登录成功后会立即重载项目列表
 - 项目接口返回空数组时，Ribbon 会显示 `无可用项目`
 - 项目接口发生其他异常时，Ribbon 会显示 `项目加载失败`
 
@@ -141,6 +141,7 @@ Ribbon 点击链路：
 - Ribbon 项目下拉框不会直接根据 HTTP 状态码判断“未登录”；它只会在连接器最终抛出 `AuthenticationRequiredException` 时弹出登录提示
 - `SystemConnectorRegistry` 只负责聚合各个连接器的 `GetProjects()` 返回值和异常，不会把其他异常类型翻译成“未登录”
 - 因此真实连接器的 `GetProjects()` 在遇到未登录或无权限场景时，至少应把 `401/403` 统一转换成 `AuthenticationRequiredException("当前未登录，请先登录")`
+- Ribbon 登录提示弹窗不会直接显示 `AuthenticationRequiredException.Message`；用户可见文案由当前宿主 UI 语言决定。异常消息主要用于连接器合同、诊断日志和普通异常区分。
 - 如果连接器抛出的是普通 `InvalidOperationException`、`HttpRequestException` 或其他异常，Ribbon 会把它当成普通项目加载失败处理，不会出现 `点我登录`
 
 相关代码入口：
@@ -396,6 +397,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 - `GetProjects()` 里的 `401/403` 要转换成 `AuthenticationRequiredException("当前未登录，请先登录")`
 - `BuildFieldMappingSeed()` 里的 `401/403` 也要转换成同样的异常；这样 `初始化当前表` 才会弹登录提示，而不是普通错误
 - `Find()` 和 `BatchSave()` 里的 `401/403` 也要转换成同样的异常；这样 `部分下载`、`部分上传` 才会走统一的登录引导
+- 异常消息不会直接作为最终用户文案展示；中文 / 英文提示由宿主 UI 语言决定
 - 登录成功后，项目列表场景会自动重载项目；初始化、下载、上传不会自动重试，用户需要重新触发一次
 
 建议直接参考当前示例连接器的处理方式：
@@ -552,7 +554,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 5. 让连接器先跑通 `GetProjects -> BuildFieldMappingSeed -> Find -> BatchSave`
 6. 再在 `ThisAddIn` 中注册或切换连接器实例
 7. 在 Excel 中执行一次 `初始化当前表`，确认 `xISDP_Setting` 被按当前标准布局写出
-8. 额外验证未登录场景下，项目下拉框、`初始化当前表`、`部分下载`、`部分上传` 都能弹出 `当前未登录，请先登录`
+8. 额外验证未登录场景下，项目下拉框、`初始化当前表`、`部分下载`、`部分上传` 都能弹出当前宿主语言对应的未登录提示
 9. 最后做 Excel 联调和手工回归
 
 当前注册位置：
@@ -619,8 +621,8 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 至少确认：
 
 - 选择项目后不会自动初始化；只有显式点击 `初始化当前表` 才会写入或刷新 `SheetFieldMappings`
-- 未登录时项目下拉框显示 `请先登录`，并弹出 `当前未登录，请先登录`；点击 `点我登录` 并登录成功后能够自动重载项目列表
-- 未登录时执行 `初始化当前表`、`部分下载`、`部分上传`，都会弹出 `当前未登录，请先登录`
+- 未登录时项目下拉框显示本地化状态（`请先登录` / `Sign in first`），并弹出本地化未登录提示；点击登录按钮并登录成功后能够自动重载项目列表
+- 未登录时执行 `初始化当前表`、`部分下载`、`部分上传`，都会弹出本地化未登录提示
 - 项目接口返回空列表时，下拉框显示 `无可用项目`
 - 显式初始化不会破坏业务单元格
 - `xISDP_Setting` 会以单 sheet、上下三个 section 的可读布局写出

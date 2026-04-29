@@ -315,6 +315,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("catch (AuthenticationRequiredException ex)", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("ShowAuthenticationRequired", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("ShowAuthenticationRequired(ex.Message)", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]

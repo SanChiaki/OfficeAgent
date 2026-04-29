@@ -304,7 +304,7 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);
                     OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
-                    if (OperationResultDialog.ShowAuthenticationRequired(ex.Message))
+                    if (OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage))
                     {
                         BeginLoginFlow(refreshProjectsAfterSuccess: true);
                     }

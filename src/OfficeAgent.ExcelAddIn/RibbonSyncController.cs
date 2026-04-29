@@ -431,7 +431,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void HandleAuthenticationRequired(AuthenticationRequiredException ex)
         {
-            if (dialogService.ShowAuthenticationRequired(ex.Message))
+            if (dialogService.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage))
             {
                 authenticationLoginAction?.Invoke();
             }

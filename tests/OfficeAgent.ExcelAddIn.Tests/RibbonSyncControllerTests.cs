@@ -268,7 +268,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void ExecuteInitializeCurrentSheetPromptsLoginWhenAuthenticationIsRequired()
+        public void ExecuteInitializeCurrentSheetLocalizesLoginPromptWhenAuthenticationIsRequired()
         {
             var connector = new FakeSystemConnector
             {
@@ -305,7 +305,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             InvokeExecuteInitializeCurrentSheet(controller);
 
             Assert.Single(dialogService.AuthenticationRequiredMessages);
-            Assert.Equal("当前未登录，请先登录", dialogService.AuthenticationRequiredMessages[0]);
+            Assert.Equal("You're not signed in. Sign in first.", dialogService.AuthenticationRequiredMessages[0]);
             Assert.True(loginTriggered);
             Assert.Empty(dialogService.ErrorMessages);
         }
