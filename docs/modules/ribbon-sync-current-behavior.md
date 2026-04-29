@@ -70,7 +70,12 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 ## 3. 元数据模型
 
-运行时元数据都保存在可见工作表 `ISDP_Setting` 中。
+运行时元数据都保存在可见工作表 `xISDP_Setting` 中。
+
+兼容规则：
+
+- 如果打开旧工作簿时只存在 `ISDP_Setting`，插件在读取 metadata 时会自动把该 worksheet 重命名为 `xISDP_Setting`，并继续使用原有内容
+- 如果 `xISDP_Setting` 和 `ISDP_Setting` 同时存在，插件优先读取 `xISDP_Setting`，不会自动合并两个 sheet
 
 当前使用三张逻辑表：
 
@@ -78,7 +83,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 - `SheetBindings`
 - `SheetFieldMappings`
 
-当前 `ISDP_Setting` 的展示布局是单个 sheet 内上下三个可读区域：
+当前 `xISDP_Setting` 的展示布局是单个 sheet 内上下三个可读区域：
 
 - 最上区是 `TemplateBindings`
 - 中间区是 `SheetBindings`
@@ -89,7 +94,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
   - 多行数据
 - 区域之间固定留两行空白分隔
 
-当前不会再使用旧的“首列表名 + 每行一条压平记录”格式；一旦发生 metadata 写入，插件会按上述可读布局整表重写 `ISDP_Setting`。
+当前不会再使用旧的“首列表名 + 每行一条压平记录”格式；一旦发生 metadata 写入，插件会按上述可读布局整表重写 `xISDP_Setting`。
 
 其中：
 
@@ -176,10 +181,10 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 性能约束：
 
-- `ISDP_Setting` 读取当前使用 `UsedRange.Value2` 批量读，不再逐单元格 COM 扫描
+- `xISDP_Setting` 读取当前使用 `UsedRange.Value2` 批量读，不再逐单元格 COM 扫描
 - `TemplateBindings`、`SheetBindings` 和 `SheetFieldMappings` 在当前活动工作簿内按表级做内存缓存，写入后同步刷新缓存
 - 当用户在同一个 Excel 进程里切换到另一个工作簿时，插件会自动失效上一工作簿的 metadata 缓存，避免把 `TemplateBindings` / `SheetBindings` / `SheetFieldMappings` 串到其他 Excel 文件
-- 如果用户手工编辑 `ISDP_Setting`，插件会在 `ISDP_Setting` 的 `SheetChange` 事件上自动失效上述缓存；下一次业务 sheet 切换或重新触发同步动作时，会重新读取最新元数据
+- 如果用户手工编辑 `xISDP_Setting` 或旧名 `ISDP_Setting`，插件会在对应 `SheetChange` 事件上自动失效上述缓存；下一次业务 sheet 切换或重新触发同步动作时，会重新读取最新元数据
 
 ### 3.4 本机模板资产层
 
@@ -191,7 +196,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 - 模板列表按当前 sheet 的 `SystemKey + ProjectId` 过滤
 - 模板内容不依赖 workbook，也不持久化具体 `SheetName`
-- 用户在业务表上编辑的仍然是 `ISDP_Setting` 展开态，不是只读模板引用
+- 用户在业务表上编辑的仍然是 `xISDP_Setting` 展开态，不是只读模板引用
 
 ## 4. 项目选择与初始化
 
@@ -212,7 +217,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
   用户可直接触发 Ribbon 登录；登录成功后会立即重载项目列表
 - 如果项目接口返回空数组，下拉框显示 `无可用项目`
 - 如果项目接口出现其他异常，下拉框显示 `项目加载失败`
-- Ribbon 当前项目状态按“活动 sheet 变化”刷新，不再随同一 sheet 内的每次选区移动重复读取 `ISDP_Setting`
+- Ribbon 当前项目状态按“活动 sheet 变化”刷新，不再随同一 sheet 内的每次选区移动重复读取 `xISDP_Setting`
 - 当同时打开多个 Excel 工作簿时，Ribbon 当前项目状态、`SheetBindings`、`SheetFieldMappings` 都按当前活动工作簿隔离，不会再因为另一个文件里存在同名 sheet 而互相覆盖或串读
 
 一个重要细节：
@@ -223,7 +228,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 - 布局对话框点击取消会完全中止本次项目切换，并恢复下拉框到切换前项目状态
 - 重选与当前绑定相同的项目时不会弹出布局对话框，也不会重写 `SheetBindings`
 - 布局对话框会根据当前字体自动扩展，避免中文 UI 字体放大时出现标签裁切或控件重叠
-- 选择项目不会激活 `ISDP_Setting`
+- 选择项目不会激活 `xISDP_Setting`
 - Ribbon 下拉框内部使用 `systemKey + projectId` 复合键，避免未来多系统下同名 `projectId` 冲突
 - Ribbon 下拉框当前显示的是选中条目文本，不单独显示控件标题
 - `401/403` 之外的项目加载异常仍走普通失败提示，不会触发登录引导
@@ -279,7 +284,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 ### 另存模板
 
 - 只要当前表已有项目绑定即可执行
-- 会把当前 `ISDP_Setting` 展开态归一化后保存成新模板
+- 会把当前 `xISDP_Setting` 展开态归一化后保存成新模板
 - 保存成功后，当前表会切换绑定到新模板
 - 此时 `TemplateOrigin` 会写成 `store-template`
 
@@ -306,7 +311,7 @@ grouped single 当前支持的运行场景：
 限制：
 
 - 如果当前 sheet 表头区为空，`全量下载` 仍会按普通单层列生成扁平表头，不会因为 `single + Excel L2` 自动生成 grouped single 父表头
-- `HeaderRowCount = 1` 时如果 `SheetFieldMappings` 里出现 grouped single 元数据，这是 `ISDP_Setting` 配置错误
+- `HeaderRowCount = 1` 时如果 `SheetFieldMappings` 里出现 grouped single 元数据，这是 `xISDP_Setting` 配置错误
 
 ### 5.1 HeaderRowCount = 1
 
@@ -314,7 +319,7 @@ grouped single 当前支持的运行场景：
 
 - 所有列都只写一行表头
 - 活动属性列只显示当前子表头名
-- `single + Excel L2` 不合法；如果 metadata 把单层字段配成 grouped single，则应视为 `ISDP_Setting` 配置错误
+- `single + Excel L2` 不合法；如果 metadata 把单层字段配成 grouped single，则应视为 `xISDP_Setting` 配置错误
 
 ### 5.2 HeaderRowCount = 2
 
@@ -491,7 +496,7 @@ grouped single 当前支持的运行场景：
 - 无 `row_id` 的行
 - 未被当前表头映射识别的非受管单元格
 - 同步前后文本值未变化的单元格
-- 普通手工编辑、初始化当前表、模板操作、`ISDP_Setting` 改动、任务窗格 Agent 写入
+- 普通手工编辑、初始化当前表、模板操作、`xISDP_Setting` 改动、任务窗格 Agent 写入
 
 上传日志依赖当前 Excel 会话内捕获到的用户编辑前值。插件会在选区变化时缓存待编辑单元格的旧值，并在 `SheetChange` 后标记为 pending；只有 `BatchSave` 成功后才写 `上传` 日志并清除对应 pending 值。如果上传失败，不写日志也不清除 pending 值。
 

@@ -9,7 +9,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 {
     internal sealed class WorksheetMetadataStore : IWorksheetMetadataStore, IWorksheetTemplateBindingStore
     {
-        private const string MetadataSheetName = "ISDP_Setting";
+        private const string MetadataSheetName = MetadataWorksheetNames.Current;
         private const string TemplateBindingsTableName = "TemplateBindings";
         private const string BindingsTableName = "SheetBindings";
         private const string FieldMappingsTableName = "SheetFieldMappings";

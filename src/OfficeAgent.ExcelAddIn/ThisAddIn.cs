@@ -252,7 +252,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private static bool IsSettingsSheet(string sheetName)
         {
-            return string.Equals(sheetName, "ISDP_Setting", StringComparison.OrdinalIgnoreCase);
+            return MetadataWorksheetNames.IsMetadataWorksheet(sheetName);
         }
 
         private static bool IsSyncLogSheet(string sheetName)

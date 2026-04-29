@@ -8,7 +8,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 {
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
-        private const string MetadataSheetName = "ISDP_Setting";
+        private const string MetadataSheetName = MetadataWorksheetNames.Current;
 
         private readonly ExcelInterop.Application application;
         private readonly MetadataSheetLayoutSerializer serializer = new MetadataSheetLayoutSerializer();
@@ -85,7 +85,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             return ExecutePreservingActiveWorksheet(() =>
             {
-                var worksheet = FindWorksheet(MetadataSheetName);
+                var worksheet = FindMetadataWorksheet(GetWorkbook());
                 if (worksheet == null)
                 {
                     return Array.Empty<string[]>();
@@ -131,6 +131,15 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private ExcelInterop.Worksheet EnsureWorksheetExists(string name)
         {
             var workbook = GetWorkbook();
+            if (string.Equals(name, MetadataSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                var metadataWorksheet = FindMetadataWorksheet(workbook);
+                if (metadataWorksheet != null)
+                {
+                    return metadataWorksheet;
+                }
+            }
+
             var existing = FindWorksheet(workbook, name);
             if (existing != null)
             {
@@ -159,6 +168,24 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return null;
+        }
+
+        private static ExcelInterop.Worksheet FindMetadataWorksheet(ExcelInterop.Workbook workbook)
+        {
+            var current = FindWorksheet(workbook, MetadataWorksheetNames.Current);
+            if (current != null)
+            {
+                return current;
+            }
+
+            var legacy = FindWorksheet(workbook, MetadataWorksheetNames.Legacy);
+            if (legacy == null)
+            {
+                return null;
+            }
+
+            legacy.Name = MetadataWorksheetNames.Current;
+            return legacy;
         }
 
         private ExcelInterop.Workbook GetWorkbook()

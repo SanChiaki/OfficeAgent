@@ -712,10 +712,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "ThisAddIn.cs"));
+            var metadataNamesText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Excel",
+                "MetadataWorksheetNames.cs"));
 
             Assert.Contains("Application.SheetChange += Application_SheetChange;", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("private void Application_SheetChange(object sh, ExcelInterop.Range target)", addInCodeText, StringComparison.Ordinal);
-            Assert.Contains("string.Equals(sheetName, \"ISDP_Setting\", StringComparison.OrdinalIgnoreCase)", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("IsSettingsSheet(sheetName)", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("MetadataWorksheetNames.IsMetadataWorksheet(sheetName)", addInCodeText, StringComparison.Ordinal);
+            Assert.Contains("xISDP_Setting", metadataNamesText, StringComparison.Ordinal);
+            Assert.Contains("ISDP_Setting", metadataNamesText, StringComparison.Ordinal);
             Assert.Contains("metadataStore.InvalidateCache();", addInCodeText, StringComparison.Ordinal);
             Assert.Contains("RibbonSyncController?.InvalidateRefreshState();", addInCodeText, StringComparison.Ordinal);
         }

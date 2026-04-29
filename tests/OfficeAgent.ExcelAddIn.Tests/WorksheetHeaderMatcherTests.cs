@@ -189,7 +189,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 () => InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid));
 
             Assert.Equal(
-                "SheetFieldMappings 中存在重复的双层表头键，请先修正 ISDP_Setting。",
+                "SheetFieldMappings 中存在重复的双层表头键，请先修正 xISDP_Setting。",
                 exception.Message);
         }
 
@@ -222,7 +222,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 () => InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid));
 
             Assert.Equal(
-                "当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 ISDP_Setting。",
+                "当前 HeaderRowCount=1，无法识别带 Excel L2 的 single 表头，请先修正 xISDP_Setting。",
                 exception.Message);
         }
 

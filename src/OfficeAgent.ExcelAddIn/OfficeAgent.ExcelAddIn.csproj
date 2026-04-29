@@ -181,6 +181,7 @@
     <Compile Include="Excel\IWorksheetGridAdapter.cs" />
     <Compile Include="Excel\IWorksheetMetadataAdapter.cs" />
     <Compile Include="Excel\ExcelWorkbookMetadataAdapter.cs" />
+    <Compile Include="Excel\MetadataWorksheetNames.cs" />
     <Compile Include="Excel\MetadataSectionDocument.cs" />
     <Compile Include="Excel\MetadataSheetLayoutSerializer.cs" />
     <Compile Include="Excel\WorksheetChangeLogEntry.cs" />

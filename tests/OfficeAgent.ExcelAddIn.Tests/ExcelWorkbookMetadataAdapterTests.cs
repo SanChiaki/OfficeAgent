@@ -28,12 +28,110 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
             var ensureWorksheet = adapterType.GetMethod("EnsureWorksheet", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-            ensureWorksheet.Invoke(adapter, new object[] { "ISDP_Setting", true });
+            ensureWorksheet.Invoke(adapter, new object[] { "xISDP_Setting", true });
 
             Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
             Assert.NotNull(application.MetadataSheet);
-            Assert.Equal("ISDP_Setting", application.MetadataSheet.Name);
+            Assert.Equal("xISDP_Setting", application.MetadataSheet.Name);
             Assert.Equal(1, application.BusinessSheet.ActivateCount);
+        }
+
+        [Fact]
+        public void ReadTableRenamesLegacyMetadataSheetToCanonicalName()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("ISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "SheetBindings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(2, 2, "SystemKey");
+            application.MetadataSheet.SetCell(3, 1, "Sheet1");
+            application.MetadataSheet.SetCell(3, 2, "current-business-system");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            var rows = (string[][])adapterType.GetMethod("ReadTable").Invoke(adapter, new object[] { "SheetBindings" });
+
+            Assert.Single(rows);
+            Assert.Equal(new[] { "Sheet1", "current-business-system" }, rows[0]);
+            Assert.Equal("xISDP_Setting", application.MetadataSheet.Name);
+            Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
+        }
+
+        [Fact]
+        public void WriteTableRenamesLegacyMetadataSheetBeforeRewriting()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("ISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "TemplateBindings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(3, 1, "Sheet1");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            adapterType.GetMethod("WriteTable").Invoke(adapter, new object[]
+            {
+                "SheetBindings",
+                new[] { "SheetName", "SystemKey" },
+                new[] { new[] { "Sheet1", "current-business-system" } },
+            });
+
+            Assert.Equal("xISDP_Setting", application.MetadataSheet.Name);
+            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(1, 1));
+            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(6, 1));
+        }
+
+        [Fact]
+        public void ReadTablePrefersCanonicalMetadataSheetWhenLegacyAlsoExists()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            var canonicalSheet = application.CreateWorksheet("xISDP_Setting");
+            canonicalSheet.SetCell(1, 1, "SheetBindings");
+            canonicalSheet.SetCell(2, 1, "SheetName");
+            canonicalSheet.SetCell(2, 2, "SystemKey");
+            canonicalSheet.SetCell(3, 1, "CanonicalSheet");
+            canonicalSheet.SetCell(3, 2, "canonical-system");
+            var legacySheet = application.CreateWorksheet("ISDP_Setting");
+            legacySheet.SetCell(1, 1, "SheetBindings");
+            legacySheet.SetCell(2, 1, "SheetName");
+            legacySheet.SetCell(2, 2, "SystemKey");
+            legacySheet.SetCell(3, 1, "LegacySheet");
+            legacySheet.SetCell(3, 2, "legacy-system");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            var rows = (string[][])adapterType.GetMethod("ReadTable").Invoke(adapter, new object[] { "SheetBindings" });
+
+            var row = Assert.Single(rows);
+            Assert.Equal("CanonicalSheet", row[0]);
+            Assert.Equal("xISDP_Setting", canonicalSheet.Name);
+            Assert.Equal("ISDP_Setting", legacySheet.Name);
         }
 
         [Fact]
@@ -87,7 +185,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("ISDP_Setting");
+            application.CreateWorksheet("xISDP_Setting");
             application.MetadataSheet.SetCell(1, 1, "TemplateBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "TemplateId");
@@ -132,7 +230,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
             var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
 
-            application.CreateWorksheet("ISDP_Setting");
+            application.CreateWorksheet("xISDP_Setting");
             application.MetadataSheet.ThrowOnDirectCellWrites = true;
 
             adapterType.GetMethod("WriteTable").Invoke(adapter, new object[]
@@ -164,7 +262,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("ISDP_Setting");
+            application.CreateWorksheet("xISDP_Setting");
             application.MetadataSheet.SetCell(1, 1, "SheetBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "SystemKey");
@@ -192,7 +290,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
 
             var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
-            application.CreateWorksheet("ISDP_Setting");
+            application.CreateWorksheet("xISDP_Setting");
             application.MetadataSheet.SetCell(1, 1, "SheetBindings");
             application.MetadataSheet.SetCell(2, 1, "SheetName");
             application.MetadataSheet.SetCell(2, 2, "SystemKey");
@@ -292,7 +390,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public LayoutAwareFakeExcelWorksheet CreateWorksheet(string name)
             {
                 var worksheet = workbook.Worksheets.AddWorksheet(name);
-                if (string.Equals(name, "ISDP_Setting", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, "xISDP_Setting", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, "ISDP_Setting", StringComparison.OrdinalIgnoreCase))
                 {
                     MetadataSheet = worksheet;
                 }
