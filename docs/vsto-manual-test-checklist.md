@@ -65,30 +65,33 @@
 ## Ribbon Sync
 
 - Run the Ribbon Sync checks twice: once under Chinese Excel (`zh-*` UI) and once under English Excel (any non-`zh-*` UI).
-- In Chinese Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
-- In English Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
+- In Chinese Excel, confirm the Ribbon group/button labels, project selector statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
+- In English Excel, confirm the Ribbon group/button labels, project selector statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
 - For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
-- Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
+- Bind a blank worksheet through the Ribbon project selector and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
 - Open `xISDP_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.
-- Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing the localized empty placeholder (`先选择项目` / `Select project`).
-- Save a workbook with `xISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows the localized empty placeholder (`先选择项目` / `Select project`) unless `SheetBindings` contains an explicit binding row for `xISDP_Setting`.
-- Switch from a bound business sheet to `xISDP_Setting` and confirm the Ribbon dropdown clears back to the localized empty placeholder (`先选择项目` / `Select project`) when `xISDP_Setting` itself has no binding.
-- Switch to a worksheet without binding metadata and confirm the Ribbon dropdown shows the localized empty placeholder (`先选择项目` / `Select project`).
-- Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon dropdown plus download/upload behavior always follow the active workbook's own `xISDP_Setting` metadata.
+- Click the Ribbon project selector, type `tracker` in the popup search box, and confirm only `delivery-tracker-交付跟踪项目` remains from the default mock project list.
+- In the project selector popup, type `dt` and confirm `delivery-tracker-交付跟踪项目` is included by fuzzy non-contiguous character matching.
+- Select a filtered `ProjectId-DisplayName` item from the popup and confirm the layout dialog appears.
+- Switch to a worksheet with existing binding metadata and confirm the Ribbon project selector automatically rehydrates that project as `ProjectId-DisplayName` instead of showing the localized empty placeholder (`先选择项目` / `Select project`).
+- Save a workbook with `xISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon project selector shows the localized empty placeholder (`先选择项目` / `Select project`) unless `SheetBindings` contains an explicit binding row for `xISDP_Setting`.
+- Switch from a bound business sheet to `xISDP_Setting` and confirm the Ribbon project selector clears back to the localized empty placeholder (`先选择项目` / `Select project`) when `xISDP_Setting` itself has no binding.
+- Switch to a worksheet without binding metadata and confirm the Ribbon project selector shows the localized empty placeholder (`先选择项目` / `Select project`).
+- Open two workbooks in the same Excel process, bind `Sheet1` in each workbook to different projects, switch back and forth between the two files, and confirm the Ribbon project selector plus download/upload behavior always follow the active workbook's own `xISDP_Setting` metadata.
 - Open an older workbook that contains `ISDP_Setting` but not `xISDP_Setting`, trigger any Ribbon Sync metadata read such as project refresh, and confirm the worksheet is automatically renamed to `xISDP_Setting` with its existing metadata preserved.
 - On a sheet that already has binding metadata, switch to another project and confirm the layout dialog defaults reuse the current sheet's saved layout values.
 - Increase Windows or Office UI font scaling, reopen the project layout dialog, and confirm all labels, inputs, and buttons remain fully visible without overlap.
 - Under both Chinese Excel and English Excel, trigger the unauthenticated path and confirm the native auth-required prompt plus login button text are localized for that host language.
 - Reselect the already bound project (`same systemKey + projectId`) and confirm no layout dialog appears and `SheetBindings` is not rewritten.
-- Cancel the layout dialog while switching projects and confirm both `xISDP_Setting` binding data and Ribbon dropdown project stay unchanged.
+- Cancel the layout dialog while switching projects and confirm both `xISDP_Setting` binding data and Ribbon project selector stay unchanged.
 - After switching to another project and confirming the dialog, verify old `SheetFieldMappings` are cleared; before clicking `初始化当前表` / `Initialize sheet`, running download/upload should report that the current sheet is not initialized.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
-- Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized sign-in-required status (`请先登录` / `Sign in first`).
-- Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
+- Start Excel while unauthenticated against a protected project API and confirm the project selector shows the localized sign-in-required status (`请先登录` / `Sign in first`).
+- Configure the project API to return an empty array and confirm the project selector shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `xISDP_Setting` changes; the business area should remain untouched.
 - Click `下载` / `Download` and `上传` / `Upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
 - Before `下载` / `Download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
