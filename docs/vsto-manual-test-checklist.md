@@ -67,7 +67,7 @@
 - Run the Ribbon Sync checks twice: once under Chinese Excel (`zh-*` UI) and once under English Excel (any non-`zh-*` UI).
 - In Chinese Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
 - In English Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
-- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `应用模板` / `Apply template`, `保存模板` / `Save template`, `另存模板` / `Save as template`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
+- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
@@ -95,17 +95,16 @@
 - Edit one managed non-ID cell, run `上传` / `Upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
 - Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
 - Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
-- Confirm the Ribbon includes a dedicated `模板` / `Template` group with `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template`.
-- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet` should use the small regular button layout; the other command buttons should remain in the large icon-above-label layout.
-- Confirm the `模板` / `Template` group shows `应用模板` / `Apply template`, `保存模板` / `Save template`, and `另存模板` / `Save as template` as large buttons.
-- Confirm the `xISDP AI` group button is labeled `Open`.
+- Confirm the Ribbon includes a dedicated `配置` / `Setting` group with `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, and `另存配置` / `Save as Setting`.
+- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet` and all buttons in the `配置` / `Setting` group should use the small regular button layout; data sync, account, and help command buttons should remain in the large icon-above-label layout.
+- Confirm the `xISDP AI` group task-pane button shows only its icon and does not display the `Open` label.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
-- In the same project, save two different local templates and confirm `应用模板` / `Apply template` can list both.
+- In the same project, save two different local templates and confirm `应用配置` / `Apply Setting` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
-- Manually edit `xISDP_Setting` field mapping text after applying a template, click `保存模板` / `Save template`, then reapply that template and confirm the edited mapping is preserved.
-- With a sheet already bound to a template, use `另存模板` / `Save as template`, confirm the new template name appears in the local template list, and confirm the current sheet's `TemplateBindings.TemplateId` switches to the new template.
-- Force a template revision conflict by editing the same template outside the workbook, then click `保存模板` / `Save template` and confirm the dialog offers overwrite, save-as, and cancel.
+- Manually edit `xISDP_Setting` field mapping text after applying a template, click `保存配置` / `Save Setting`, then reapply that template and confirm the edited mapping is preserved.
+- With a sheet already bound to a template, use `另存配置` / `Save as Setting`, confirm the new template name appears in the local template list, and confirm the current sheet's `TemplateBindings.TemplateId` switches to the new template.
+- Force a template revision conflict by editing the same template outside the workbook, then click `保存配置` / `Save Setting` and confirm the dialog offers overwrite, save-as, and cancel.
 - Open an older workbook that has no `TemplateBindings` section and confirm download, upload, and initialize still work.
 - Edit `xISDP_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run the hidden full-download path and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run the hidden full-download path and confirm the plugin refreshes data cells without rewriting those existing headers.

@@ -36,6 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("xISDP", GetString(strings, "HostWindowTitle"));
             Assert.Equal("xISDP", GetString(strings, "RibbonTabLabel"));
             Assert.Equal("xISDP AI", GetString(strings, "RibbonAgentGroupLabel"));
+            Assert.Equal(string.Empty, GetString(strings, "RibbonAgentButtonLabel"));
         }
 
         [Theory]
@@ -50,6 +51,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(expectedDownloadLabel, GetString(strings, "RibbonPartialDownloadButtonLabel"));
             Assert.Equal(expectedUploadLabel, GetString(strings, "RibbonPartialUploadButtonLabel"));
+        }
+
+        [Theory]
+        [InlineData("zh", "配置", "应用配置", "保存配置", "另存配置")]
+        [InlineData("en", "Setting", "Apply Setting", "Save Setting", "Save as Setting")]
+        public void ForLocaleReturnsExpectedConfigurationRibbonLabels(
+            string locale,
+            string expectedGroupLabel,
+            string expectedApplyLabel,
+            string expectedSaveLabel,
+            string expectedSaveAsLabel)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedGroupLabel, GetString(strings, "RibbonTemplateGroupLabel"));
+            Assert.Equal(expectedApplyLabel, GetString(strings, "RibbonApplyTemplateButtonLabel"));
+            Assert.Equal(expectedSaveLabel, GetString(strings, "RibbonSaveTemplateButtonLabel"));
+            Assert.Equal(expectedSaveAsLabel, GetString(strings, "RibbonSaveAsTemplateButtonLabel"));
         }
 
         [Theory]

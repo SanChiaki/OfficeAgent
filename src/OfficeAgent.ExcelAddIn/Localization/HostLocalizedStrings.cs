@@ -17,7 +17,7 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonAgentGroupLabel => "xISDP AI";
 
-        public string RibbonAgentButtonLabel => "Open";
+        public string RibbonAgentButtonLabel => string.Empty;
 
         public string RibbonProjectGroupLabel => Locale == "zh" ? "项目" : "Project";
 
@@ -40,13 +40,13 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonInitializeSheetButtonLabel => Locale == "zh" ? "初始化当前表" : "Initialize sheet";
 
-        public string RibbonTemplateGroupLabel => Locale == "zh" ? "模板" : "Template";
+        public string RibbonTemplateGroupLabel => Locale == "zh" ? "配置" : "Setting";
 
-        public string RibbonApplyTemplateButtonLabel => Locale == "zh" ? "应用模板" : "Apply template";
+        public string RibbonApplyTemplateButtonLabel => Locale == "zh" ? "应用配置" : "Apply Setting";
 
-        public string RibbonSaveTemplateButtonLabel => Locale == "zh" ? "保存模板" : "Save template";
+        public string RibbonSaveTemplateButtonLabel => Locale == "zh" ? "保存配置" : "Save Setting";
 
-        public string RibbonSaveAsTemplateButtonLabel => Locale == "zh" ? "另存模板" : "Save as template";
+        public string RibbonSaveAsTemplateButtonLabel => Locale == "zh" ? "另存配置" : "Save as Setting";
 
         public string InitializeCurrentSheetCompletedMessage => Locale == "zh"
             ? "初始化当前表完成。"

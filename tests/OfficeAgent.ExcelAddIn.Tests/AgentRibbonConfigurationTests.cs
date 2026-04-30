@@ -23,7 +23,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.toggleTaskPaneButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.toggleTaskPaneButton.ShowImage = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.Label = string.Empty;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.ShowLabel = false;", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.toggleTaskPaneButton.Label = \"Open\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.toggleTaskPaneButton.ShowImage = false;", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.toggleTaskPaneButton.ShowLabel = true;", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("toggleTaskPaneButton.Image = Properties.Resources.Logo;", ribbonCodeText, StringComparison.Ordinal);
         }
 
@@ -82,9 +86,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.fullDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.fullUploadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
@@ -107,7 +111,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void RibbonTabAndAgentGroupUseXisdpBrandingWhileAgentButtonUsesOpen()
+        public void RibbonTabAndAgentGroupUseXisdpBrandingWhileAgentButtonUsesIconOnly()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
                 "src",
@@ -120,7 +124,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("this.tab1.Label = \"xISDP\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.group1.Label = \"xISDP AI\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.toggleTaskPaneButton.Label = \"Open\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.Label = string.Empty;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.toggleTaskPaneButton.ShowLabel = false;", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.toggleTaskPaneButton.Label = \"Open\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("toggleTaskPaneButton.Label = \"Open\";", ribbonCodeText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.tab1.Label = \"X-ISDP\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.tab1.Label = \"ISDP\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.group1.Label = \"ISDP AI\";", designerText, StringComparison.Ordinal);
@@ -153,7 +160,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.groupProject.Label = \"Project\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.projectDropDown.Label = \"Select project\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.initializeSheetButton.Label = \"Initialize sheet\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.groupTemplate.Label = \"Setting\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.applyTemplateButton.Label = \"Apply Setting\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveTemplateButton.Label = \"Save Setting\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.saveAsTemplateButton.Label = \"Save as Setting\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.applyTemplateButton.Label = \"Apply setting\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveTemplateButton.Label = \"Save setting\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveAsTemplateButton.Label = \"Save as setting\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupTemplate.Label = \"Config\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.applyTemplateButton.Label = \"Apply config\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveTemplateButton.Label = \"Save config\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveAsTemplateButton.Label = \"Save as config\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.groupTemplate.Label = \"Template\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.applyTemplateButton.Label = \"Apply template\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveTemplateButton.Label = \"Save template\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.saveAsTemplateButton.Label = \"Save as template\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupDataSync.Label = \"Data sync\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialDownloadButton.Label = \"Download\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialUploadButton.Label = \"Upload\";", designerText, StringComparison.Ordinal);

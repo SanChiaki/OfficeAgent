@@ -70,10 +70,11 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // toggleTaskPaneButton
             // 
-            this.toggleTaskPaneButton.Label = "Open";
+            this.toggleTaskPaneButton.Label = string.Empty;
             this.toggleTaskPaneButton.Name = "openTaskPaneButton";
             this.toggleTaskPaneButton.OfficeImageId = "Info";
             this.toggleTaskPaneButton.ShowImage = true;
+            this.toggleTaskPaneButton.ShowLabel = false;
             this.toggleTaskPaneButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
             this.toggleTaskPaneButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ToggleTaskPaneButton_Click);
             // 
@@ -108,34 +109,34 @@ namespace OfficeAgent.ExcelAddIn
             this.groupTemplate.Items.Add(this.applyTemplateButton);
             this.groupTemplate.Items.Add(this.saveTemplateButton);
             this.groupTemplate.Items.Add(this.saveAsTemplateButton);
-            this.groupTemplate.Label = "Template";
+            this.groupTemplate.Label = "Setting";
             this.groupTemplate.Name = "groupTemplate";
             // 
             // applyTemplateButton
             // 
-            this.applyTemplateButton.Label = "Apply template";
+            this.applyTemplateButton.Label = "Apply Setting";
             this.applyTemplateButton.Name = "applyTemplateButton";
             this.applyTemplateButton.OfficeImageId = "FileOpen";
             this.applyTemplateButton.ShowImage = true;
-            this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.applyTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.applyTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ApplyTemplateButton_Click);
             // 
             // saveTemplateButton
             // 
-            this.saveTemplateButton.Label = "Save template";
+            this.saveTemplateButton.Label = "Save Setting";
             this.saveTemplateButton.Name = "saveTemplateButton";
             this.saveTemplateButton.OfficeImageId = "FileSave";
             this.saveTemplateButton.ShowImage = true;
-            this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.saveTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.saveTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveTemplateButton_Click);
             // 
             // saveAsTemplateButton
             // 
-            this.saveAsTemplateButton.Label = "Save as template";
+            this.saveAsTemplateButton.Label = "Save as Setting";
             this.saveAsTemplateButton.Name = "saveAsTemplateButton";
             this.saveAsTemplateButton.OfficeImageId = "FileSaveAs";
             this.saveAsTemplateButton.ShowImage = true;
-            this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.saveAsTemplateButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.saveAsTemplateButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.SaveAsTemplateButton_Click);
             // 
             // groupDataSync
