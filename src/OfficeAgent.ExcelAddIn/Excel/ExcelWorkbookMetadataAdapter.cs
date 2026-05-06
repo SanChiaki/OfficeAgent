@@ -95,6 +95,26 @@ namespace OfficeAgent.ExcelAddIn.Excel
             });
         }
 
+        public string[] ReadHeaders(string tableName)
+        {
+            if (string.IsNullOrWhiteSpace(tableName))
+            {
+                throw new ArgumentException("Table name is required.", nameof(tableName));
+            }
+
+            return ExecutePreservingActiveWorksheet(() =>
+            {
+                var worksheet = FindMetadataWorksheet(GetWorkbook());
+                if (worksheet == null)
+                {
+                    return Array.Empty<string>();
+                }
+
+                var section = serializer.ReadSection(tableName, ReadUsedRows(worksheet));
+                return section?.Headers ?? Array.Empty<string>();
+            });
+        }
+
         private void ExecutePreservingActiveWorksheet(Action action)
         {
             ExecutePreservingActiveWorksheet(() =>

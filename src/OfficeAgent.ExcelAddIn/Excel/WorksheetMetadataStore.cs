@@ -47,6 +47,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private bool bindingRowsCacheLoaded;
         private string[][] fieldMappingRowsCache;
         private bool fieldMappingRowsCacheLoaded;
+        private string[] fieldMappingPersistedHeadersCache;
+        private bool fieldMappingPersistedHeadersCacheLoaded;
         private string workbookScopeKey = string.Empty;
 
         public WorksheetMetadataStore(IWorksheetMetadataAdapter adapter)
@@ -208,9 +210,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var headers = new[] { "SheetName" }
                 .Concat(columns.Select(column => column.ColumnName))
                 .ToArray();
-            fieldMappingHeaders = headers.ToArray();
 
-            var existingRows = GetFieldMappingRows().ToList();
+            var existingRows = NormalizeFieldMappingRows(GetFieldMappingRows(), columns).ToList();
             existingRows.RemoveAll(row =>
                 row.Length > 0 &&
                 string.Equals(row[0], sheetName, StringComparison.OrdinalIgnoreCase));
@@ -233,6 +234,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             adapter.WriteTable(FieldMappingsTableName, headers, existingRows.ToArray());
+            fieldMappingHeaders = headers.ToArray();
+            fieldMappingPersistedHeadersCache = headers.ToArray();
+            fieldMappingPersistedHeadersCacheLoaded = true;
             fieldMappingRowsCache = CloneRows(existingRows);
             fieldMappingRowsCacheLoaded = true;
         }
@@ -252,6 +256,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             EnsureWorkbookScope();
             var columns = GetDistinctFieldMappingColumns(definition);
             var rows = GetFieldMappingRows();
+            var valueIndexes = ResolveFieldMappingValueIndexes(columns);
 
             return rows
                 .Where(row =>
@@ -264,8 +269,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
                     {
                         var columnName = GetColumnValueKey(columns[columnIndex]);
-                        values[columnName] = row.Length > columnIndex + 1
-                            ? row[columnIndex + 1]
+                        var valueIndex = ResolveFieldMappingRowValueIndex(columnIndex, valueIndexes);
+                        values[columnName] = valueIndex >= 0 && row.Length > valueIndex
+                            ? row[valueIndex]
                             : string.Empty;
                     }
 
@@ -298,6 +304,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             var headers = ResolveFieldMappingHeaders(rows);
             adapter.WriteTable(FieldMappingsTableName, headers, rows.ToArray());
+            fieldMappingHeaders = headers.ToArray();
+            fieldMappingPersistedHeadersCache = headers.ToArray();
+            fieldMappingPersistedHeadersCacheLoaded = true;
             fieldMappingRowsCache = CloneRows(rows);
             fieldMappingRowsCacheLoaded = true;
         }
@@ -359,6 +368,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             bindingRowsCacheLoaded = false;
             fieldMappingRowsCache = null;
             fieldMappingRowsCacheLoaded = false;
+            fieldMappingPersistedHeadersCache = null;
+            fieldMappingPersistedHeadersCacheLoaded = false;
             fieldMappingHeaders = DefaultFieldMappingHeaders.ToArray();
         }
 
@@ -505,9 +516,15 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         private string[] ResolveFieldMappingHeaders(IReadOnlyList<string[]> rows)
         {
-            if (fieldMappingHeaders != null && fieldMappingHeaders.Length > 0)
+            if (fieldMappingHeaders != null && fieldMappingHeaders.Length > DefaultFieldMappingHeaders.Length)
             {
                 return fieldMappingHeaders.ToArray();
+            }
+
+            var persistedHeaders = GetFieldMappingPersistedHeaders();
+            if (persistedHeaders.Length > 0)
+            {
+                return persistedHeaders.ToArray();
             }
 
             var maxColumns = rows?.Count > 0
@@ -522,6 +539,97 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return headers;
+        }
+
+        private int[] ResolveFieldMappingValueIndexes(FieldMappingColumnDefinition[] columns)
+        {
+            var persistedHeaders = GetFieldMappingPersistedHeaders();
+            if (persistedHeaders.Length <= DefaultFieldMappingHeaders.Length)
+            {
+                return null;
+            }
+
+            var indexesByHeaderName = new Dictionary<string, Queue<int>>(StringComparer.OrdinalIgnoreCase);
+            for (var index = DefaultFieldMappingHeaders.Length; index < persistedHeaders.Length; index++)
+            {
+                var headerName = persistedHeaders[index];
+                if (string.IsNullOrWhiteSpace(headerName))
+                {
+                    continue;
+                }
+
+                if (!indexesByHeaderName.TryGetValue(headerName, out var indexes))
+                {
+                    indexes = new Queue<int>();
+                    indexesByHeaderName[headerName] = indexes;
+                }
+
+                indexes.Enqueue(index);
+            }
+
+            if (indexesByHeaderName.Count == 0)
+            {
+                return null;
+            }
+
+            var valueIndexes = new int[columns.Length];
+            var anyMatched = false;
+            for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
+            {
+                valueIndexes[columnIndex] = -1;
+                var headerName = columns[columnIndex]?.ColumnName ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(headerName) ||
+                    !indexesByHeaderName.TryGetValue(headerName, out var indexes) ||
+                    indexes.Count == 0)
+                {
+                    continue;
+                }
+
+                valueIndexes[columnIndex] = indexes.Dequeue();
+                anyMatched = true;
+            }
+
+            return anyMatched ? valueIndexes : null;
+        }
+
+        private static int ResolveFieldMappingRowValueIndex(int columnIndex, IReadOnlyList<int> valueIndexes)
+        {
+            if (valueIndexes == null || valueIndexes.Count <= columnIndex)
+            {
+                return columnIndex + DefaultFieldMappingHeaders.Length;
+            }
+
+            return valueIndexes[columnIndex];
+        }
+
+        private string[][] NormalizeFieldMappingRows(IReadOnlyList<string[]> rows, FieldMappingColumnDefinition[] columns)
+        {
+            var valueIndexes = ResolveFieldMappingValueIndexes(columns);
+            return (rows ?? Array.Empty<string[]>())
+                .Select(row => NormalizeFieldMappingRow(row, columns.Length, valueIndexes))
+                .ToArray();
+        }
+
+        private static string[] NormalizeFieldMappingRow(
+            IReadOnlyList<string> row,
+            int columnCount,
+            IReadOnlyList<int> valueIndexes)
+        {
+            var normalized = new string[columnCount + DefaultFieldMappingHeaders.Length];
+            normalized[0] = row != null && row.Count > 0
+                ? row[0] ?? string.Empty
+                : string.Empty;
+
+            for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+            {
+                var valueIndex = ResolveFieldMappingRowValueIndex(columnIndex, valueIndexes);
+                normalized[columnIndex + DefaultFieldMappingHeaders.Length] =
+                    valueIndex >= 0 && row != null && row.Count > valueIndex
+                        ? row[valueIndex] ?? string.Empty
+                        : string.Empty;
+            }
+
+            return normalized;
         }
 
         private IReadOnlyList<string[]> GetTemplateBindingRows()
@@ -550,11 +658,27 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             if (!fieldMappingRowsCacheLoaded)
             {
+                GetFieldMappingPersistedHeaders();
                 fieldMappingRowsCache = adapter.ReadTable(FieldMappingsTableName) ?? Array.Empty<string[]>();
                 fieldMappingRowsCacheLoaded = true;
             }
 
             return fieldMappingRowsCache ?? Array.Empty<string[]>();
+        }
+
+        private string[] GetFieldMappingPersistedHeaders()
+        {
+            if (!fieldMappingPersistedHeadersCacheLoaded)
+            {
+                fieldMappingPersistedHeadersCache = adapter.ReadHeaders(FieldMappingsTableName) ?? Array.Empty<string>();
+                fieldMappingPersistedHeadersCacheLoaded = true;
+                if (fieldMappingPersistedHeadersCache.Length > 0)
+                {
+                    fieldMappingHeaders = fieldMappingPersistedHeadersCache.ToArray();
+                }
+            }
+
+            return fieldMappingPersistedHeadersCache ?? Array.Empty<string>();
         }
 
         private static string[][] CloneRows(IEnumerable<string[]> rows)

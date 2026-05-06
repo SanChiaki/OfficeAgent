@@ -2397,6 +2397,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             private readonly Dictionary<string, Dictionary<string, List<string[]>>> tablesByWorkbook =
                 new Dictionary<string, Dictionary<string, List<string[]>>>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, Dictionary<string, string[]>> headersByWorkbook =
+                new Dictionary<string, Dictionary<string, string[]>>(StringComparer.OrdinalIgnoreCase);
 
             public ScopedWorksheetMetadataAdapter(Type adapterInterface)
                 : base(adapterInterface)
@@ -2418,12 +2420,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "WriteTable":
                         {
                             var tables = GetCurrentWorkbookTables();
+                            var headers = GetCurrentWorkbookHeaders();
                             var tableName = (string)call.InArgs[0];
+                            var tableHeaders = (string[])call.InArgs[1];
                             var rows = (string[][])call.InArgs[2];
+                            headers[tableName] = tableHeaders?.ToArray() ?? Array.Empty<string>();
                             tables[tableName] = (rows ?? Array.Empty<string[]>())
                                 .Select(row => row?.ToArray() ?? Array.Empty<string>())
                                 .ToList();
                             return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                        }
+                    case "ReadHeaders":
+                        {
+                            var headers = GetCurrentWorkbookHeaders();
+                            var tableName = (string)call.InArgs[0];
+                            var result = headers.TryGetValue(tableName, out var storedHeaders)
+                                ? storedHeaders.ToArray()
+                                : Array.Empty<string>();
+                            return new ReturnMessage(result, null, 0, call.LogicalCallContext, call);
                         }
                     case "ReadTable":
                         {
@@ -2443,6 +2457,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 WorkbookScopeKey = workbookScopeKey ?? string.Empty;
                 GetCurrentWorkbookTables();
+                GetCurrentWorkbookHeaders();
             }
 
             public void SeedTable(string tableName, string[][] rows)
@@ -2467,6 +2482,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 }
 
                 return tables;
+            }
+
+            private Dictionary<string, string[]> GetCurrentWorkbookHeaders()
+            {
+                if (!headersByWorkbook.TryGetValue(WorkbookScopeKey, out var headers))
+                {
+                    headers = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+                    headersByWorkbook[WorkbookScopeKey] = headers;
+                }
+
+                return headers;
             }
         }
 

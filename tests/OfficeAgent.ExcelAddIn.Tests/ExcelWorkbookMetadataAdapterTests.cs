@@ -67,6 +67,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ReadHeadersReturnsSectionHeadersAndRestoresActiveWorksheet()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("xISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "SheetFieldMappings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(2, 2, "HeaderType");
+            application.MetadataSheet.SetCell(2, 3, "ISDP L1");
+            application.MetadataSheet.SetCell(2, 4, "Excel L1");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            var headers = (string[])adapterType.GetMethod("ReadHeaders").Invoke(adapter, new object[] { "SheetFieldMappings" });
+
+            Assert.Equal(new[] { "SheetName", "HeaderType", "ISDP L1", "Excel L1" }, headers);
+            Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
+        }
+
+        [Fact]
         public void WriteTableRenamesLegacyMetadataSheetBeforeRewriting()
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());

@@ -72,7 +72,7 @@
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
 - Open `xISDP_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
-- Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
+- Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `ISDP L2`, `Excel L1`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.
 - Click the Ribbon project selector, type `tracker` in the popup search box, and confirm only `delivery-tracker-交付跟踪项目` remains from the default mock project list.
 - In the project selector popup, type `dt` and confirm `delivery-tracker-交付跟踪项目` is included by fuzzy non-contiguous character matching.
