@@ -187,6 +187,38 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
         }
 
+        [Theory]
+        [InlineData("下载", "下载\r")]
+        [InlineData("上传", "上传\r")]
+        [InlineData("文档", "文档\r")]
+        [InlineData("关于", "关于\r")]
+        [InlineData("登录", "登录\r")]
+        [InlineData("全量下载", "全量下载")]
+        [InlineData("Download", "Download")]
+        [InlineData("", "")]
+        [InlineData(null, "")]
+        public void RibbonButtonLabelFormatterAddsCarriageReturnHintOnlyForTwoCharacterChineseLabels(
+            string label,
+            string expectedLabel)
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
+            var method = ribbonType.GetMethod(
+                "FormatRibbonButtonLabel",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.NotNull(method);
+            Assert.Equal(expectedLabel, (string)method.Invoke(null, new object[] { label }));
+        }
+
         [Fact]
         public void DataSyncGroupContainsPartialDownloadAndUploadOnly()
         {
