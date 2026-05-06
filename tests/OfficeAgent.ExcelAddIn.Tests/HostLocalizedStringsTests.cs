@@ -27,6 +27,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "下面三个值会写入当前工作表与ISDP实施计划的映射配置表xISDP_Setting中，请确认后保存。")]
+        [InlineData("en", "The three values below will be written to xISDP_Setting, the mapping configuration table for the current worksheet and the ISDP implementation plan. Confirm them before saving.")]
+        public void ForLocaleReturnsExpectedProjectLayoutInstruction(
+            string locale,
+            string expectedInstruction)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedInstruction, GetString(strings, "ProjectLayoutInstructionText"));
+        }
+
+        [Theory]
         [InlineData("zh")]
         [InlineData("en")]
         public void ForLocaleUsesXisdpAsHostAndRibbonName(string locale)
