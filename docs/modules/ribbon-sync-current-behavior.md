@@ -158,17 +158,17 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 当前系统的典型结构示意：
 
-| SheetName | HeaderType | ISDP L1 | Excel L1 | ISDP L2 | Excel L2 | HeaderId | ApiFieldKey | IsIdColumn | ActivityId | PropertyId |
+| SheetName | HeaderType | ISDP L1 | ISDP L2 | Excel L1 | Excel L2 | HeaderId | ApiFieldKey | IsIdColumn | ActivityId | PropertyId |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Sheet1 | single | ID | ID |  |  | row_id | row_id | true |  |  |
-| Sheet1 | single | 负责人 | 负责人 |  |  | owner_name | owner_name | false |  |  |
-| Sheet1 | activityProperty | 测试活动111 | 测试活动111 | 开始时间 | 开始时间 | start_12345678 | start_12345678 | false | 12345678 | start |
+| Sheet1 | single | ID |  | ID |  | row_id | row_id | true |  |  |
+| Sheet1 | single | 负责人 |  | 负责人 |  | owner_name | owner_name | false |  |  |
+| Sheet1 | activityProperty | 测试活动111 | 开始时间 | 测试活动111 | 开始时间 | start_12345678 | start_12345678 | false | 12345678 | start |
 
 说明：
 
 - 第一列固定是 `SheetName`
 - 其余列来自业务系统连接器
-- 当前 `current-business-system` 会把所有表头显示字段收敛成四列：`ISDP L1`、`Excel L1`、`ISDP L2`、`Excel L2`
+- 当前 `current-business-system` 会把所有表头显示字段收敛成四列：`ISDP L1`、`ISDP L2`、`Excel L1`、`Excel L2`
 - `L1` 对应单层表头文本或双层表头父文本；`L2` 对应双层表头子文本
 - 所有 ID / 接口字段相关列都放在显示列之后，便于手工阅读和修改
 - Excel 运行时按“语义角色”读取映射，不依赖写死的列顺序

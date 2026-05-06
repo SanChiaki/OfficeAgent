@@ -147,10 +147,10 @@ namespace OfficeAgent.Infrastructure.Http
                 {
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.HeaderType, Role = FieldMappingSemanticRole.HeaderType },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.IsdpLevel1, Role = FieldMappingSemanticRole.DefaultSingleHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.DefaultLevel1 },
-                    new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ExcelLevel1, Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.CurrentLevel1 },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.IsdpLevel1, Role = FieldMappingSemanticRole.DefaultParentHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.DefaultLevel1 },
-                    new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ExcelLevel1, Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.CurrentLevel1 },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.IsdpLevel2, Role = FieldMappingSemanticRole.DefaultChildHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.DefaultLevel2 },
+                    new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ExcelLevel1, Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.CurrentLevel1 },
+                    new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ExcelLevel1, Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.CurrentLevel1 },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ExcelLevel2, Role = FieldMappingSemanticRole.CurrentChildHeaderText, RoleKey = CurrentBusinessFieldMappingColumns.CurrentLevel2 },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.HeaderId, Role = FieldMappingSemanticRole.HeaderIdentity },
                     new FieldMappingColumnDefinition { ColumnName = CurrentBusinessFieldMappingHeaders.ApiFieldKey, Role = FieldMappingSemanticRole.ApiFieldKey },

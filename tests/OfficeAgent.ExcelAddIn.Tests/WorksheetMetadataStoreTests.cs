@@ -371,27 +371,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     },
                     new FieldMappingColumnDefinition
                     {
-                        ColumnName = "Excel L1",
-                        Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
-                        RoleKey = "CurrentL1",
-                    },
-                    new FieldMappingColumnDefinition
-                    {
                         ColumnName = "ISDP L1",
                         Role = FieldMappingSemanticRole.DefaultParentHeaderText,
                         RoleKey = "DefaultL1",
                     },
                     new FieldMappingColumnDefinition
                     {
+                        ColumnName = "ISDP L2",
+                        Role = FieldMappingSemanticRole.DefaultChildHeaderText,
+                        RoleKey = "DefaultL2",
+                    },
+                    new FieldMappingColumnDefinition
+                    {
                         ColumnName = "Excel L1",
-                        Role = FieldMappingSemanticRole.CurrentParentHeaderText,
+                        Role = FieldMappingSemanticRole.CurrentSingleHeaderText,
                         RoleKey = "CurrentL1",
                     },
                     new FieldMappingColumnDefinition
                     {
-                        ColumnName = "ISDP L2",
-                        Role = FieldMappingSemanticRole.DefaultChildHeaderText,
-                        RoleKey = "DefaultL2",
+                        ColumnName = "Excel L1",
+                        Role = FieldMappingSemanticRole.CurrentParentHeaderText,
+                        RoleKey = "CurrentL1",
                     },
                     new FieldMappingColumnDefinition
                     {
@@ -407,11 +407,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 },
             };
 
-            adapter.SeedTable("SheetFieldMappings", new[]
-            {
-                new[] { "SheetA", "single", "旧L1", "当前旧L1", string.Empty, string.Empty, "legacy_id" },
-                new[] { "Sheet1", "single", "旧负责人", "当前旧负责人", string.Empty, string.Empty, "old_sheet1_id" },
-            });
+            adapter.SeedTable(
+                "SheetFieldMappings",
+                new[] { "SheetName", "HeaderType", "ISDP L1", "Excel L1", "ISDP L2", "Excel L2", "HeaderId" },
+                new[]
+                {
+                    new[] { "SheetA", "single", "旧L1", "当前旧L1", "旧L2", "当前旧L2", "legacy_id" },
+                    new[] { "Sheet1", "single", "旧负责人", "当前旧负责人", string.Empty, string.Empty, "old_sheet1_id" },
+                });
 
             InvokeSaveFieldMappings(
                 store,
@@ -447,11 +450,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var headers = adapter.ReadSeededHeaders("SheetFieldMappings");
             Assert.Equal(
-                new[] { "SheetName", "HeaderType", "ISDP L1", "Excel L1", "ISDP L2", "Excel L2", "HeaderId" },
+                new[] { "SheetName", "HeaderType", "ISDP L1", "ISDP L2", "Excel L1", "Excel L2", "HeaderId" },
                 headers);
 
             var rawRows = adapter.ReadSeededTable("SheetFieldMappings");
-            Assert.Contains(rawRows, row => row[0] == "SheetA" && row[6] == "legacy_id");
+            Assert.Contains(
+                rawRows,
+                row => row[0] == "SheetA" &&
+                       row[1] == "single" &&
+                       row[2] == "旧L1" &&
+                       row[3] == "旧L2" &&
+                       row[4] == "当前旧L1" &&
+                       row[5] == "当前旧L2" &&
+                       row[6] == "legacy_id");
             Assert.DoesNotContain(rawRows, row => row[0] == "Sheet1" && row[6] == "old_sheet1_id");
         }
 
@@ -521,6 +532,45 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Empty(rows);
             Assert.Equal(0, adapter.EnsureWorksheetCallCount);
             Assert.Null(adapter.WorksheetName);
+        }
+
+        [Fact]
+        public void LoadFieldMappingsUsesPersistedHeadersWhenColumnOrderDiffersFromCurrentDefinition()
+        {
+            var (store, adapter) = CreateStore();
+            var definition = new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition { ColumnName = "HeaderType", Role = FieldMappingSemanticRole.HeaderType },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultSingleHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultParentHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L2", Role = FieldMappingSemanticRole.DefaultChildHeaderText, RoleKey = "DefaultL2" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L2", Role = FieldMappingSemanticRole.CurrentChildHeaderText, RoleKey = "CurrentL2" },
+                    new FieldMappingColumnDefinition { ColumnName = "HeaderId", Role = FieldMappingSemanticRole.HeaderIdentity },
+                },
+            };
+
+            adapter.SeedTable(
+                "SheetFieldMappings",
+                new[] { "SheetName", "HeaderType", "ISDP L1", "Excel L1", "ISDP L2", "Excel L2", "HeaderId" },
+                new[]
+                {
+                    new[] { "Sheet1", "activityProperty", "活动A", "活动A当前", "开始时间", "开始时间当前", "start_a" },
+                });
+
+            var loaded = InvokeLoadFieldMappings(store, "Sheet1", definition);
+            var loadedRow = Assert.Single(loaded);
+
+            Assert.Equal("activityProperty", loadedRow.Values["HeaderType"]);
+            Assert.Equal("活动A", loadedRow.Values["DefaultL1"]);
+            Assert.Equal("开始时间", loadedRow.Values["DefaultL2"]);
+            Assert.Equal("活动A当前", loadedRow.Values["CurrentL1"]);
+            Assert.Equal("开始时间当前", loadedRow.Values["CurrentL2"]);
+            Assert.Equal("start_a", loadedRow.Values["HeaderId"]);
         }
 
         [Fact]
@@ -888,6 +938,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     "GetWorkbookScopeKey" => HandleGetWorkbookScopeKey(call),
                     "EnsureWorksheet" => HandleEnsureWorksheet(call),
                     "WriteTable" => HandleWriteTable(call),
+                    "ReadHeaders" => HandleReadHeaders(call),
                     "ReadTable" => HandleReadTable(call),
                     _ => throw new NotSupportedException(call.MethodName),
                 };
@@ -926,6 +977,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
             }
 
+            private IMessage HandleReadHeaders(IMethodCallMessage call)
+            {
+                var tableName = (string)call.InArgs[0];
+                var headers = GetCurrentWorkbookHeaders();
+                var result = headers.TryGetValue(tableName, out var tableHeaders)
+                    ? tableHeaders.ToArray()
+                    : Array.Empty<string>();
+                return new ReturnMessage(result, null, 0, call.LogicalCallContext, call);
+            }
+
             private IMessage HandleReadTable(IMethodCallMessage call)
             {
                 ReadTableCallCount++;
@@ -940,6 +1001,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 var tables = GetCurrentWorkbookTables();
                 tables[tableName] = rows.Select(row => row?.ToArray() ?? Array.Empty<string>()).ToList();
+            }
+
+            public void SeedTable(string tableName, string[] headers, string[][] rows)
+            {
+                var tableHeaders = GetCurrentWorkbookHeaders();
+                tableHeaders[tableName] = headers?.ToArray() ?? Array.Empty<string>();
+                SeedTable(tableName, rows);
             }
 
             public string[][] ReadSeededTable(string tableName)

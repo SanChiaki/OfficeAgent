@@ -72,7 +72,7 @@
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
 - Open `xISDP_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
-- Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `Excel L1`, `ISDP L2`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
+- Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `ISDP L2`, `Excel L1`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.
 - Switch to a worksheet with existing binding metadata and confirm the Ribbon dropdown automatically rehydrates that project as `ProjectId-DisplayName` instead of showing the localized empty placeholder (`先选择项目` / `Select project`).
 - Save a workbook with `xISDP_Setting` as the active sheet, reopen Excel from the desktop shortcut, and confirm the Ribbon dropdown shows the localized empty placeholder (`先选择项目` / `Select project`) unless `SheetBindings` contains an explicit binding row for `xISDP_Setting`.

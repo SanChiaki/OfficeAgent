@@ -83,10 +83,10 @@ namespace OfficeAgent.Infrastructure.Tests
                 {
                     (CurrentBusinessFieldMappingHeaders.HeaderType, FieldMappingSemanticRole.HeaderType, string.Empty),
                     (CurrentBusinessFieldMappingHeaders.IsdpLevel1, FieldMappingSemanticRole.DefaultSingleHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel1),
-                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentSingleHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
                     (CurrentBusinessFieldMappingHeaders.IsdpLevel1, FieldMappingSemanticRole.DefaultParentHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel1),
-                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentParentHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
                     (CurrentBusinessFieldMappingHeaders.IsdpLevel2, FieldMappingSemanticRole.DefaultChildHeaderText, CurrentBusinessFieldMappingColumns.DefaultLevel2),
+                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentSingleHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
+                    (CurrentBusinessFieldMappingHeaders.ExcelLevel1, FieldMappingSemanticRole.CurrentParentHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel1),
                     (CurrentBusinessFieldMappingHeaders.ExcelLevel2, FieldMappingSemanticRole.CurrentChildHeaderText, CurrentBusinessFieldMappingColumns.CurrentLevel2),
                     (CurrentBusinessFieldMappingHeaders.HeaderId, FieldMappingSemanticRole.HeaderIdentity, string.Empty),
                     (CurrentBusinessFieldMappingHeaders.ApiFieldKey, FieldMappingSemanticRole.ApiFieldKey, string.Empty),
