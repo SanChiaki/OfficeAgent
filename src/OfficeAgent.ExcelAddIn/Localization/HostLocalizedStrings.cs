@@ -183,8 +183,8 @@ namespace OfficeAgent.ExcelAddIn.Localization
         public string ProjectLayoutDialogTitle => Locale == "zh" ? "配置当前表布局" : "Configure sheet layout";
 
         public string ProjectLayoutInstructionText => Locale == "zh"
-            ? "下面三个值会写入当前工作表的同步配置（SheetBindings），请确认后保存。"
-            : "The three values below will be saved to the current worksheet sync settings (SheetBindings). Review them before saving.";
+            ? "下面三个值会写入当前工作表与ISDP实施计划的映射配置表xISDP_Setting中，请确认后保存。"
+            : "The three values below will be written to xISDP_Setting, the mapping configuration table for the current worksheet and the ISDP implementation plan. Confirm them before saving.";
 
         public string ProjectLayoutCurrentBindingText(string projectId, string projectName)
         {

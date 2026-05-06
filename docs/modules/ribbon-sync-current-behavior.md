@@ -224,6 +224,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 
 - 当前 sheet 首次绑定项目，或切换到不同项目时，会先弹出布局对话框
 - 布局对话框默认值优先取当前 sheet 已保存的 `HeaderStartRow`、`HeaderRowCount`、`DataStartRow`；如果当前 sheet 还没有绑定记录，则回退到连接器 `CreateBindingSeed` 默认值
+- 布局对话框会提示这三个值将写入当前工作表与 ISDP 实施计划的映射配置表 `xISDP_Setting`
 - 只有用户在布局对话框点击确认后，才会把项目和布局值写入 `SheetBindings`
 - 布局对话框点击取消会完全中止本次项目切换，并恢复下拉框到切换前项目状态
 - 重选与当前绑定相同的项目时不会弹出布局对话框，也不会重写 `SheetBindings`
