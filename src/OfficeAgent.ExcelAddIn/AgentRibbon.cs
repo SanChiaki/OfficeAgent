@@ -18,6 +18,7 @@ namespace OfficeAgent.ExcelAddIn
 {
     public partial class AgentRibbon
     {
+        private const string RibbonNoWrapLabelTerminator = "\r";
         private static string ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText;
         private const string DocumentationUrl = "https://github.com/SanChiaki/OfficeAgent";
 
@@ -139,7 +140,7 @@ namespace OfficeAgent.ExcelAddIn
                 return false;
             }
 
-            loginButton.Label = GetStrings().RibbonLoginInProgressButtonLabel;
+            loginButton.Label = FormatRibbonButtonLabel(GetStrings().RibbonLoginInProgressButtonLabel);
             loginButton.Enabled = false;
 
             try
@@ -169,7 +170,7 @@ namespace OfficeAgent.ExcelAddIn
             }
             finally
             {
-                loginButton.Label = GetStrings().RibbonLoginButtonLabel;
+                loginButton.Label = FormatRibbonButtonLabel(GetStrings().RibbonLoginButtonLabel);
                 loginButton.Enabled = true;
             }
         }
@@ -560,25 +561,50 @@ namespace OfficeAgent.ExcelAddIn
             var strings = GetStrings();
             tab1.Label = strings.RibbonTabLabel;
             group1.Label = strings.RibbonAgentGroupLabel;
-            toggleTaskPaneButton.Label = strings.RibbonAgentButtonLabel;
+            toggleTaskPaneButton.Label = FormatRibbonButtonLabel(strings.RibbonAgentButtonLabel);
             groupProject.Label = strings.RibbonProjectGroupLabel;
-            initializeSheetButton.Label = strings.RibbonInitializeSheetButtonLabel;
+            initializeSheetButton.Label = FormatRibbonButtonLabel(strings.RibbonInitializeSheetButtonLabel);
             groupTemplate.Label = strings.RibbonTemplateGroupLabel;
-            applyTemplateButton.Label = strings.RibbonApplyTemplateButtonLabel;
-            saveTemplateButton.Label = strings.RibbonSaveTemplateButtonLabel;
-            saveAsTemplateButton.Label = strings.RibbonSaveAsTemplateButtonLabel;
+            applyTemplateButton.Label = FormatRibbonButtonLabel(strings.RibbonApplyTemplateButtonLabel);
+            saveTemplateButton.Label = FormatRibbonButtonLabel(strings.RibbonSaveTemplateButtonLabel);
+            saveAsTemplateButton.Label = FormatRibbonButtonLabel(strings.RibbonSaveAsTemplateButtonLabel);
             groupDataSync.Label = strings.RibbonDataSyncGroupLabel;
-            fullDownloadButton.Label = strings.RibbonFullDownloadButtonLabel;
-            partialDownloadButton.Label = strings.RibbonPartialDownloadButtonLabel;
-            fullUploadButton.Label = strings.RibbonFullUploadButtonLabel;
-            partialUploadButton.Label = strings.RibbonPartialUploadButtonLabel;
+            fullDownloadButton.Label = FormatRibbonButtonLabel(strings.RibbonFullDownloadButtonLabel);
+            partialDownloadButton.Label = FormatRibbonButtonLabel(strings.RibbonPartialDownloadButtonLabel);
+            fullUploadButton.Label = FormatRibbonButtonLabel(strings.RibbonFullUploadButtonLabel);
+            partialUploadButton.Label = FormatRibbonButtonLabel(strings.RibbonPartialUploadButtonLabel);
             group2.Label = strings.RibbonAccountGroupLabel;
-            loginButton.Label = strings.RibbonLoginButtonLabel;
+            loginButton.Label = FormatRibbonButtonLabel(strings.RibbonLoginButtonLabel);
             groupHelp.Label = strings.RibbonHelpGroupLabel;
-            documentationButton.Label = strings.RibbonDocumentationButtonLabel;
-            aboutButton.Label = strings.RibbonAboutButtonLabel;
+            documentationButton.Label = FormatRibbonButtonLabel(strings.RibbonDocumentationButtonLabel);
+            aboutButton.Label = FormatRibbonButtonLabel(strings.RibbonAboutButtonLabel);
             projectSelectorButton.Label = ProjectDropDownPlaceholderText;
             projectSelectorButton.ScreenTip = ProjectDropDownPlaceholderText;
+        }
+
+        private static string FormatRibbonButtonLabel(string label)
+        {
+            var normalizedLabel = label ?? string.Empty;
+            if (normalizedLabel.EndsWith(RibbonNoWrapLabelTerminator, StringComparison.Ordinal))
+            {
+                return normalizedLabel;
+            }
+
+            return IsTwoCharacterChineseLabel(normalizedLabel)
+                ? normalizedLabel + RibbonNoWrapLabelTerminator
+                : normalizedLabel;
+        }
+
+        private static bool IsTwoCharacterChineseLabel(string label)
+        {
+            return !string.IsNullOrEmpty(label) &&
+                   label.Length == 2 &&
+                   label.All(IsCjkUnifiedIdeograph);
+        }
+
+        private static bool IsCjkUnifiedIdeograph(char value)
+        {
+            return value >= '\u4e00' && value <= '\u9fff';
         }
 
         private static HostLocalizedStrings GetStrings()

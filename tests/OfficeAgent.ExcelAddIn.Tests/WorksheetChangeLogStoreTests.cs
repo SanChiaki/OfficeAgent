@@ -61,6 +61,47 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(2001, grid.GetLastUsedRow("xISDP_Log"));
         }
 
+        [Fact]
+        public void AppendPreservesExistingTimestampReadBackAsExcelValue2DateSerial()
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
+            var storeType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetChangeLogStore", throwOnError: true);
+            var entryType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetChangeLogEntry", throwOnError: true);
+            var grid = new FakeWorksheetGridAdapter(gridInterface);
+            grid.SetRawCell("xISDP_Log", 2, 1, "row-0001");
+            grid.SetRawCell("xISDP_Log", 2, 2, "负责人");
+            grid.SetRawCell("xISDP_Log", 2, 3, "下载");
+            grid.SetRawCell("xISDP_Log", 2, 4, "Alice");
+            grid.SetRawCell("xISDP_Log", 2, 5, "Bob");
+            grid.SetRawCell("xISDP_Log", 2, 6, new DateTime(2026, 4, 29, 9, 30, 0).ToOADate());
+
+            var now = new DateTime(2026, 4, 29, 10, 45, 0);
+            var store = Activator.CreateInstance(
+                storeType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[]
+                {
+                    grid.GetTransparentProxy(),
+                    new Func<DateTime>(() => now),
+                },
+                culture: null);
+            var entry = Activator.CreateInstance(entryType);
+            SetProperty(entry, "Key", "row-0002");
+            SetProperty(entry, "HeaderText", "状态");
+            SetProperty(entry, "ChangeMode", "上传");
+            SetProperty(entry, "NewValue", "完成");
+            SetProperty(entry, "OldValue", "进行中");
+            var entries = Array.CreateInstance(entryType, 1);
+            entries.SetValue(entry, 0);
+
+            storeType.GetMethod("Append").Invoke(store, new object[] { entries });
+
+            Assert.Equal("2026-04-29 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
+            Assert.Equal("2026-04-29 10:45:00", grid.GetCell("xISDP_Log", 3, 6));
+        }
+
         private static void SetProperty(object target, string propertyName, object value)
         {
             target.GetType()
@@ -88,7 +129,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         private sealed class FakeWorksheetGridAdapter : RealProxy
         {
             private readonly Type interfaceType;
-            private readonly Dictionary<string, string> cells = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, object> cells = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
             public FakeWorksheetGridAdapter(Type interfaceType)
                 : base(interfaceType)
@@ -157,8 +198,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public string GetCell(string sheetName, int row, int column)
             {
                 return cells.TryGetValue(BuildKey(sheetName, row, column), out var value)
-                    ? value
+                    ? Convert.ToString(value)
                     : string.Empty;
+            }
+
+            public void SetRawCell(string sheetName, int row, int column, object value)
+            {
+                WorksheetNames.Add(sheetName);
+                cells[BuildKey(sheetName, row, column)] = value;
             }
 
             public int GetLastUsedRow(string sheetName)
@@ -191,6 +238,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                             sheetName,
                             startRow + rowOffset,
                             startColumn + columnOffset);
+                        if (cells.TryGetValue(
+                            BuildKey(sheetName, startRow + rowOffset, startColumn + columnOffset),
+                            out var rawValue))
+                        {
+                            values[rowOffset, columnOffset] = rawValue;
+                        }
                     }
                 }
 
@@ -222,7 +275,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     for (var columnOffset = 0; columnOffset < values.GetLength(1); columnOffset++)
                     {
                         cells[BuildKey(sheetName, startRow + rowOffset, startColumn + columnOffset)] =
-                            Convert.ToString(values[rowOffset, columnOffset]) ?? string.Empty;
+                            values[rowOffset, columnOffset] ?? string.Empty;
                     }
                 }
             }

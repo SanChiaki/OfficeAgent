@@ -75,7 +75,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var changeMode = Convert.ToString(values[row, 2]) ?? string.Empty;
                 var newValue = Convert.ToString(values[row, 3]) ?? string.Empty;
                 var oldValue = Convert.ToString(values[row, 4]) ?? string.Empty;
-                var changedAtText = Convert.ToString(values[row, 5]) ?? string.Empty;
+                var changedAtValue = values[row, 5];
+                var changedAtText = Convert.ToString(changedAtValue) ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(key) &&
                     string.IsNullOrWhiteSpace(headerText) &&
                     string.IsNullOrWhiteSpace(changeMode) &&
@@ -93,7 +94,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     ChangeMode = changeMode,
                     NewValue = newValue,
                     OldValue = oldValue,
-                    ChangedAt = ParseTimestamp(changedAtText),
+                    ChangedAt = ParseTimestamp(changedAtValue),
                 });
             }
 
@@ -131,16 +132,59 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return result;
         }
 
-        private static DateTime ParseTimestamp(string value)
+        private static DateTime ParseTimestamp(object value)
         {
+            if (value is DateTime timestamp)
+            {
+                return timestamp;
+            }
+
+            if (value is double serial)
+            {
+                return ParseOADate(serial);
+            }
+
+            if (value is float floatSerial)
+            {
+                return ParseOADate(floatSerial);
+            }
+
+            if (value is decimal decimalSerial)
+            {
+                return ParseOADate((double)decimalSerial);
+            }
+
+            if (value is int intSerial)
+            {
+                return ParseOADate(intSerial);
+            }
+
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
             return DateTime.TryParseExact(
-                value,
+                text,
                 TimestampFormat,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.None,
                 out var parsed)
                 ? parsed
                 : default(DateTime);
+        }
+
+        private static DateTime ParseOADate(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                return default(DateTime);
+            }
+
+            try
+            {
+                return DateTime.FromOADate(value);
+            }
+            catch (ArgumentException)
+            {
+                return default(DateTime);
+            }
         }
     }
 }
