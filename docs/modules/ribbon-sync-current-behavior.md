@@ -281,23 +281,25 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 2. 按当前 `SheetBindings.HeaderStartRow` 和 `HeaderRowCount` 扫描完整表头区域，而不是使用当前选区。
 3. 单层表头读取实际单元格文本；双层表头读取父 / 子两行文本，并兼容父表头横向合并或只在第一列填写的常见布局。
 4. 读取当前 `SheetFieldMappings` 作为候选字段，包含默认 ISDP 表头、当前 Excel 表头、字段类型、HeaderId、ApiFieldKey、ID 字段和活动属性标识。
-5. 调用 AI 列映射客户端生成推荐。该客户端复用现有设置中的 `Base URL`、`API Key`、`Model` 和 `API Format`。
+5. 在本地先过滤已经与 `SheetFieldMappings.Excel L1 / Excel L2` 完全一致的实际表头，并排除 ID 列候选；如果过滤后没有待映射表头，则不调用模型，直接返回没有可应用推荐。
+6. 调用 AI 列映射客户端生成推荐。该客户端复用现有设置中的 `Base URL`、`API Key`、`Model` 和 `API Format`。
    - `API Format = OpenAI Compatible` 时，请求使用 OpenAI-compatible `chat/completions`：endpoint 为 `/v1/chat/completions` 或保留已有路径前缀后的 `/chat/completions`，认证使用 `Authorization: Bearer <API Key>`。
    - `API Format = Anthropic Messages` 时，请求使用 Anthropic Messages：endpoint 为 `/v1/messages` 或保留已有路径前缀后的 `/messages`，认证使用 `x-api-key`，并发送 `anthropic-version: 2023-06-01`。
-   - 当候选字段数量较少时，请求会保留当前 sheet 的全部候选字段。
-   - 当候选字段超过大表阈值时，插件会先用本地文本相似度给候选排序，只把每个实际表头最相关的一批候选拼进 prompt，减少模型输入规模。
+   - 当候选字段数量不超过 30 时，请求会保留当前 sheet 中除 ID 列外的全部候选字段。
+   - 当候选字段超过 30 时，插件会先用本地文本相似度给候选排序，只把每个实际表头最相关的一批候选拼进 prompt，减少模型输入规模。
    - 本地相似度只用于候选召回和排序，不会直接决定最终映射；最终是否应用仍由模型推荐、预览确认和本地校验共同决定。
    - prompt 中的映射 JSON 使用紧凑序列化，避免多余缩进增加 token。
    - AI 列映射客户端会优先使用 `stream: true` 按 SSE 增量读取模型文本；OpenAI-compatible 格式读取 `choices[].delta.content`，Anthropic Messages 格式读取 `content_block_delta` / `text_delta` 并在 `message_stop` 时结束。如果服务明确不支持流式请求，会自动回退到对应格式的非流式请求。
    - 当前流式只发生在网络读取层，插件仍会等完整 JSON 解析成功后再生成并弹出预览确认，不会边生成边显示预览行。
-6. 弹出 WinForms 预览确认对话框，展示 Excel 列号、实际表头、目标 ISDP 表头、建议写入的 Excel 表头、置信度、状态和原因。
-7. 用户确认后，仅把状态为 accepted 的推荐写入 `SheetFieldMappings.Excel L1 / Excel L2`；取消则不会保存任何 metadata。
-8. 完成提示会显示应用数量和跳过数量；如果没有可应用推荐，则只显示没有可应用的推荐。
+7. 弹出 WinForms 预览确认对话框，只展示可应用的 accepted 推荐。表格列固定为“是否修改”、Excel 字母列号、当前实际表头 `L1/L2`、匹配到的 ISDP 表头 `L1/L2`；已经等同于当前 `Excel L1 / Excel L2` 的 accepted no-op 推荐不会显示。
+8. “是否修改”默认全部选中；用户取消勾选的行即使原本是 accepted，也不会写入 `SheetFieldMappings`。用户点击取消则不会保存任何 metadata。
+9. 用户确认后，仅把仍被勾选且状态为 accepted 的推荐写入 `SheetFieldMappings.Excel L1 / Excel L2`。
+10. 完成提示会显示应用数量和跳过数量；如果没有可应用推荐，则只显示没有可应用的推荐。
 
 安全规则：
 
-- ID 列不会被 AI 推荐覆盖。
-- 低置信度、未匹配、目标字段不存在、目标重复、Excel 列重复等推荐不会应用。
+- ID 列不会作为模型候选发送，模型返回或被篡改出的 ID 列目标也会被拒绝。
+- 低置信度、未匹配、目标字段不存在、目标重复、Excel 列重复等推荐不会进入可应用确认列表，也不会应用。
 - 本地校验不会因为候选字段是 `activityProperty`、`single` 或其他类型而限制 `Excel L1 / Excel L2` 写回；模型推荐的实际 L1 / L2 会作为自由显示名保存。
 - 应用阶段会重新校验预览内容，防止被篡改的 accepted 项写入 metadata。
 - 未登录或模型接口配置错误会显示普通错误或登录提示；不会静默写入。

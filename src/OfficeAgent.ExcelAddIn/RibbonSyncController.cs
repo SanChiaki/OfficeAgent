@@ -230,6 +230,12 @@ namespace OfficeAgent.ExcelAddIn
                 var sheetName = GetRequiredSheetName();
                 var service = EnsureExecutionService();
                 var preview = service.PrepareAiColumnMappingPreview(sheetName);
+                if (!HasApplicableAiColumnMappings(preview))
+                {
+                    dialogService.ShowInfo(strings.AiColumnMappingNoAcceptedMappingsMessage);
+                    return;
+                }
+
                 if (!dialogService.ConfirmAiColumnMapping(preview))
                 {
                     return;
@@ -248,6 +254,13 @@ namespace OfficeAgent.ExcelAddIn
             {
                 dialogService.ShowError(ex.Message);
             }
+        }
+
+        private static bool HasApplicableAiColumnMappings(AiColumnMappingPreview preview)
+        {
+            return (preview?.Items ?? Array.Empty<AiColumnMappingPreviewItem>())
+                .Any(item => item != null &&
+                             string.Equals(item.Status, AiColumnMappingPreviewStatuses.Accepted, StringComparison.Ordinal));
         }
 
         private void ExecuteDownload(Func<WorksheetSyncExecutionService, WorksheetDownloadPlan> preparePlan)

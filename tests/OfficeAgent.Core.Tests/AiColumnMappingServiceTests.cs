@@ -16,10 +16,10 @@ namespace OfficeAgent.Core.Tests
         {
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
-            var rows = new[] { CreateOwnerRow() };
+            var rows = new[] { CreateOwnerRowWithCurrentHeader("项目负责人") };
             var actualHeaders = new[]
             {
-                new AiColumnMappingActualHeader { ExcelColumn = 3, DisplayText = "项目负责人", ActualL1 = "项目负责人" },
+                new AiColumnMappingActualHeader { ExcelColumn = 3, DisplayText = "负责人", ActualL1 = "负责人" },
             };
 
             var request = service.BuildRequest("Sheet1", definition, rows, actualHeaders);
@@ -35,7 +35,7 @@ namespace OfficeAgent.Core.Tests
             Assert.Equal(string.Empty, candidate.IsdpL2);
             Assert.Equal("负责人", candidate.DefaultL1);
             Assert.Equal(string.Empty, candidate.DefaultL2);
-            Assert.Equal("负责人", candidate.CurrentExcelL1);
+            Assert.Equal("项目负责人", candidate.CurrentExcelL1);
             Assert.Equal(string.Empty, candidate.CurrentExcelL2);
         }
 
@@ -66,7 +66,7 @@ namespace OfficeAgent.Core.Tests
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
             var rows = new List<SheetFieldMappingRow> { CreateOwnerRow() };
-            for (var index = 0; index < 140; index++)
+            for (var index = 0; index < 31; index++)
             {
                 rows.Add(CreateSingleRow(
                     "noise_" + index.ToString("D3"),
@@ -102,6 +102,135 @@ namespace OfficeAgent.Core.Tests
                 new[] { new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "完全不同", DisplayText = "完全不同" } });
 
             Assert.Equal(3, request.Candidates.Length);
+        }
+
+        [Fact]
+        public void BuildRequestOmitsActualHeadersThatAlreadyMatchCurrentMappings()
+        {
+            var service = new AiColumnMappingService();
+            var definition = CreateDefinition();
+            var rows = new[]
+            {
+                CreateIdRow(),
+                CreateOwnerRow(),
+            };
+
+            var request = service.BuildRequest(
+                "Sheet1",
+                definition,
+                rows,
+                new[]
+                {
+                    new AiColumnMappingActualHeader { ExcelColumn = 1, ActualL1 = "ID", DisplayText = "ID" },
+                    new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "项目负责人", DisplayText = "项目负责人" },
+                });
+
+            var actual = Assert.Single(request.ActualHeaders);
+            Assert.Equal(2, actual.ExcelColumn);
+            Assert.DoesNotContain(request.Candidates, candidate => candidate.IsIdColumn);
+        }
+
+        [Fact]
+        public void BuildRequestKeepsHeadersThatOnlyMatchDefaultMappings()
+        {
+            var service = new AiColumnMappingService();
+            var definition = CreateDefinition();
+            var rows = new[] { CreateOwnerRowWithCurrentHeader("项目负责人") };
+
+            var request = service.BuildRequest(
+                "Sheet1",
+                definition,
+                rows,
+                new[] { new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "负责人", DisplayText = "负责人" } });
+
+            var actual = Assert.Single(request.ActualHeaders);
+            Assert.Equal("负责人", actual.ActualL1);
+            Assert.Contains(request.Candidates, candidate => string.Equals(candidate.HeaderId, "owner_name", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void CreatePreviewHidesAcceptedItemsThatWouldNotChangeCurrentMappings()
+        {
+            var service = new AiColumnMappingService();
+            var request = new AiColumnMappingRequest
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ActualHeaders = new[] { new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "项目负责人", DisplayText = "项目负责人" } },
+                Candidates = new[]
+                {
+                    new AiColumnMappingCandidate
+                    {
+                        HeaderId = "owner_name",
+                        ApiFieldKey = "owner_name",
+                        HeaderType = "single",
+                        IsdpL1 = "负责人",
+                        CurrentExcelL1 = "项目负责人",
+                    },
+                },
+            };
+            var response = new AiColumnMappingResponse
+            {
+                Mappings = new[]
+                {
+                    new AiColumnMappingSuggestion
+                    {
+                        ExcelColumn = 2,
+                        ActualL1 = "项目负责人",
+                        TargetHeaderId = "owner_name",
+                        TargetApiFieldKey = "owner_name",
+                        Confidence = 1,
+                    },
+                },
+            };
+
+            var preview = service.CreatePreview(request, response, headerRowCount: 1);
+
+            Assert.Empty(preview.Items);
+        }
+
+        [Fact]
+        public void CreatePreviewRejectsIdColumnTargets()
+        {
+            var service = new AiColumnMappingService();
+            var request = new AiColumnMappingRequest
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ActualHeaders = new[] { new AiColumnMappingActualHeader { ExcelColumn = 1, ActualL1 = "实际ID", DisplayText = "实际ID" } },
+                Candidates = new[]
+                {
+                    new AiColumnMappingCandidate
+                    {
+                        HeaderId = "row_id",
+                        ApiFieldKey = "row_id",
+                        HeaderType = "single",
+                        IsdpL1 = "ID",
+                        CurrentExcelL1 = "ID",
+                        IsIdColumn = true,
+                    },
+                },
+            };
+            var response = new AiColumnMappingResponse
+            {
+                Mappings = new[]
+                {
+                    new AiColumnMappingSuggestion
+                    {
+                        ExcelColumn = 1,
+                        ActualL1 = "实际ID",
+                        TargetHeaderId = "row_id",
+                        TargetApiFieldKey = "row_id",
+                        Confidence = 0.98,
+                    },
+                },
+            };
+
+            var preview = service.CreatePreview(request, response, headerRowCount: 1);
+
+            var item = Assert.Single(preview.Items);
+            Assert.Equal(AiColumnMappingPreviewStatuses.Rejected, item.Status);
+            Assert.Equal("Rejected ID column target.", item.Reason);
         }
 
         [Fact]
@@ -355,6 +484,38 @@ namespace OfficeAgent.Core.Tests
                         Status = AiColumnMappingPreviewStatuses.Accepted,
                     },
                 },
+            };
+
+            var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 1);
+
+            Assert.Equal(0, result.AppliedCount);
+            Assert.Equal("负责人", result.Rows[0].Values["current_single"]);
+            Assert.Equal("负责人", result.Rows[0].Values["current_parent"]);
+            Assert.Equal(string.Empty, result.Rows[0].Values["current_child"]);
+        }
+
+        [Fact]
+        public void ApplyConfirmedPreviewSkipsAcceptedItemsUncheckedByUser()
+        {
+            var service = new AiColumnMappingService();
+            var definition = CreateDefinition();
+            var rows = new[] { CreateOwnerRow() };
+            var item = new AiColumnMappingPreviewItem
+            {
+                ExcelColumn = 2,
+                SuggestedExcelL1 = "项目负责人",
+                TargetHeaderId = "owner_name",
+                TargetApiFieldKey = "owner_name",
+                HeaderType = "single",
+                Confidence = 0.92,
+                Status = AiColumnMappingPreviewStatuses.Accepted,
+            };
+            var shouldApplyProperty = typeof(AiColumnMappingPreviewItem).GetProperty("ShouldApply");
+            Assert.NotNull(shouldApplyProperty);
+            shouldApplyProperty.SetValue(item, false);
+            var preview = new AiColumnMappingPreview
+            {
+                Items = new[] { item },
             };
 
             var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 1);
@@ -1065,6 +1226,47 @@ namespace OfficeAgent.Core.Tests
                     ["current_child"] = string.Empty,
                     ["api_field_key"] = "owner_name",
                     ["is_id_column"] = "false",
+                    ["activity_id"] = string.Empty,
+                    ["property_id"] = string.Empty,
+                },
+            };
+        }
+
+        private static SheetFieldMappingRow CreateOwnerRowWithCurrentHeader(string currentHeader)
+        {
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in CreateOwnerRow().Values)
+            {
+                values[pair.Key] = pair.Value;
+            }
+
+            values["current_single"] = currentHeader;
+            values["current_parent"] = currentHeader;
+
+            return new SheetFieldMappingRow
+            {
+                SheetName = "Sheet1",
+                Values = values,
+            };
+        }
+
+        private static SheetFieldMappingRow CreateIdRow()
+        {
+            return new SheetFieldMappingRow
+            {
+                SheetName = "Sheet1",
+                Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["header_id"] = "row_id",
+                    ["header_type"] = "single",
+                    ["default_l1"] = "ID",
+                    ["default_parent"] = "ID",
+                    ["default_l2"] = string.Empty,
+                    ["current_single"] = "ID",
+                    ["current_parent"] = "ID",
+                    ["current_child"] = string.Empty,
+                    ["api_field_key"] = "row_id",
+                    ["is_id_column"] = "true",
                     ["activity_id"] = string.Empty,
                     ["property_id"] = string.Empty,
                 },

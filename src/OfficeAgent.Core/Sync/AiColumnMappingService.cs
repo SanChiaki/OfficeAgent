@@ -9,7 +9,7 @@ namespace OfficeAgent.Core.Sync
     public sealed class AiColumnMappingService
     {
         private const double ConfidenceThreshold = 0.75;
-        private const int CandidatePreselectionThreshold = 120;
+        private const int CandidatePreselectionThreshold = 30;
         private const int CandidateLimitPerActualHeader = 30;
 
         private readonly FieldMappingValueAccessor accessor = new FieldMappingValueAccessor();
@@ -25,12 +25,13 @@ namespace OfficeAgent.Core.Sync
                 throw new ArgumentNullException(nameof(definition));
             }
 
-            var actualHeaderList = (actualHeaders ?? Array.Empty<AiColumnMappingActualHeader>())
-                .Where(header => header != null)
-                .ToArray();
-            var candidates = (rows ?? Array.Empty<SheetFieldMappingRow>())
+            var allCandidates = (rows ?? Array.Empty<SheetFieldMappingRow>())
                 .Where(row => IsTargetSheet(row, sheetName))
                 .Select(row => CreateCandidate(definition, row))
+                .ToArray();
+            var actualHeaderList = FilterHeadersNeedingAiMapping(actualHeaders, allCandidates);
+            var candidates = allCandidates
+                .Where(candidate => !candidate.IsIdColumn)
                 .ToArray();
 
             return new AiColumnMappingRequest
@@ -96,7 +97,10 @@ namespace OfficeAgent.Core.Sync
             {
                 suggestion.Item.Status = ResolveStatus(suggestion.Item, suggestion.Candidate, suggestion.HasActualHeader, headerRowCount, duplicateTargets, duplicateColumns);
                 suggestion.Item.Reason = ResolveReason(suggestion.Item.Status, suggestion.Item, suggestion.Candidate, suggestion.HasActualHeader, headerRowCount, duplicateTargets, duplicateColumns);
-                items.Add(suggestion.Item);
+                if (!IsNoOpAcceptedSuggestion(suggestion.Item, suggestion.Candidate))
+                {
+                    items.Add(suggestion.Item);
+                }
             }
 
             foreach (var unmatched in response?.Unmatched ?? Array.Empty<AiColumnMappingUnmatchedHeader>())
@@ -140,7 +144,9 @@ namespace OfficeAgent.Core.Sync
             }
 
             var acceptedPreviewItems = (preview?.Items ?? Array.Empty<AiColumnMappingPreviewItem>())
-                .Where(item => item != null && string.Equals(item.Status, AiColumnMappingPreviewStatuses.Accepted, StringComparison.Ordinal))
+                .Where(item => item != null &&
+                               item.ShouldApply &&
+                               string.Equals(item.Status, AiColumnMappingPreviewStatuses.Accepted, StringComparison.Ordinal))
                 .ToArray();
             var duplicateColumns = new HashSet<int>(
                 acceptedPreviewItems
@@ -217,6 +223,27 @@ namespace OfficeAgent.Core.Sync
                 ActivityId = accessor.GetValue(definition, row, FieldMappingSemanticRole.ActivityIdentity),
                 PropertyId = accessor.GetValue(definition, row, FieldMappingSemanticRole.PropertyIdentity),
             };
+        }
+
+        private static AiColumnMappingActualHeader[] FilterHeadersNeedingAiMapping(
+            IReadOnlyList<AiColumnMappingActualHeader> actualHeaders,
+            IReadOnlyList<AiColumnMappingCandidate> candidates)
+        {
+            var candidateList = (candidates ?? Array.Empty<AiColumnMappingCandidate>())
+                .Where(candidate => candidate != null)
+                .ToArray();
+            return (actualHeaders ?? Array.Empty<AiColumnMappingActualHeader>())
+                .Where(header => header != null)
+                .Where(header => !HasExactCurrentHeaderMatch(header, candidateList))
+                .ToArray();
+        }
+
+        private static bool HasExactCurrentHeaderMatch(
+            AiColumnMappingActualHeader actual,
+            IReadOnlyList<AiColumnMappingCandidate> candidates)
+        {
+            return (candidates ?? Array.Empty<AiColumnMappingCandidate>())
+                .Any(candidate => HeaderPairEquals(actual.ActualL1, actual.ActualL2, candidate.CurrentExcelL1, candidate.CurrentExcelL2));
         }
 
         private static AiColumnMappingCandidate[] PreselectCandidates(
@@ -585,6 +612,11 @@ namespace OfficeAgent.Core.Sync
                 return AiColumnMappingPreviewStatuses.Rejected;
             }
 
+            if (candidate.IsIdColumn)
+            {
+                return AiColumnMappingPreviewStatuses.Rejected;
+            }
+
             if (duplicateColumns.Contains(item.ExcelColumn))
             {
                 return AiColumnMappingPreviewStatuses.Rejected;
@@ -624,6 +656,11 @@ namespace OfficeAgent.Core.Sync
                 return "Rejected duplicate target field.";
             }
 
+            if (candidate.IsIdColumn)
+            {
+                return "Rejected ID column target.";
+            }
+
             if (duplicateColumns.Contains(item.ExcelColumn))
             {
                 return "Rejected duplicate Excel column.";
@@ -639,6 +676,20 @@ namespace OfficeAgent.Core.Sync
                 && !string.IsNullOrWhiteSpace(item.TargetHeaderId)
                 && !string.IsNullOrWhiteSpace(item.TargetApiFieldKey)
                 && item.Confidence >= ConfidenceThreshold;
+        }
+
+        private static bool IsNoOpAcceptedSuggestion(AiColumnMappingPreviewItem item, AiColumnMappingCandidate candidate)
+        {
+            return item != null
+                && candidate != null
+                && string.Equals(item.Status, AiColumnMappingPreviewStatuses.Accepted, StringComparison.Ordinal)
+                && HeaderPairEquals(item.SuggestedExcelL1, item.SuggestedExcelL2, candidate.CurrentExcelL1, candidate.CurrentExcelL2);
+        }
+
+        private static bool HeaderPairEquals(string leftL1, string leftL2, string rightL1, string rightL2)
+        {
+            return string.Equals(NormalizeHeaderText(leftL1), NormalizeHeaderText(rightL1), StringComparison.Ordinal)
+                && string.Equals(NormalizeHeaderText(leftL2), NormalizeHeaderText(rightL2), StringComparison.Ordinal);
         }
 
         private static HashSet<string> CreateDuplicateTargetIdentities(IEnumerable<AiColumnMappingCandidate> candidates)

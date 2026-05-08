@@ -152,6 +152,11 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             var request = aiColumnMappingService.BuildRequest(sheetName, context.Definition, context.Mappings, actualHeaders);
+            if (request.ActualHeaders == null || request.ActualHeaders.Length == 0)
+            {
+                return new AiColumnMappingPreview();
+            }
+
             var response = aiColumnMappingClient.Map(request);
             return aiColumnMappingService.CreatePreview(request, response, context.Binding.HeaderRowCount);
         }

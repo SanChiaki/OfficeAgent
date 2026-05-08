@@ -57,8 +57,16 @@ namespace OfficeAgent.ExcelAddIn.Localization
         public string AiColumnMappingPreviewDialogTitle => Locale == "zh" ? "确认 AI 映射列" : "Confirm AI column mapping";
 
         public string AiColumnMappingPreviewInstructionText => Locale == "zh"
-            ? "请确认 AI 推荐的列映射。确认后仅会更新 xISDP_Setting.SheetFieldMappings 中的 Excel L1 / Excel L2。"
-            : "Review the AI column mapping suggestions. Confirming updates only Excel L1 / Excel L2 in xISDP_Setting.SheetFieldMappings.";
+            ? "请选择需要写入的 AI 推荐列映射。确认后仅会更新 xISDP_Setting.SheetFieldMappings 中的 Excel L1 / Excel L2。"
+            : "Select the AI column mappings to write. Confirming updates only Excel L1 / Excel L2 in xISDP_Setting.SheetFieldMappings.";
+
+        public string AiColumnMappingApplyColumnHeader => Locale == "zh" ? "是否修改" : "Apply";
+
+        public string AiColumnMappingExcelColumnHeader => Locale == "zh" ? "列号" : "Column";
+
+        public string AiColumnMappingActualHeaderColumnHeader => Locale == "zh" ? "当前表头（L1/L2）" : "Current header (L1/L2)";
+
+        public string AiColumnMappingMatchedHeaderColumnHeader => Locale == "zh" ? "匹配表头（L1/L2）" : "Matched header (L1/L2)";
 
         public string AiColumnMappingNoAcceptedMappingsMessage => Locale == "zh"
             ? "AI 映射列没有可应用的推荐。"

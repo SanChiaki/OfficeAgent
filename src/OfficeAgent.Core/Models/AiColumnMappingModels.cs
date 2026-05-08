@@ -240,6 +240,8 @@ namespace OfficeAgent.Core.Models
 
         public string Status { get; set; } = AiColumnMappingPreviewStatuses.Unmatched;
 
+        public bool ShouldApply { get; set; } = true;
+
         public string Reason { get; set; } = string.Empty;
     }
 

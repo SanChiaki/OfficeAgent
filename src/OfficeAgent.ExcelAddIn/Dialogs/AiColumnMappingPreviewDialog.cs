@@ -10,10 +10,17 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
     internal sealed class AiColumnMappingPreviewDialog : Form
     {
         private readonly HostLocalizedStrings strings;
+        private readonly AiColumnMappingPreview preview;
+        private readonly DataGridView grid;
+        private readonly AiColumnMappingPreviewItem[] displayedItems;
 
         private AiColumnMappingPreviewDialog(AiColumnMappingPreview preview, HostLocalizedStrings strings)
         {
             this.strings = strings ?? HostLocalizedStrings.ForLocale("en");
+            this.preview = preview ?? new AiColumnMappingPreview();
+            displayedItems = (this.preview.Items ?? Array.Empty<AiColumnMappingPreviewItem>())
+                .Where(IsActionableItem)
+                .ToArray();
 
             Text = this.strings.AiColumnMappingPreviewDialogTitle;
             StartPosition = FormStartPosition.CenterParent;
@@ -21,8 +28,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             FormBorderStyle = FormBorderStyle.Sizable;
             MinimizeBox = false;
             ShowInTaskbar = false;
-            MinimumSize = new Size(860, 420);
-            ClientSize = new Size(960, 520);
+            MinimumSize = new Size(720, 360);
+            ClientSize = new Size(820, 460);
             Padding = new Padding(16);
 
             var instructionLabel = new Label
@@ -33,7 +40,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Text = this.strings.AiColumnMappingPreviewInstructionText,
             };
 
-            var grid = CreateGrid(preview);
+            grid = CreateGrid();
 
             var okButton = new Button
             {
@@ -43,6 +50,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Padding = new Padding(12, 4, 12, 4),
                 Margin = new Padding(8, 0, 0, 0),
             };
+            okButton.Click += (sender, args) => ApplySelectionToPreview();
             var cancelButton = new Button
             {
                 Text = this.strings.CancelButtonText,
@@ -78,7 +86,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             }
         }
 
-        private static DataGridView CreateGrid(AiColumnMappingPreview preview)
+        private DataGridView CreateGrid()
         {
             var grid = new DataGridView
             {
@@ -92,34 +100,23 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Dock = DockStyle.Fill,
                 Margin = new Padding(0, 12, 0, 0),
                 MultiSelect = false,
-                ReadOnly = true,
+                ReadOnly = false,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             };
 
-            AddTextColumn(grid, "ExcelColumn", "Excel column", 70, DataGridViewContentAlignment.MiddleRight);
-            AddTextColumn(grid, "ActualHeader", "Actual header", 150, DataGridViewContentAlignment.MiddleLeft);
-            AddTextColumn(grid, "IsdpHeader", "ISDP header", 150, DataGridViewContentAlignment.MiddleLeft);
-            AddTextColumn(grid, "SuggestedHeader", "Suggested Excel header", 170, DataGridViewContentAlignment.MiddleLeft);
-            AddTextColumn(grid, "Confidence", "Confidence", 80, DataGridViewContentAlignment.MiddleRight);
-            AddTextColumn(grid, "Status", "Status", 90, DataGridViewContentAlignment.MiddleLeft);
-            AddTextColumn(grid, "Reason", "Reason", 190, DataGridViewContentAlignment.MiddleLeft);
+            AddApplyColumn(grid);
+            AddTextColumn(grid, "ExcelColumn", strings.AiColumnMappingExcelColumnHeader, 70, DataGridViewContentAlignment.MiddleLeft);
+            AddTextColumn(grid, "ActualHeader", strings.AiColumnMappingActualHeaderColumnHeader, 220, DataGridViewContentAlignment.MiddleLeft);
+            AddTextColumn(grid, "IsdpHeader", strings.AiColumnMappingMatchedHeaderColumnHeader, 220, DataGridViewContentAlignment.MiddleLeft);
 
-            foreach (var item in preview?.Items ?? Array.Empty<AiColumnMappingPreviewItem>())
+            foreach (var item in displayedItems)
             {
-                if (item == null)
-                {
-                    continue;
-                }
-
                 grid.Rows.Add(
-                    item.ExcelColumn.ToString(),
+                    item.ShouldApply,
+                    FormatExcelColumnName(item.ExcelColumn),
                     FormatHeader(item.SuggestedExcelL1, item.SuggestedExcelL2),
-                    FormatHeader(item.TargetIsdpL1, item.TargetIsdpL2),
-                    FormatHeader(item.SuggestedExcelL1, item.SuggestedExcelL2),
-                    item.Confidence <= 0 ? string.Empty : item.Confidence.ToString("0.00"),
-                    item.Status ?? string.Empty,
-                    item.Reason ?? string.Empty);
+                    FormatHeader(item.TargetIsdpL1, item.TargetIsdpL2));
             }
 
             if (grid.Rows.Count > 0)
@@ -128,6 +125,35 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             }
 
             return grid;
+        }
+
+        private void ApplySelectionToPreview()
+        {
+            grid.EndEdit();
+
+            for (var index = 0; index < displayedItems.Length && index < grid.Rows.Count; index++)
+            {
+                var value = grid.Rows[index].Cells["ShouldApply"].Value;
+                displayedItems[index].ShouldApply = value is bool shouldApply && shouldApply;
+            }
+        }
+
+        private static bool IsActionableItem(AiColumnMappingPreviewItem item)
+        {
+            return item != null &&
+                   string.Equals(item.Status, AiColumnMappingPreviewStatuses.Accepted, StringComparison.Ordinal);
+        }
+
+        private void AddApplyColumn(DataGridView grid)
+        {
+            grid.Columns.Add(new DataGridViewCheckBoxColumn
+            {
+                Name = "ShouldApply",
+                HeaderText = strings.AiColumnMappingApplyColumnHeader,
+                MinimumWidth = 80,
+                FillWeight = 70,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+            });
         }
 
         private static void AddTextColumn(
@@ -142,10 +168,30 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Name = name,
                 HeaderText = headerText,
                 MinimumWidth = minimumWidth,
+                ReadOnly = true,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
             };
             column.DefaultCellStyle.Alignment = alignment;
             grid.Columns.Add(column);
+        }
+
+        private static string FormatExcelColumnName(int columnNumber)
+        {
+            if (columnNumber <= 0)
+            {
+                return string.Empty;
+            }
+
+            var value = columnNumber;
+            var result = string.Empty;
+            while (value > 0)
+            {
+                value--;
+                result = (char)('A' + (value % 26)) + result;
+                value /= 26;
+            }
+
+            return result;
         }
 
         private static string FormatHeader(string l1, string l2)

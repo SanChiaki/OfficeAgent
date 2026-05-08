@@ -634,6 +634,101 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Empty(dialogService.InfoMessages);
         }
 
+        [Fact]
+        public void ExecuteAiColumnMappingDoesNotShowPreviewWhenNoAcceptedMappingsExist()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService { AiColumnMappingConfirmResult = true };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Unmatched = new[]
+                    {
+                        new AiColumnMappingUnmatchedHeader
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            Reason = "No clear match",
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Empty(dialogService.AiColumnMappingPreviews);
+            Assert.Empty(metadataStore.LastSavedFieldMappings);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("no accepted mappings", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
+        public void ExecuteAiColumnMappingSkipsMappingsUncheckedInPreview()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AiColumnMappingConfirmResult = true,
+                OnConfirmAiColumnMapping = preview =>
+                {
+                    preview.Items.Single().ShouldApply = false;
+                },
+            };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Single(dialogService.AiColumnMappingPreviews);
+            Assert.Equal("负责人", metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["CurrentL1"]);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("no accepted mappings", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
@@ -1232,6 +1327,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public bool AiColumnMappingConfirmResult { get; set; }
 
+            public Action<AiColumnMappingPreview> OnConfirmAiColumnMapping { get; set; }
+
             public override IMessage Invoke(IMessage msg)
             {
                 var call = (IMethodCallMessage)msg;
@@ -1241,7 +1338,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "ConfirmUpload":
                         return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
                     case "ConfirmAiColumnMapping":
-                        AiColumnMappingPreviews.Add((AiColumnMappingPreview)call.InArgs[0]);
+                        var preview = (AiColumnMappingPreview)call.InArgs[0];
+                        AiColumnMappingPreviews.Add(preview);
+                        OnConfirmAiColumnMapping?.Invoke(preview);
                         return new ReturnMessage(AiColumnMappingConfirmResult, null, 0, call.LogicalCallContext, call);
                     case "ShowProjectLayoutDialog":
                         ProjectLayoutPrompts.Add(CloneBinding((SheetBinding)call.InArgs[0]));

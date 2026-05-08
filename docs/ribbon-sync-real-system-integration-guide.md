@@ -238,14 +238,17 @@ Ribbon 点击链路：
 
 - 真实连接器必须给 `SheetFieldMappings` 列定义提供清晰的语义角色，包括默认表头、当前 Excel 表头、HeaderId、ApiFieldKey、ID 标记，以及活动字段的 ActivityId / PropertyId。
 - AI 映射请求会使用这些语义角色构造候选字段，不依赖固定列顺序。
-- 当当前 sheet 的候选字段较多时，AI 映射会先按实际表头和候选表头的本地文本相似度做候选召回，只把相关候选拼进 prompt；该本地排序不决定最终映射。
+- AI 映射请求会先在本地过滤已经与 `SheetFieldMappings.Excel L1 / Excel L2` 完全一致的实际表头，并排除 ID 列候选；如果过滤后没有待映射表头，则不会调用模型。
+- 当当前 sheet 的候选字段超过 30 时，AI 映射会先按实际表头和候选表头的本地文本相似度做候选召回，只把相关候选拼进 prompt；该本地排序不决定最终映射。
 - AI 映射客户端复用插件设置里的 `Base URL`、`API Key`、`Model` 和 `API Format`，所以不需要为真实系统新增单独的模型配置；只要现有 LLM 设置可用即可。
 - `API Format` 支持 `OpenAI Compatible` 和 `Anthropic Messages`。OpenAI-compatible 使用 `/v1/chat/completions` 或保留路径前缀后的 `/chat/completions`，并发送 `Authorization: Bearer <API Key>`；Anthropic Messages 使用 `/v1/messages` 或保留路径前缀后的 `/messages`，并发送 `x-api-key` 与 `anthropic-version: 2023-06-01`。
 - AI 映射客户端优先使用 `stream: true` 读取模型输出；OpenAI-compatible 读取 `choices[].delta.content`，Anthropic Messages 读取 `content_block_delta` / `text_delta` 并在 `message_stop` 时结束。服务不支持流式请求时会回退到对应格式的非流式调用。当前预览仍等完整 JSON 返回后再显示。
 - 表头扫描按 `SheetBindings.HeaderStartRow + HeaderRowCount` 扫描完整表头区域，不依赖当前选区。
 - 用户必须先确认预览；取消预览不会写入 `xISDP_Setting`。
+- 预览只展示可应用的 accepted 建议；确认表格包含“是否修改”、Excel 字母列号、当前实际表头 `L1/L2`、匹配到的 ISDP 表头 `L1/L2`。已经等同于当前 `Excel L1 / Excel L2` 的 accepted no-op 建议不会显示。
+- “是否修改”默认全部选中；用户取消勾选的建议不会写入 `xISDP_Setting`。
 - 确认后只更新 `Excel L1 / Excel L2`，不会覆盖 `ISDP L1 / ISDP L2`、HeaderId、ApiFieldKey、ID 列标记或活动字段标识。
-- 低置信度、未匹配、重复目标、重复 Excel 列和 ID 列建议会被跳过。
+- 低置信度、未匹配、重复目标、重复 Excel 列和 ID 列建议不会进入可应用确认列表，也不会应用。
 - `Excel L1 / Excel L2` 是可自由分配的当前显示名；AI 映射确认写回时不会因为候选行是 `activityProperty`、`single` 或其他类型而限制 L1 / L2 组合，也不会因为当前 `HeaderRowCount` 限制模型推荐的 L2。
 
 这意味着真实系统不应把 AI 映射当成字段定义来源。字段定义仍然来自连接器和业务接口；AI 只帮助把用户 Excel 中的实际显示名填回当前显示文本列。

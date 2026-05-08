@@ -1267,13 +1267,47 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var preview = (AiColumnMappingPreview)InvokePrepare(service, "PrepareAiColumnMappingPreview", "Sheet1");
 
             Assert.Equal("Sheet1", aiClient.LastRequest.SheetName);
-            Assert.Equal(4, aiClient.LastRequest.ActualHeaders.Length);
-            Assert.Contains(aiClient.LastRequest.ActualHeaders, header => header.ExcelColumn == 4 && header.ActualL1 == "测试活动111" && header.ActualL2 == "结束时间");
+            var actualHeader = Assert.Single(aiClient.LastRequest.ActualHeaders);
+            Assert.Equal(2, actualHeader.ExcelColumn);
+            Assert.Equal("基础信息", actualHeader.ActualL1);
+            Assert.Equal("负责人", actualHeader.ActualL2);
+            Assert.DoesNotContain(aiClient.LastRequest.ActualHeaders, header => header.ExcelColumn == 4);
             Assert.DoesNotContain(aiClient.LastRequest.Candidates, candidate => string.Equals(candidate.HeaderId, "other_sheet_owner", StringComparison.Ordinal));
             var item = Assert.Single(preview.Items);
             Assert.Equal(AiColumnMappingPreviewStatuses.Accepted, item.Status);
             Assert.Equal("基础信息", item.ActualL1);
             Assert.Equal("负责人", item.ActualL2);
+        }
+
+        [Fact]
+        public void PrepareAiColumnMappingPreviewDoesNotCallClientForAlreadyMatchedHeaders()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            var aiClient = new FakeAiColumnMappingClient();
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader(), aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+            grid.SetCell("Sheet1", 3, 3, "测试活动111");
+            grid.SetCell("Sheet1", 4, 3, "开始时间");
+            grid.SetCell("Sheet1", 4, 4, "结束时间");
+
+            var preview = (AiColumnMappingPreview)InvokePrepare(service, "PrepareAiColumnMappingPreview", "Sheet1");
+
+            Assert.Null(aiClient.LastRequest);
+            Assert.Empty(preview.Items);
         }
 
         [Fact]
