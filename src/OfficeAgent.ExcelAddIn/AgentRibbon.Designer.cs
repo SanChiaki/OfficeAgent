@@ -32,6 +32,7 @@ namespace OfficeAgent.ExcelAddIn
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
             this.projectDropDown = Factory.CreateRibbonDropDown();
             this.initializeSheetButton = Factory.CreateRibbonButton();
+            this.aiMapColumnsButton = Factory.CreateRibbonButton();
             this.applyTemplateButton = Factory.CreateRibbonButton();
             this.saveTemplateButton = Factory.CreateRibbonButton();
             this.saveAsTemplateButton = Factory.CreateRibbonButton();
@@ -82,6 +83,7 @@ namespace OfficeAgent.ExcelAddIn
             // 
             this.groupProject.Items.Add(this.projectDropDown);
             this.groupProject.Items.Add(this.initializeSheetButton);
+            this.groupProject.Items.Add(this.aiMapColumnsButton);
             this.groupProject.Label = "Project";
             this.groupProject.Name = "groupProject";
             // 
@@ -103,6 +105,15 @@ namespace OfficeAgent.ExcelAddIn
             this.initializeSheetButton.ShowImage = true;
             this.initializeSheetButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.initializeSheetButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.InitializeSheetButton_Click);
+            //
+            // aiMapColumnsButton
+            //
+            this.aiMapColumnsButton.Label = "AI map columns";
+            this.aiMapColumnsButton.Name = "aiMapColumnsButton";
+            this.aiMapColumnsButton.OfficeImageId = "TableAutoFormat";
+            this.aiMapColumnsButton.ShowImage = true;
+            this.aiMapColumnsButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
+            this.aiMapColumnsButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.AiMapColumnsButton_Click);
             // 
             // groupTemplate
             // 
@@ -252,6 +263,7 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonDropDown projectDropDown;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton initializeSheetButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton aiMapColumnsButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton applyTemplateButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton saveTemplateButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton saveAsTemplateButton;

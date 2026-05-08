@@ -118,7 +118,8 @@ namespace OfficeAgent.ExcelAddIn
                 worksheetGridAdapter,
                 new SyncOperationPreviewFactory(),
                 WorksheetChangeLogStore,
-                WorksheetPendingEditTracker);
+                WorksheetPendingEditTracker,
+                new AiColumnMappingClient(SettingsStore));
             RibbonSyncController = new RibbonSyncController(
                 WorksheetMetadataStore,
                 WorksheetSyncService,

@@ -187,6 +187,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void AiMapColumnsButtonIsPlacedUnderInitializeSheetInProjectGroup()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+
+            var initializeIndex = designerText.IndexOf("this.groupProject.Items.Add(this.initializeSheetButton);", StringComparison.Ordinal);
+            var aiMapIndex = designerText.IndexOf("this.groupProject.Items.Add(this.aiMapColumnsButton);", StringComparison.Ordinal);
+
+            Assert.True(initializeIndex >= 0);
+            Assert.True(aiMapIndex > initializeIndex);
+            Assert.Contains("this.aiMapColumnsButton.Label = \"AI map columns\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aiMapColumnsButton.OfficeImageId = \"TableAutoFormat\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aiMapColumnsButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.aiMapColumnsButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+        }
+
         [Theory]
         [InlineData("下载", "下载\r")]
         [InlineData("上传", "上传\r")]

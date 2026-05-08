@@ -573,6 +573,11 @@ namespace OfficeAgent.ExcelAddIn
             Globals.ThisAddIn.RibbonSyncController?.ExecuteInitializeCurrentSheet();
         }
 
+        private void AiMapColumnsButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn.RibbonSyncController?.ExecuteAiColumnMapping();
+        }
+
         private void ApplyTemplateButton_Click(object sender, RibbonControlEventArgs e)
         {
             Globals.ThisAddIn.RibbonTemplateController?.ExecuteApplyTemplate();
@@ -676,6 +681,7 @@ namespace OfficeAgent.ExcelAddIn
             toggleTaskPaneButton.Label = FormatRibbonButtonLabel(strings.RibbonAgentButtonLabel);
             groupProject.Label = strings.RibbonProjectGroupLabel;
             initializeSheetButton.Label = FormatRibbonButtonLabel(strings.RibbonInitializeSheetButtonLabel);
+            aiMapColumnsButton.Label = FormatRibbonButtonLabel(strings.RibbonAiMapColumnsButtonLabel);
             groupTemplate.Label = strings.RibbonTemplateGroupLabel;
             applyTemplateButton.Label = FormatRibbonButtonLabel(strings.RibbonApplyTemplateButtonLabel);
             saveTemplateButton.Label = FormatRibbonButtonLabel(strings.RibbonSaveTemplateButtonLabel);

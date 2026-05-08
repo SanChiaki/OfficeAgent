@@ -87,6 +87,14 @@ namespace OfficeAgent.Core.Sync
             return metadataStore.LoadFieldMappings(sheetName, definition);
         }
 
+        public void SaveFieldMappings(
+            string sheetName,
+            FieldMappingTableDefinition definition,
+            IReadOnlyList<SheetFieldMappingRow> rows)
+        {
+            metadataStore.SaveFieldMappings(sheetName, definition, rows);
+        }
+
         public IReadOnlyList<IDictionary<string, object>> Download(
             string systemKey,
             string projectId,

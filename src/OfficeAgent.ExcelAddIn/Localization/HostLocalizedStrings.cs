@@ -40,6 +40,8 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonInitializeSheetButtonLabel => Locale == "zh" ? "初始化当前表" : "Initialize sheet";
 
+        public string RibbonAiMapColumnsButtonLabel => Locale == "zh" ? "AI映射列" : "AI map columns";
+
         public string RibbonTemplateGroupLabel => Locale == "zh" ? "配置" : "Setting";
 
         public string RibbonApplyTemplateButtonLabel => Locale == "zh" ? "应用配置" : "Apply Setting";
@@ -51,6 +53,23 @@ namespace OfficeAgent.ExcelAddIn.Localization
         public string InitializeCurrentSheetCompletedMessage => Locale == "zh"
             ? "初始化当前表完成。"
             : "Initialize sheet completed.";
+
+        public string AiColumnMappingPreviewDialogTitle => Locale == "zh" ? "确认 AI 映射列" : "Confirm AI column mapping";
+
+        public string AiColumnMappingPreviewInstructionText => Locale == "zh"
+            ? "请确认 AI 推荐的列映射。确认后仅会更新 xISDP_Setting.SheetFieldMappings 中的 Excel L1 / Excel L2。"
+            : "Review the AI column mapping suggestions. Confirming updates only Excel L1 / Excel L2 in xISDP_Setting.SheetFieldMappings.";
+
+        public string AiColumnMappingNoAcceptedMappingsMessage => Locale == "zh"
+            ? "AI 映射列没有可应用的推荐。"
+            : "AI column mapping found no accepted mappings.";
+
+        public string AiColumnMappingCompletedMessage(int appliedCount, int skippedCount)
+        {
+            return Locale == "zh"
+                ? $"AI 映射列完成。\r\n已应用：{appliedCount}\r\n已跳过：{skippedCount}"
+                : $"AI column mapping completed.\r\nApplied: {appliedCount}\r\nSkipped: {skippedCount}";
+        }
 
         public string RibbonDataSyncGroupLabel => Locale == "zh" ? "数据同步" : "Data sync";
 

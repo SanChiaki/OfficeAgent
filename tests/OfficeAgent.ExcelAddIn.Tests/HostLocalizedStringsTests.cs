@@ -66,6 +66,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "AI映射列")]
+        [InlineData("en", "AI map columns")]
+        public void ForLocaleReturnsAiColumnMappingRibbonLabel(string locale, string expectedLabel)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedLabel, GetString(strings, "RibbonAiMapColumnsButtonLabel"));
+        }
+
+        [Theory]
         [InlineData("zh", "配置", "应用配置", "保存配置", "另存配置")]
         [InlineData("en", "Setting", "Apply Setting", "Save Setting", "Save as Setting")]
         public void ForLocaleReturnsExpectedConfigurationRibbonLabels(

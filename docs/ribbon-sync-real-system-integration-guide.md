@@ -16,6 +16,7 @@
 - `SheetBindings` 记录项目绑定和表格行位置信息
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
+- `AI映射列` / `AI map columns` 可以扫描当前 sheet 的完整配置表头区域，把实际 Excel 表头推荐映射到 `SheetFieldMappings.Excel L1 / Excel L2`
 - 本机模板资产保存在 `%LocalAppData%\OfficeAgent\templates\...`，不直接替代运行时 metadata
 - 当前 Ribbon 入口只做部分下载、部分上传
 - `全量下载` 和 `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
@@ -229,7 +230,23 @@ Ribbon 点击链路：
 4. 从平铺字段里识别活动属性列
 5. 生成 `SheetFieldMappings`
 
-### 4.5 查询接口
+### 4.5 AI 自动映射列
+
+真实系统接入后，如果用户已有的 Excel 表头和初始化种子里的 `ISDP L1 / ISDP L2` 不完全一致，可以使用 Ribbon 项目组里的 `AI映射列` / `AI map columns` 辅助维护 `SheetFieldMappings.Excel L1 / Excel L2`。
+
+接入约束：
+
+- 真实连接器必须给 `SheetFieldMappings` 列定义提供清晰的语义角色，包括默认表头、当前 Excel 表头、HeaderId、ApiFieldKey、ID 标记，以及活动字段的 ActivityId / PropertyId。
+- AI 映射请求会使用这些语义角色构造候选字段，不依赖固定列顺序。
+- 当前实现复用插件设置里的 `Base URL`、`API Key` 和 `Model`，所以不需要为真实系统新增单独的模型配置；只要现有 LLM 设置可用即可。
+- 表头扫描按 `SheetBindings.HeaderStartRow + HeaderRowCount` 扫描完整表头区域，不依赖当前选区。
+- 用户必须先确认预览；取消预览不会写入 `xISDP_Setting`。
+- 确认后只更新 `Excel L1 / Excel L2`，不会覆盖 `ISDP L1 / ISDP L2`、HeaderId、ApiFieldKey、ID 列标记或活动字段标识。
+- 低置信度、未匹配、重复目标、重复 Excel 列、ID 列和不符合当前表头层级的建议会被跳过。
+
+这意味着真实系统不应把 AI 映射当成字段定义来源。字段定义仍然来自连接器和业务接口；AI 只帮助把用户 Excel 中的实际显示名填回当前显示文本列。
+
+### 4.6 查询接口
 
 插件对 `Find` 的要求是：
 
@@ -250,13 +267,13 @@ Ribbon 点击链路：
 ]
 ```
 
-### 4.6 更新接口
+### 4.7 更新接口
 
 当前上传不是按整行提交，而是按单元格提交 `CellChange`。
 
 也就是说，真实系统如果只有“整行更新”接口，需要在连接器内部把这些单元格改动聚合成目标系统所需 payload，不要把这个复杂度上推到 Excel 层。
 
-### 4.7 上传过滤
+### 4.8 上传过滤
 
 如果真实业务系统需要按业务规则跳过部分单元格，不要只在 `BatchSave()` 里静默过滤。当前推荐做法是让真实连接器额外实现 `IUploadChangeFilter`：
 
@@ -388,7 +405,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 - 上传成功后的完成提示会显示实际上传数量；如果存在跳过项，会额外显示跳过数量
 - 上传日志只记录实际提交且 `BatchSave()` 成功的单元格，不记录被过滤跳过的单元格
 
-### 4.8 认证失败异常约定
+### 4.9 认证失败异常约定
 
 当前 Ribbon Sync 的登录引导是“异常类型驱动”的，而不是“HTTP 状态码驱动”的。
 
@@ -462,9 +479,9 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 
 - `single + Excel L2` 只表示这个字段在运行时要按 grouped single 的双层文本参与识别
 - 它不是一个“空表头时默认生成 grouped single 布局”的信号
-- 如果用户只改了 Excel 可见表头，没有同步改 `SheetFieldMappings.Excel L1 / Excel L2`，插件不会自动识别这是同一列，也不会自动回写 metadata
+- 如果用户只改了 Excel 可见表头，没有同步改 `SheetFieldMappings.Excel L1 / Excel L2`，上传 / 下载不会自动识别这是同一列。用户可以手工维护这些列，也可以使用 `AI映射列` 在确认预览后批量写回。
 
-所以如果用户改了 Excel 列名，就要同步维护 `SheetFieldMappings`；插件不会自动探测和回写这种改动。
+所以如果用户改了 Excel 列名，就要同步维护 `SheetFieldMappings`；插件不会在上传 / 下载中静默探测并回写这种改动。
 
 ### 7.2 布局行号由用户控制
 
@@ -621,6 +638,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 至少确认：
 
 - 选择项目后不会自动初始化；只有显式点击 `初始化当前表` 才会写入或刷新 `SheetFieldMappings`
+- 对已有实际表头的 sheet，点击 `AI映射列` / `AI map columns` 后应先看到预览确认；确认后只更新 `SheetFieldMappings.Excel L1 / Excel L2`，取消后不写 metadata
 - 未登录时项目下拉框显示本地化状态（`请先登录` / `Sign in first`），并弹出本地化未登录提示；点击登录按钮并登录成功后能够自动重载项目列表
 - 未登录时执行 `初始化当前表`、`部分下载`、`部分上传`，都会弹出本地化未登录提示
 - 项目接口返回空列表时，下拉框显示 `无可用项目`

@@ -217,6 +217,39 @@ namespace OfficeAgent.ExcelAddIn
             }
         }
 
+        public void ExecuteAiColumnMapping()
+        {
+            if (!EnsureProjectSelected())
+            {
+                return;
+            }
+
+            try
+            {
+                var strings = GetStrings();
+                var sheetName = GetRequiredSheetName();
+                var service = EnsureExecutionService();
+                var preview = service.PrepareAiColumnMappingPreview(sheetName);
+                if (!dialogService.ConfirmAiColumnMapping(preview))
+                {
+                    return;
+                }
+
+                var result = service.ApplyAiColumnMappingPreview(sheetName, preview);
+                dialogService.ShowInfo(result.AppliedCount == 0
+                    ? strings.AiColumnMappingNoAcceptedMappingsMessage
+                    : strings.AiColumnMappingCompletedMessage(result.AppliedCount, result.SkippedCount));
+            }
+            catch (AuthenticationRequiredException ex)
+            {
+                HandleAuthenticationRequired(ex);
+            }
+            catch (Exception ex)
+            {
+                dialogService.ShowError(ex.Message);
+            }
+        }
+
         private void ExecuteDownload(Func<WorksheetSyncExecutionService, WorksheetDownloadPlan> preparePlan)
         {
             if (!EnsureProjectSelected())

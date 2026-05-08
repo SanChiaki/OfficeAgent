@@ -17,6 +17,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
         bool ConfirmUpload(string operationName, string projectName, SyncOperationPreview preview);
 
+        bool ConfirmAiColumnMapping(AiColumnMappingPreview preview);
+
         SheetBinding ShowProjectLayoutDialog(SheetBinding suggestedBinding);
 
         void ShowInfo(string message);
@@ -43,6 +45,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         public bool ConfirmUpload(string operationName, string projectName, SyncOperationPreview preview)
         {
             return UploadConfirmDialog.Confirm(operationName, projectName, preview);
+        }
+
+        public bool ConfirmAiColumnMapping(AiColumnMappingPreview preview)
+        {
+            return AiColumnMappingPreviewDialog.Confirm(preview);
         }
 
         public SheetBinding ShowProjectLayoutDialog(SheetBinding suggestedBinding)

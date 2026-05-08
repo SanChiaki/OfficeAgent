@@ -1220,6 +1220,109 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(string.Empty, grid.GetCell("Sheet1", 6, 1));
         }
 
+        [Fact]
+        public void PrepareAiColumnMappingPreviewScansFullHeaderAreaAndCallsClient()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "基础信息",
+                            ActualL2 = "负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader(), aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "基础信息");
+            grid.SetCell("Sheet1", 4, 2, "负责人");
+            grid.SetCell("Sheet1", 3, 3, "测试活动111");
+            grid.SetCell("Sheet1", 4, 3, "开始时间");
+            grid.SetCell("Sheet1", 4, 4, "结束时间");
+
+            var preview = (AiColumnMappingPreview)InvokePrepare(service, "PrepareAiColumnMappingPreview", "Sheet1");
+
+            Assert.Equal("Sheet1", aiClient.LastRequest.SheetName);
+            Assert.Equal(4, aiClient.LastRequest.ActualHeaders.Length);
+            Assert.Contains(aiClient.LastRequest.ActualHeaders, header => header.ExcelColumn == 4 && header.ActualL1 == "测试活动111" && header.ActualL2 == "结束时间");
+            Assert.DoesNotContain(aiClient.LastRequest.Candidates, candidate => string.Equals(candidate.HeaderId, "other_sheet_owner", StringComparison.Ordinal));
+            var item = Assert.Single(preview.Items);
+            Assert.Equal(AiColumnMappingPreviewStatuses.Accepted, item.Status);
+            Assert.Equal("基础信息", item.ActualL1);
+            Assert.Equal("负责人", item.ActualL2);
+        }
+
+        [Fact]
+        public void ApplyAiColumnMappingPreviewSavesOnlyConfirmedMetadataRows()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1")
+                .Concat(new[] { CreateMappingRow("OtherSheet", "other_sheet_owner", "single", false, currentSingle: "其他负责人") })
+                .ToArray();
+            var preview = new AiColumnMappingPreview
+            {
+                Items = new[]
+                {
+                    new AiColumnMappingPreviewItem
+                    {
+                        ExcelColumn = 2,
+                        SuggestedExcelL1 = "基础信息",
+                        SuggestedExcelL2 = "负责人",
+                        TargetHeaderId = "owner_name",
+                        TargetApiFieldKey = "owner_name",
+                        Confidence = 0.91,
+                        Status = AiColumnMappingPreviewStatuses.Accepted,
+                    },
+                },
+            };
+
+            var (service, _) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader(), new FakeAiColumnMappingClient());
+            var result = InvokeApplyAiColumnMappingPreview(service, "Sheet1", preview);
+
+            Assert.Equal(1, result.AppliedCount);
+            Assert.Equal("基础信息", metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["CurrentL1"]);
+            Assert.Equal("负责人", metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["CurrentL2"]);
+            Assert.Equal("负责人", metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["DefaultL1"]);
+            Assert.Equal(string.Empty, metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["DefaultL2"]);
+            Assert.Equal("其他负责人", metadataStore.LastSavedFieldMappings.Single(row => row.SheetName == "OtherSheet").Values["CurrentL1"]);
+        }
+
         private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
             FakeSystemConnector connector,
             IWorksheetMetadataStore metadataStore,
@@ -1229,9 +1332,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
+            FakeSystemConnector connector,
+            IWorksheetMetadataStore metadataStore,
+            FakeWorksheetSelectionReader selectionReader,
+            IAiColumnMappingClient aiClient)
+        {
+            return CreateService(new[] { connector }, metadataStore, selectionReader, aiClient);
+        }
+
+        private static (object Service, FakeWorksheetGridAdapter Grid) CreateService(
             IReadOnlyList<FakeSystemConnector> connectors,
             IWorksheetMetadataStore metadataStore,
-            FakeWorksheetSelectionReader selectionReader)
+            FakeWorksheetSelectionReader selectionReader,
+            IAiColumnMappingClient aiClient = null)
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var serviceType = assembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
@@ -1269,6 +1382,38 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 grid.GetTransparentProxy(),
                 new SyncOperationPreviewFactory(),
             });
+
+            if (aiClient != null)
+            {
+                var extendedCtor = serviceType.GetConstructor(
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    binder: null,
+                    types: new[]
+                    {
+                        typeof(WorksheetSyncService),
+                        typeof(IWorksheetMetadataStore),
+                        typeof(IWorksheetSelectionReader),
+                        gridInterface,
+                        typeof(SyncOperationPreviewFactory),
+                        typeof(IAiColumnMappingClient),
+                    },
+                    modifiers: null);
+
+                if (extendedCtor == null)
+                {
+                    throw new InvalidOperationException("WorksheetSyncExecutionService AI constructor was not found.");
+                }
+
+                service = extendedCtor.Invoke(new object[]
+                {
+                    syncService,
+                    metadataStore,
+                    selectionReader,
+                    grid.GetTransparentProxy(),
+                    new SyncOperationPreviewFactory(),
+                    aiClient,
+                });
+            }
 
             return (service, grid);
         }
@@ -1502,6 +1647,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
 
             method.Invoke(service, new[] { plan });
+        }
+
+        private static AiColumnMappingApplyResult InvokeApplyAiColumnMappingPreview(
+            object service,
+            string sheetName,
+            AiColumnMappingPreview preview)
+        {
+            var method = service.GetType().GetMethod(
+                "ApplyAiColumnMappingPreview",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("ApplyAiColumnMappingPreview was not found.");
+            }
+
+            try
+            {
+                return (AiColumnMappingApplyResult)method.Invoke(service, new object[] { sheetName, preview });
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
         }
 
         private static SyncOperationPreview ReadPreview(object plan)
@@ -1868,6 +2037,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         })
                         .ToArray(),
                 };
+            }
+        }
+
+        private sealed class FakeAiColumnMappingClient : IAiColumnMappingClient
+        {
+            public AiColumnMappingResponse Response { get; set; } = new AiColumnMappingResponse();
+
+            public AiColumnMappingRequest LastRequest { get; private set; }
+
+            public AiColumnMappingResponse Map(AiColumnMappingRequest request)
+            {
+                LastRequest = request;
+                return Response;
+            }
+
+            public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request)
+            {
+                LastRequest = request;
+                return System.Threading.Tasks.Task.FromResult(Response);
             }
         }
 

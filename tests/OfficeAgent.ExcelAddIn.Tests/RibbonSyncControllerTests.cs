@@ -541,6 +541,99 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("row-1 / status: 已跳过，单据已归档，禁止上传", message);
         }
 
+        [Fact]
+        public void ExecuteAiColumnMappingConfirmsPreviewBeforeSavingMappings()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService { AiColumnMappingConfirmResult = true };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Single(dialogService.AiColumnMappingPreviews);
+            Assert.Equal("Sheet1", aiClient.LastRequest.SheetName);
+            Assert.Equal("项目负责人", aiClient.LastRequest.ActualHeaders.Single(header => header.ExcelColumn == 2).ActualL1);
+            Assert.Equal("项目负责人", metadataStore.LastSavedFieldMappings.Single(row => row.Values["HeaderId"] == "owner_name").Values["CurrentL1"]);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Applied: 1", StringComparison.Ordinal) >= 0);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
+        public void ExecuteAiColumnMappingDoesNotSaveWhenPreviewIsCancelled()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService { AiColumnMappingConfirmResult = false };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Single(dialogService.AiColumnMappingPreviews);
+            Assert.Empty(metadataStore.LastSavedFieldMappings);
+            Assert.Empty(dialogService.InfoMessages);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
@@ -559,7 +652,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
-            var executionService = CreateExecutionService(addInAssembly, connector, metadataStore);
+            var (executionService, _) = CreateExecutionService(addInAssembly, connector, metadataStore);
             var dialogInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Dialogs.IRibbonSyncDialogService", throwOnError: true);
             var syncService = new WorksheetSyncService(
                 new SystemConnectorRegistry(new ISystemConnector[] { connector }),
@@ -602,10 +695,48 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 : ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction });
         }
 
-        private static object CreateExecutionService(
+        private static (object Controller, FakeWorksheetGridAdapter Grid) CreateControllerWithGrid(
+            FakeSystemConnector connector,
+            FakeWorksheetMetadataStore metadataStore,
+            FakeDialogService dialogService,
+            Func<string> sheetNameProvider,
+            IAiColumnMappingClient aiClient)
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
+            var (executionService, grid) = CreateExecutionService(addInAssembly, connector, metadataStore, aiClient);
+            var dialogInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Dialogs.IRibbonSyncDialogService", throwOnError: true);
+            var syncService = new WorksheetSyncService(
+                new SystemConnectorRegistry(new ISystemConnector[] { connector }),
+                metadataStore,
+                new WorksheetChangeTracker(),
+                new SyncOperationPreviewFactory());
+            var ctor = controllerType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(IWorksheetMetadataStore),
+                    typeof(WorksheetSyncService),
+                    typeof(Func<string>),
+                    executionService.GetType(),
+                    dialogInterface,
+                },
+                modifiers: null);
+
+            if (ctor == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
+            }
+
+            return (ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() }), grid);
+        }
+
+        private static (object Service, FakeWorksheetGridAdapter Grid) CreateExecutionService(
             Assembly addInAssembly,
             FakeSystemConnector connector,
-            FakeWorksheetMetadataStore metadataStore)
+            FakeWorksheetMetadataStore metadataStore,
+            IAiColumnMappingClient aiClient = null)
         {
             var serviceType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
             var gridInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
@@ -616,17 +747,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
 
-            var ctor = serviceType.GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
+            var ctorTypes = aiClient == null
+                ? new[]
                 {
                     typeof(WorksheetSyncService),
                     typeof(IWorksheetMetadataStore),
                     typeof(IWorksheetSelectionReader),
                     gridInterface,
                     typeof(SyncOperationPreviewFactory),
-                },
+                }
+                : new[]
+                {
+                    typeof(WorksheetSyncService),
+                    typeof(IWorksheetMetadataStore),
+                    typeof(IWorksheetSelectionReader),
+                    gridInterface,
+                    typeof(SyncOperationPreviewFactory),
+                    typeof(IAiColumnMappingClient),
+                };
+            var ctor = serviceType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: ctorTypes,
                 modifiers: null);
 
             if (ctor == null)
@@ -634,14 +776,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 throw new InvalidOperationException("WorksheetSyncExecutionService constructor was not found.");
             }
 
-            return ctor.Invoke(new object[]
-            {
-                syncService,
-                metadataStore,
-                new FakeWorksheetSelectionReader(),
-                grid.GetTransparentProxy(),
-                new SyncOperationPreviewFactory(),
-            });
+            var args = aiClient == null
+                ? new object[]
+                {
+                    syncService,
+                    metadataStore,
+                    new FakeWorksheetSelectionReader(),
+                    grid.GetTransparentProxy(),
+                    new SyncOperationPreviewFactory(),
+                }
+                : new object[]
+                {
+                    syncService,
+                    metadataStore,
+                    new FakeWorksheetSelectionReader(),
+                    grid.GetTransparentProxy(),
+                    new SyncOperationPreviewFactory(),
+                    aiClient,
+                };
+
+            return (ctor.Invoke(args), grid);
         }
 
         private static void InvokeSelectProject(object controller, ProjectOption option)
@@ -715,6 +869,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
             if (method == null)
             {
                 throw new InvalidOperationException("RibbonSyncController.ExecuteInitializeCurrentSheet() was not found.");
+            }
+
+            method.Invoke(controller, null);
+        }
+
+        private static void InvokeExecuteAiColumnMapping(object controller)
+        {
+            var method = controller.GetType().GetMethod(
+                "ExecuteAiColumnMapping",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.ExecuteAiColumnMapping() was not found.");
             }
 
             method.Invoke(controller, null);
@@ -796,6 +964,73 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
 
             return (string)method.Invoke(null, new[] { strings, operationName, preview });
+        }
+
+        private static SheetBinding CreateAiMappingBinding()
+        {
+            return new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 1,
+                DataStartRow = 4,
+            };
+        }
+
+        private static FieldMappingTableDefinition BuildAiMappingDefinition()
+        {
+            return new FieldMappingTableDefinition
+            {
+                SystemKey = "current-business-system",
+                Columns = new[]
+                {
+                    new FieldMappingColumnDefinition { ColumnName = "HeaderId", Role = FieldMappingSemanticRole.HeaderIdentity },
+                    new FieldMappingColumnDefinition { ColumnName = "HeaderType", Role = FieldMappingSemanticRole.HeaderType },
+                    new FieldMappingColumnDefinition { ColumnName = "ApiFieldKey", Role = FieldMappingSemanticRole.ApiFieldKey },
+                    new FieldMappingColumnDefinition { ColumnName = "IsIdColumn", Role = FieldMappingSemanticRole.IsIdColumn },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultSingleHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentSingleHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L1", Role = FieldMappingSemanticRole.DefaultParentHeaderText, RoleKey = "DefaultL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L1", Role = FieldMappingSemanticRole.CurrentParentHeaderText, RoleKey = "CurrentL1" },
+                    new FieldMappingColumnDefinition { ColumnName = "ISDP L2", Role = FieldMappingSemanticRole.DefaultChildHeaderText, RoleKey = "DefaultL2" },
+                    new FieldMappingColumnDefinition { ColumnName = "Excel L2", Role = FieldMappingSemanticRole.CurrentChildHeaderText, RoleKey = "CurrentL2" },
+                },
+            };
+        }
+
+        private static SheetFieldMappingRow[] BuildAiMappings(string sheetName)
+        {
+            return new[]
+            {
+                CreateAiMappingRow(sheetName, "row_id", "ID", true),
+                CreateAiMappingRow(sheetName, "owner_name", "负责人", false),
+            };
+        }
+
+        private static SheetFieldMappingRow CreateAiMappingRow(
+            string sheetName,
+            string apiFieldKey,
+            string headerText,
+            bool isIdColumn)
+        {
+            return new SheetFieldMappingRow
+            {
+                SheetName = sheetName,
+                Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["HeaderId"] = apiFieldKey,
+                    ["HeaderType"] = "single",
+                    ["ApiFieldKey"] = apiFieldKey,
+                    ["IsIdColumn"] = isIdColumn ? "true" : "false",
+                    ["DefaultL1"] = headerText,
+                    ["CurrentL1"] = headerText,
+                    ["DefaultL2"] = string.Empty,
+                    ["CurrentL2"] = string.Empty,
+                },
+            };
         }
 
         private sealed class FakeSystemConnector : ISystemConnector
@@ -896,6 +1131,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        private sealed class FakeAiColumnMappingClient : IAiColumnMappingClient
+        {
+            public AiColumnMappingResponse Response { get; set; } = new AiColumnMappingResponse();
+
+            public AiColumnMappingRequest LastRequest { get; private set; }
+
+            public AiColumnMappingResponse Map(AiColumnMappingRequest request)
+            {
+                LastRequest = request;
+                return Response;
+            }
+
+            public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request)
+            {
+                LastRequest = request;
+                return System.Threading.Tasks.Task.FromResult(Response);
+            }
+        }
+
         private sealed class FakeWorksheetMetadataStore : IWorksheetMetadataStore
         {
             public Dictionary<string, SheetBinding> Bindings { get; } = new Dictionary<string, SheetBinding>(StringComparer.OrdinalIgnoreCase);
@@ -970,9 +1224,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<string> AuthenticationRequiredMessages { get; } = new List<string>();
 
+            public List<AiColumnMappingPreview> AiColumnMappingPreviews { get; } = new List<AiColumnMappingPreview>();
+
             public SheetBinding NextProjectLayoutBinding { get; set; }
 
             public bool AuthenticationRequiredResult { get; set; }
+
+            public bool AiColumnMappingConfirmResult { get; set; }
 
             public override IMessage Invoke(IMessage msg)
             {
@@ -982,6 +1240,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "ConfirmDownload":
                     case "ConfirmUpload":
                         return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
+                    case "ConfirmAiColumnMapping":
+                        AiColumnMappingPreviews.Add((AiColumnMappingPreview)call.InArgs[0]);
+                        return new ReturnMessage(AiColumnMappingConfirmResult, null, 0, call.LogicalCallContext, call);
                     case "ShowProjectLayoutDialog":
                         ProjectLayoutPrompts.Add(CloneBinding((SheetBinding)call.InArgs[0]));
                         return new ReturnMessage(CloneBinding(NextProjectLayoutBinding), null, 0, call.LogicalCallContext, call);
@@ -1043,9 +1304,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private sealed class FakeWorksheetGridAdapter : RealProxy
         {
+            private readonly Dictionary<(string Sheet, int Row, int Column), string> cells =
+                new Dictionary<(string Sheet, int Row, int Column), string>();
+
             public FakeWorksheetGridAdapter(Type interfaceType)
                 : base(interfaceType)
             {
+            }
+
+            public void SetCell(string sheetName, int row, int column, string value)
+            {
+                cells[(sheetName, row, column)] = value ?? string.Empty;
             }
 
             public override IMessage Invoke(IMessage msg)
@@ -1054,10 +1323,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 switch (call.MethodName)
                 {
                     case "GetCellText":
-                        return new ReturnMessage(string.Empty, null, 0, call.LogicalCallContext, call);
-                    case "GetLastUsedRow":
+                        return HandleGetCellText(call);
                     case "GetLastUsedColumn":
-                        return new ReturnMessage(0, null, 0, call.LogicalCallContext, call);
+                        return HandleGetLastUsedColumn(call);
+                    case "GetLastUsedRow":
+                        return HandleGetLastUsedRow(call);
                     case "SetCellText":
                     case "ClearRange":
                     case "ClearWorksheet":
@@ -1071,6 +1341,37 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public new object GetTransparentProxy()
             {
                 return base.GetTransparentProxy();
+            }
+
+            private IMessage HandleGetCellText(IMethodCallMessage call)
+            {
+                var sheetName = (string)call.InArgs[0];
+                var row = (int)call.InArgs[1];
+                var column = (int)call.InArgs[2];
+                cells.TryGetValue((sheetName, row, column), out var value);
+                return new ReturnMessage(value ?? string.Empty, null, 0, call.LogicalCallContext, call);
+            }
+
+            private IMessage HandleGetLastUsedColumn(IMethodCallMessage call)
+            {
+                var sheetName = (string)call.InArgs[0];
+                var lastColumn = cells.Keys
+                    .Where(key => string.Equals(key.Sheet, sheetName, StringComparison.OrdinalIgnoreCase))
+                    .Select(key => key.Column)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                return new ReturnMessage(lastColumn, null, 0, call.LogicalCallContext, call);
+            }
+
+            private IMessage HandleGetLastUsedRow(IMethodCallMessage call)
+            {
+                var sheetName = (string)call.InArgs[0];
+                var lastRow = cells.Keys
+                    .Where(key => string.Equals(key.Sheet, sheetName, StringComparison.OrdinalIgnoreCase))
+                    .Select(key => key.Row)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                return new ReturnMessage(lastRow, null, 0, call.LogicalCallContext, call);
             }
         }
     }

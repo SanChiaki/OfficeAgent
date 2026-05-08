@@ -137,6 +137,7 @@
     <Compile Include="AgentRibbon.Designer.cs">
       <DependentUpon>AgentRibbon.cs</DependentUpon>
     </Compile>
+    <Compile Include="Dialogs\AiColumnMappingPreviewDialog.cs" />
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
     <Compile Include="Dialogs\ProjectLayoutDialog.cs" />
@@ -191,6 +192,7 @@
     <Compile Include="Excel\WorksheetMetadataStore.cs" />
     <Compile Include="Excel\WorksheetPendingEditTracker.cs" />
     <Compile Include="Excel\WorksheetHeaderMatcher.cs" />
+    <Compile Include="Excel\WorksheetHeaderScanner.cs" />
     <Compile Include="Excel\WorksheetSchemaLayoutService.cs" />
     <Compile Include="Excel\WorksheetSelectionResolver.cs" />
     <Compile Include="Excel\WorksheetColumnSegment.cs" />

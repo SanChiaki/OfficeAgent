@@ -43,6 +43,9 @@ namespace OfficeAgent.ExcelAddIn
         private readonly WorksheetColumnSegmentBuilder segmentBuilder;
         private readonly SyncOperationPreviewFactory previewFactory;
         private readonly WorksheetHeaderMatcher headerMatcher;
+        private readonly WorksheetHeaderScanner headerScanner;
+        private readonly AiColumnMappingService aiColumnMappingService;
+        private readonly IAiColumnMappingClient aiColumnMappingClient;
         private readonly FieldMappingValueAccessor valueAccessor;
         private readonly ExcelUploadValueNormalizer uploadValueNormalizer;
         private readonly IWorksheetChangeLogStore changeLogStore;
@@ -86,12 +89,84 @@ namespace OfficeAgent.ExcelAddIn
             segmentBuilder = new WorksheetColumnSegmentBuilder();
             valueAccessor = new FieldMappingValueAccessor();
             headerMatcher = new WorksheetHeaderMatcher(valueAccessor);
+            headerScanner = new WorksheetHeaderScanner();
+            aiColumnMappingService = new AiColumnMappingService();
             uploadValueNormalizer = new ExcelUploadValueNormalizer();
+        }
+
+        public WorksheetSyncExecutionService(
+            WorksheetSyncService worksheetSyncService,
+            IWorksheetMetadataStore metadataStore,
+            IWorksheetSelectionReader selectionReader,
+            IWorksheetGridAdapter gridAdapter,
+            SyncOperationPreviewFactory previewFactory,
+            IAiColumnMappingClient aiColumnMappingClient)
+            : this(
+                worksheetSyncService,
+                metadataStore,
+                selectionReader,
+                gridAdapter,
+                previewFactory)
+        {
+            this.aiColumnMappingClient = aiColumnMappingClient ?? throw new ArgumentNullException(nameof(aiColumnMappingClient));
+        }
+
+        public WorksheetSyncExecutionService(
+            WorksheetSyncService worksheetSyncService,
+            IWorksheetMetadataStore metadataStore,
+            IWorksheetSelectionReader selectionReader,
+            IWorksheetGridAdapter gridAdapter,
+            SyncOperationPreviewFactory previewFactory,
+            IWorksheetChangeLogStore changeLogStore,
+            WorksheetPendingEditTracker pendingEditTracker,
+            IAiColumnMappingClient aiColumnMappingClient)
+            : this(
+                worksheetSyncService,
+                metadataStore,
+                selectionReader,
+                gridAdapter,
+                previewFactory,
+                changeLogStore,
+                pendingEditTracker)
+        {
+            this.aiColumnMappingClient = aiColumnMappingClient ?? throw new ArgumentNullException(nameof(aiColumnMappingClient));
         }
 
         public void InitializeCurrentSheet(string sheetName, ProjectOption project)
         {
             worksheetSyncService.InitializeSheet(sheetName, project);
+        }
+
+        public AiColumnMappingPreview PrepareAiColumnMappingPreview(string sheetName)
+        {
+            if (aiColumnMappingClient == null)
+            {
+                throw new InvalidOperationException("AI column mapping is not configured.");
+            }
+
+            var context = LoadSheetContext(sheetName);
+            var actualHeaders = headerScanner.Scan(sheetName, context.Binding, gridAdapter);
+            if (actualHeaders.Length == 0)
+            {
+                throw new InvalidOperationException("No header text was found in the configured header area. Check HeaderStartRow and HeaderRowCount.");
+            }
+
+            var request = aiColumnMappingService.BuildRequest(sheetName, context.Definition, context.Mappings, actualHeaders);
+            var response = aiColumnMappingClient.Map(request);
+            return aiColumnMappingService.CreatePreview(request, response, context.Binding.HeaderRowCount);
+        }
+
+        public AiColumnMappingApplyResult ApplyAiColumnMappingPreview(string sheetName, AiColumnMappingPreview preview)
+        {
+            var context = LoadSheetContext(sheetName);
+            var result = aiColumnMappingService.ApplyConfirmedPreview(
+                sheetName,
+                context.Definition,
+                context.Mappings,
+                preview,
+                context.Binding.HeaderRowCount);
+            worksheetSyncService.SaveFieldMappings(sheetName, context.Definition, result.Rows);
+            return result;
         }
 
         public void TryAutoInitializeCurrentSheet(string sheetName, ProjectOption project)
