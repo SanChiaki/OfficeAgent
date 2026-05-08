@@ -93,6 +93,8 @@
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `xISDP_Setting` changes; the business area should remain untouched.
 - Configure `Base URL`, `API Key`, `Model`, and `API Format` in the existing Settings UI for an OpenAI-compatible model endpoint, then use `AI映射列` / `AI map columns` and confirm it reuses those settings rather than asking for a separate AI mapping configuration.
 - Switch `API Format` to `Anthropic Messages` with a compatible model endpoint, run `AI映射列` / `AI map columns`, and confirm the preview appears after the Anthropic Messages response completes.
+- Run `AI映射列` / `AI map columns` against a slow model response and confirm a native processing dialog appears above Excel with `中止` / `Abort`; click it and verify the model call is cancelled, no preview is shown, and Excel control returns after cancellation.
+- While the AI mapping preview, completion, or error dialog is open, click/focus the Excel window and confirm the dialog remains owned by Excel rather than disappearing behind the workbook.
 - On an initialized sheet, rename one visible business header so it no longer matches `ISDP L1` / `ISDP L2`, click `AI映射列` / `AI map columns`, and confirm the preview dialog appears before any metadata is saved.
 - Confirm headers that already match `SheetFieldMappings.Excel L1 / Excel L2`, including the `ID` column, are not shown as accepted rows in the AI mapping preview; if all scanned headers already match, the model should not be called and the command should report no accepted mappings.
 - Confirm the AI mapping preview shows only four columns: apply checkbox (`是否修改` / `Apply`), Excel letter column, current actual header `L1/L2`, and matched ISDP header `L1/L2`.

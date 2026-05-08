@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using OfficeAgent.Core.Models;
 using Xunit;
@@ -56,6 +57,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
             });
         }
 
+        [Fact]
+        public void ProgressDialogCancelButtonCancelsWithoutClosingImmediately()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateProgressDialog(locale: "zh"))
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    Assert.False(dialog.ControlBox);
+                    var cancelButton = FindButtons(dialog).Single(button => string.Equals(button.Text, "中止", StringComparison.Ordinal));
+                    Assert.Equal(DialogResult.None, cancelButton.DialogResult);
+                    Assert.Null(dialog.CancelButton);
+                }
+            });
+        }
+
         private static Form CreateDialog(AiColumnMappingPreview preview, string locale)
         {
             return (Form)Activator.CreateInstance(
@@ -63,6 +82,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic,
                 binder: null,
                 args: new[] { preview, CreateHostStrings(locale) },
+                culture: null);
+        }
+
+        private static Form CreateProgressDialog(string locale)
+        {
+            var taskCompletionSource = new TaskCompletionSource<AiColumnMappingPreview>();
+            return (Form)Activator.CreateInstance(
+                GetProgressDialogType(),
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[]
+                {
+                    new Func<CancellationToken, Task<AiColumnMappingPreview>>(token => taskCompletionSource.Task),
+                    CreateHostStrings(locale),
+                },
                 culture: null);
         }
 
@@ -105,6 +139,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 .FirstOrDefault();
         }
 
+        private static Button[] FindButtons(Control root)
+        {
+            return root.Controls.Cast<Control>()
+                .SelectMany(control => EnumerateControls(control))
+                .OfType<Button>()
+                .ToArray();
+        }
+
         private static IEnumerable<Control> EnumerateControls(Control root)
         {
             yield return root;
@@ -132,6 +174,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             return LoadAddInAssembly()
                 .GetType("OfficeAgent.ExcelAddIn.Dialogs.AiColumnMappingPreviewDialog", throwOnError: true);
+        }
+
+        private static Type GetProgressDialogType()
+        {
+            return LoadAddInAssembly()
+                .GetType("OfficeAgent.ExcelAddIn.Dialogs.AiColumnMappingProgressDialog", throwOnError: true);
         }
 
         private static Assembly LoadAddInAssembly()

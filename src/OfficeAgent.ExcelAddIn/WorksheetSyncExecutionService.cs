@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -144,6 +146,38 @@ namespace OfficeAgent.ExcelAddIn
                 throw new InvalidOperationException("AI column mapping is not configured.");
             }
 
+            var context = PrepareAiColumnMappingContext(sheetName);
+            if (context.Request.ActualHeaders == null || context.Request.ActualHeaders.Length == 0)
+            {
+                return new AiColumnMappingPreview();
+            }
+
+            var response = aiColumnMappingClient.Map(context.Request);
+            return aiColumnMappingService.CreatePreview(context.Request, response, context.HeaderRowCount);
+        }
+
+        public async Task<AiColumnMappingPreview> PrepareAiColumnMappingPreviewAsync(
+            string sheetName,
+            CancellationToken cancellationToken)
+        {
+            if (aiColumnMappingClient == null)
+            {
+                throw new InvalidOperationException("AI column mapping is not configured.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var context = PrepareAiColumnMappingContext(sheetName);
+            if (context.Request.ActualHeaders == null || context.Request.ActualHeaders.Length == 0)
+            {
+                return new AiColumnMappingPreview();
+            }
+
+            var response = await aiColumnMappingClient.MapAsync(context.Request, cancellationToken);
+            return aiColumnMappingService.CreatePreview(context.Request, response, context.HeaderRowCount);
+        }
+
+        private AiColumnMappingExecutionContext PrepareAiColumnMappingContext(string sheetName)
+        {
             var context = LoadSheetContext(sheetName);
             var actualHeaders = headerScanner.Scan(sheetName, context.Binding, gridAdapter);
             if (actualHeaders.Length == 0)
@@ -151,14 +185,11 @@ namespace OfficeAgent.ExcelAddIn
                 throw new InvalidOperationException("No header text was found in the configured header area. Check HeaderStartRow and HeaderRowCount.");
             }
 
-            var request = aiColumnMappingService.BuildRequest(sheetName, context.Definition, context.Mappings, actualHeaders);
-            if (request.ActualHeaders == null || request.ActualHeaders.Length == 0)
+            return new AiColumnMappingExecutionContext
             {
-                return new AiColumnMappingPreview();
-            }
-
-            var response = aiColumnMappingClient.Map(request);
-            return aiColumnMappingService.CreatePreview(request, response, context.Binding.HeaderRowCount);
+                Request = aiColumnMappingService.BuildRequest(sheetName, context.Definition, context.Mappings, actualHeaders),
+                HeaderRowCount = context.Binding.HeaderRowCount,
+            };
         }
 
         public AiColumnMappingApplyResult ApplyAiColumnMappingPreview(string sheetName, AiColumnMappingPreview preview)
@@ -1461,6 +1492,13 @@ namespace OfficeAgent.ExcelAddIn
         public WorksheetRuntimeColumn[] RuntimeColumns { get; set; } = Array.Empty<WorksheetRuntimeColumn>();
         public WorksheetSchema Schema { get; set; }
         public bool UsesExistingLayout { get; set; }
+    }
+
+    internal sealed class AiColumnMappingExecutionContext
+    {
+        public AiColumnMappingRequest Request { get; set; }
+
+        public int HeaderRowCount { get; set; }
     }
 
     internal sealed class WorksheetUploadReadSegment

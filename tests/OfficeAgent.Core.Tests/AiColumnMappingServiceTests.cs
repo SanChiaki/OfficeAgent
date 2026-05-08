@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core.Models;
@@ -1203,6 +1204,12 @@ namespace OfficeAgent.Core.Tests
             }
 
             public Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request)
+            {
+                LastRequest = request;
+                return Task.FromResult(Response);
+            }
+
+            public Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request, CancellationToken cancellationToken)
             {
                 LastRequest = request;
                 return Task.FromResult(Response);

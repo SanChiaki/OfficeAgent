@@ -6,6 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
+using System.Threading;
+using System.Threading.Tasks;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -1311,6 +1313,55 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public async Task PrepareAiColumnMappingPreviewAsyncPassesCancellationTokenToClient()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "基础信息",
+                            ActualL2 = "负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader(), aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "基础信息");
+            grid.SetCell("Sheet1", 4, 2, "负责人");
+            using (var cancellationTokenSource = new CancellationTokenSource())
+            {
+                var preview = await InvokePrepareAiColumnMappingPreviewAsync(service, "Sheet1", cancellationTokenSource.Token);
+
+                Assert.Equal(cancellationTokenSource.Token, aiClient.LastCancellationToken);
+                Assert.Single(preview.Items);
+            }
+        }
+
+        [Fact]
         public void ApplyAiColumnMappingPreviewSavesOnlyConfirmedMetadataRows()
         {
             var connector = new FakeSystemConnector();
@@ -1707,6 +1758,31 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        private static async Task<AiColumnMappingPreview> InvokePrepareAiColumnMappingPreviewAsync(
+            object service,
+            string sheetName,
+            CancellationToken cancellationToken)
+        {
+            var method = service.GetType().GetMethod(
+                "PrepareAiColumnMappingPreviewAsync",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("PrepareAiColumnMappingPreviewAsync was not found.");
+            }
+
+            try
+            {
+                var task = (Task<AiColumnMappingPreview>)method.Invoke(service, new object[] { sheetName, cancellationToken });
+                return await task;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
+        }
+
         private static SyncOperationPreview ReadPreview(object plan)
         {
             var property = plan.GetType().GetProperty(
@@ -2080,6 +2156,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public AiColumnMappingRequest LastRequest { get; private set; }
 
+            public CancellationToken LastCancellationToken { get; private set; }
+
             public AiColumnMappingResponse Map(AiColumnMappingRequest request)
             {
                 LastRequest = request;
@@ -2088,7 +2166,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request)
             {
+                return MapAsync(request, CancellationToken.None);
+            }
+
+            public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request, CancellationToken cancellationToken)
+            {
                 LastRequest = request;
+                LastCancellationToken = cancellationToken;
                 return System.Threading.Tasks.Task.FromResult(Response);
             }
         }

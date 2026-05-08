@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
+using System.Threading;
+using System.Threading.Tasks;
 using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -729,6 +731,102 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("no accepted mappings", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        [Fact]
+        public void ExecuteAiColumnMappingRunsModelCallThroughCancellableProgressDialog()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService { AiColumnMappingConfirmResult = true };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Equal(1, dialogService.AiColumnMappingProgressRunCount);
+            Assert.Equal(dialogService.LastProgressCancellationToken, aiClient.LastCancellationToken);
+            Assert.Single(dialogService.AiColumnMappingPreviews);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
+        public void ExecuteAiColumnMappingDoesNotSaveWhenProgressDialogCancelsOperation()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AiColumnMappingConfirmResult = true,
+                CancelAiColumnMappingProgress = true,
+            };
+            var aiClient = new FakeAiColumnMappingClient
+            {
+                Response = new AiColumnMappingResponse
+                {
+                    Mappings = new[]
+                    {
+                        new AiColumnMappingSuggestion
+                        {
+                            ExcelColumn = 2,
+                            ActualL1 = "项目负责人",
+                            TargetHeaderId = "owner_name",
+                            TargetApiFieldKey = "owner_name",
+                            Confidence = 0.91,
+                        },
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "项目负责人");
+
+            InvokeRefresh(controller);
+            InvokeExecuteAiColumnMapping(controller);
+
+            Assert.Equal(1, dialogService.AiColumnMappingProgressRunCount);
+            Assert.Empty(dialogService.AiColumnMappingPreviews);
+            Assert.Empty(metadataStore.LastSavedFieldMappings);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
@@ -1232,6 +1330,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public AiColumnMappingRequest LastRequest { get; private set; }
 
+            public CancellationToken LastCancellationToken { get; private set; }
+
             public AiColumnMappingResponse Map(AiColumnMappingRequest request)
             {
                 LastRequest = request;
@@ -1240,7 +1340,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request)
             {
+                return MapAsync(request, CancellationToken.None);
+            }
+
+            public System.Threading.Tasks.Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request, CancellationToken cancellationToken)
+            {
                 LastRequest = request;
+                LastCancellationToken = cancellationToken;
+                cancellationToken.ThrowIfCancellationRequested();
                 return System.Threading.Tasks.Task.FromResult(Response);
             }
         }
@@ -1321,11 +1428,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<AiColumnMappingPreview> AiColumnMappingPreviews { get; } = new List<AiColumnMappingPreview>();
 
+            public int AiColumnMappingProgressRunCount { get; private set; }
+
+            public CancellationToken LastProgressCancellationToken { get; private set; }
+
             public SheetBinding NextProjectLayoutBinding { get; set; }
 
             public bool AuthenticationRequiredResult { get; set; }
 
             public bool AiColumnMappingConfirmResult { get; set; }
+
+            public bool CancelAiColumnMappingProgress { get; set; }
 
             public Action<AiColumnMappingPreview> OnConfirmAiColumnMapping { get; set; }
 
@@ -1342,6 +1455,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         AiColumnMappingPreviews.Add(preview);
                         OnConfirmAiColumnMapping?.Invoke(preview);
                         return new ReturnMessage(AiColumnMappingConfirmResult, null, 0, call.LogicalCallContext, call);
+                    case "RunAiColumnMappingWithProgress":
+                        AiColumnMappingProgressRunCount++;
+                        var operation = (Func<CancellationToken, Task<AiColumnMappingPreview>>)call.InArgs[0];
+                        using (var cancellationTokenSource = new CancellationTokenSource())
+                        {
+                            if (CancelAiColumnMappingProgress)
+                            {
+                                cancellationTokenSource.Cancel();
+                            }
+
+                            LastProgressCancellationToken = cancellationTokenSource.Token;
+                            try
+                            {
+                                return new ReturnMessage(operation(cancellationTokenSource.Token).GetAwaiter().GetResult(), null, 0, call.LogicalCallContext, call);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                            }
+                        }
                     case "ShowProjectLayoutDialog":
                         ProjectLayoutPrompts.Add(CloneBinding((SheetBinding)call.InArgs[0]));
                         return new ReturnMessage(CloneBinding(NextProjectLayoutBinding), null, 0, call.LogicalCallContext, call);

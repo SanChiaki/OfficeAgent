@@ -79,10 +79,17 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
         public static bool Confirm(AiColumnMappingPreview preview)
         {
+            return Confirm(preview, null);
+        }
+
+        public static bool Confirm(AiColumnMappingPreview preview, IWin32Window owner)
+        {
             var strings = Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
             using (var dialog = new AiColumnMappingPreviewDialog(preview, strings))
             {
-                return dialog.ShowDialog() == DialogResult.OK;
+                return owner == null
+                    ? dialog.ShowDialog() == DialogResult.OK
+                    : dialog.ShowDialog(owner) == DialogResult.OK;
             }
         }
 

@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Threading;
 using OfficeAgent.Core.Models;
 
 namespace OfficeAgent.Core.Services
@@ -8,5 +9,7 @@ namespace OfficeAgent.Core.Services
         AiColumnMappingResponse Map(AiColumnMappingRequest request);
 
         Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request);
+
+        Task<AiColumnMappingResponse> MapAsync(AiColumnMappingRequest request, CancellationToken cancellationToken);
     }
 }

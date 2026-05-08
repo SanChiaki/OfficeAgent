@@ -229,7 +229,13 @@ namespace OfficeAgent.ExcelAddIn
                 var strings = GetStrings();
                 var sheetName = GetRequiredSheetName();
                 var service = EnsureExecutionService();
-                var preview = service.PrepareAiColumnMappingPreview(sheetName);
+                var preview = dialogService.RunAiColumnMappingWithProgress(
+                    cancellationToken => service.PrepareAiColumnMappingPreviewAsync(sheetName, cancellationToken));
+                if (preview == null)
+                {
+                    return;
+                }
+
                 if (!HasApplicableAiColumnMappings(preview))
                 {
                     dialogService.ShowInfo(strings.AiColumnMappingNoAcceptedMappingsMessage);

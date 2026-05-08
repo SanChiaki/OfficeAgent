@@ -347,6 +347,50 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public async Task MapAsyncPassesCancellationTokenToStreamingHttpRequest()
+        {
+            var handler = new RecordingHandler(_ => CreateStreamingChatCompletionResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"Mappings\\\":[],\\\"Unmatched\\\":[]}\"},\"finish_reason\":\"stop\"}]}\n\n"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+            using (var cancellationTokenSource = new CancellationTokenSource())
+            {
+                await client.MapAsync(CreateRequest(), cancellationTokenSource.Token);
+
+                Assert.True(handler.LastCancellationToken.CanBeCanceled);
+            }
+        }
+
+        [Fact]
+        public async Task MapAsyncStopsBeforeHttpRequestWhenCancellationIsAlreadyRequested()
+        {
+            var handler = new RecordingHandler(_ => CreateChatCompletionResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+            using (var cancellationTokenSource = new CancellationTokenSource())
+            {
+                cancellationTokenSource.Cancel();
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                    () => client.MapAsync(CreateRequest(), cancellationTokenSource.Token));
+
+                Assert.Equal(0, handler.CallCount);
+            }
+        }
+
+        [Fact]
         public void MapRejectsMissingApiKeys()
         {
             var handler = new RecordingHandler(_ => CreateChatCompletionResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
@@ -529,10 +573,13 @@ namespace OfficeAgent.Infrastructure.Tests
 
             public int CallCount { get; private set; }
 
+            public CancellationToken LastCancellationToken { get; private set; }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 CallCount++;
                 LastRequest = request;
+                LastCancellationToken = cancellationToken;
                 LastBody = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
                 return Task.FromResult(responder(request));
             }

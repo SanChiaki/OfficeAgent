@@ -243,8 +243,10 @@ Ribbon 点击链路：
 - AI 映射客户端复用插件设置里的 `Base URL`、`API Key`、`Model` 和 `API Format`，所以不需要为真实系统新增单独的模型配置；只要现有 LLM 设置可用即可。
 - `API Format` 支持 `OpenAI Compatible` 和 `Anthropic Messages`。OpenAI-compatible 使用 `/v1/chat/completions` 或保留路径前缀后的 `/chat/completions`，并发送 `Authorization: Bearer <API Key>`；Anthropic Messages 使用 `/v1/messages` 或保留路径前缀后的 `/messages`，并发送 `x-api-key` 与 `anthropic-version: 2023-06-01`。
 - AI 映射客户端优先使用 `stream: true` 读取模型输出；OpenAI-compatible 读取 `choices[].delta.content`，Anthropic Messages 读取 `content_block_delta` / `text_delta` 并在 `message_stop` 时结束。服务不支持流式请求时会回退到对应格式的非流式调用。当前预览仍等完整 JSON 返回后再显示。
+- 模型调用期间会显示本地处理中对话框；用户点击 `中止` / `Abort` 会取消本次 HTTP / SSE 调用，关闭处理中对话框，不弹出预览，也不会写入 `xISDP_Setting`。
 - 表头扫描按 `SheetBindings.HeaderStartRow + HeaderRowCount` 扫描完整表头区域，不依赖当前选区。
 - 用户必须先确认预览；取消预览不会写入 `xISDP_Setting`。
+- AI 映射列的处理中、预览确认、完成和错误提示会以 Excel 主窗口为 owner 显示，避免弹框被 Excel 主界面遮挡。
 - 预览只展示可应用的 accepted 建议；确认表格包含“是否修改”、Excel 字母列号、当前实际表头 `L1/L2`、匹配到的 ISDP 表头 `L1/L2`。已经等同于当前 `Excel L1 / Excel L2` 的 accepted no-op 建议不会显示。
 - “是否修改”默认全部选中；用户取消勾选的建议不会写入 `xISDP_Setting`。
 - 确认后只更新 `Excel L1 / Excel L2`，不会覆盖 `ISDP L1 / ISDP L2`、HeaderId、ApiFieldKey、ID 列标记或活动字段标识。

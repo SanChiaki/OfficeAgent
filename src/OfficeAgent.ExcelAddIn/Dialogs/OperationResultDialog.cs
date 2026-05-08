@@ -1,5 +1,7 @@
 using System;
 using System.Drawing;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Localization;
@@ -18,6 +20,9 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         bool ConfirmUpload(string operationName, string projectName, SyncOperationPreview preview);
 
         bool ConfirmAiColumnMapping(AiColumnMappingPreview preview);
+
+        AiColumnMappingPreview RunAiColumnMappingWithProgress(
+            Func<CancellationToken, Task<AiColumnMappingPreview>> operation);
 
         SheetBinding ShowProjectLayoutDialog(SheetBinding suggestedBinding);
 
@@ -49,14 +54,24 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
         public bool ConfirmAiColumnMapping(AiColumnMappingPreview preview)
         {
-            return AiColumnMappingPreviewDialog.Confirm(preview);
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            return AiColumnMappingPreviewDialog.Confirm(preview, owner);
+        }
+
+        public AiColumnMappingPreview RunAiColumnMappingWithProgress(
+            Func<CancellationToken, Task<AiColumnMappingPreview>> operation)
+        {
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            return AiColumnMappingProgressDialog.Run(owner, operation);
         }
 
         public SheetBinding ShowProjectLayoutDialog(SheetBinding suggestedBinding)
         {
+            var owner = ExcelDialogOwner.FromCurrentApplication();
             using (var dialog = new ProjectLayoutDialog(suggestedBinding))
             {
-                return dialog.ShowDialog() == DialogResult.OK
+                var result = owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+                return result == DialogResult.OK
                     ? dialog.ResultBinding
                     : null;
             }
@@ -88,26 +103,31 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         public static void ShowInfo(string message)
         {
             var strings = GetStrings();
-            MessageBox.Show(message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            MessageBox.Show(owner, message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public static void ShowWarning(string message)
         {
             var strings = GetStrings();
-            MessageBox.Show(message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            MessageBox.Show(owner, message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         public static void ShowError(string message)
         {
             var strings = GetStrings();
-            MessageBox.Show(message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            MessageBox.Show(owner, message, strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         public static bool ShowAuthenticationRequired(string message)
         {
+            var owner = ExcelDialogOwner.FromCurrentApplication();
             using (var dialog = new AuthenticationRequiredDialog(message, GetStrings()))
             {
-                return dialog.ShowDialog() == DialogResult.Yes;
+                var result = owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+                return result == DialogResult.Yes;
             }
         }
 

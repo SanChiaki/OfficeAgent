@@ -56,6 +56,14 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string AiColumnMappingPreviewDialogTitle => Locale == "zh" ? "确认 AI 映射列" : "Confirm AI column mapping";
 
+        public string AiColumnMappingProgressDialogTitle => Locale == "zh" ? "AI 映射列处理中" : "AI column mapping";
+
+        public string AiColumnMappingProgressMessage => Locale == "zh"
+            ? "AI 正在分析当前表头并生成列映射，请等待处理完成。"
+            : "AI is analyzing the current headers and generating column mappings. Wait for it to finish.";
+
+        public string AiColumnMappingAbortButtonText => Locale == "zh" ? "中止" : "Abort";
+
         public string AiColumnMappingPreviewInstructionText => Locale == "zh"
             ? "请选择需要写入的 AI 推荐列映射。确认后仅会更新 xISDP_Setting.SheetFieldMappings 中的 Excel L1 / Excel L2。"
             : "Select the AI column mappings to write. Confirming updates only Excel L1 / Excel L2 in xISDP_Setting.SheetFieldMappings.";

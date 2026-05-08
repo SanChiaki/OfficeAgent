@@ -137,8 +137,10 @@
     <Compile Include="AgentRibbon.Designer.cs">
       <DependentUpon>AgentRibbon.cs</DependentUpon>
     </Compile>
+    <Compile Include="Dialogs\AiColumnMappingProgressDialog.cs" />
     <Compile Include="Dialogs\AiColumnMappingPreviewDialog.cs" />
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
+    <Compile Include="Dialogs\ExcelDialogOwner.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
     <Compile Include="Dialogs\ProjectLayoutDialog.cs" />
     <Compile Include="Dialogs\TemplateDialogService.cs" />
