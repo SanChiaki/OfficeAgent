@@ -103,6 +103,49 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void MapIgnoresStreamingChunksWithoutChoices()
+        {
+            var handler = new RecordingHandler(_ => CreateStreamingChatCompletionResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"Mappings\\\":[],\\\"Unmatched\\\":\"}}]}\n\n"
+                + "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5}}\n\n"
+                + "data: {\"choices\":[{\"delta\":{\"content\":\"[]}\"},\"finish_reason\":\"stop\"}]}\n\n"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Empty(result.Mappings);
+            Assert.Empty(result.Unmatched);
+        }
+
+        [Fact]
+        public void MapCompletesStreamingResponseWhenFinishReasonIsStopWithoutDoneMarker()
+        {
+            var handler = new RecordingHandler(_ => CreateStreamingChatCompletionResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"Mappings\\\":[],\\\"Unmatched\\\":[]}\"},\"finish_reason\":\"stop\"}]}\n\n"
+                + "data: {\"choices\":[{\"delta\":{\"content\":\"this should not be appended\"}}]}\n\n"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Empty(result.Mappings);
+            Assert.Empty(result.Unmatched);
+        }
+
+        [Fact]
         public void MapFallsBackToNonStreamingWhenStreamingRequestIsRejected()
         {
             RecordingHandler handler = null;

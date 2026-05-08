@@ -190,7 +190,10 @@ namespace OfficeAgent.Infrastructure.Http
                         break;
                     }
 
-                    AppendStreamingDeltaContent(builder, data);
+                    if (AppendStreamingDeltaContent(builder, data))
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -208,21 +211,27 @@ namespace OfficeAgent.Infrastructure.Http
             return builder.ToString();
         }
 
-        private static void AppendStreamingDeltaContent(StringBuilder builder, string data)
+        private static bool AppendStreamingDeltaContent(StringBuilder builder, string data)
         {
             try
             {
                 var parsed = JObject.Parse(data);
-                var content = parsed["choices"]?[0]?["delta"]?["content"] ?? parsed["choices"]?[0]?["message"]?["content"];
+                var choice = parsed["choices"]?.First;
+                if (choice == null)
+                {
+                    return false;
+                }
+
+                var content = choice["delta"]?["content"] ?? choice["message"]?["content"];
                 if (content == null)
                 {
-                    return;
+                    return IsStreamingChoiceFinished(choice);
                 }
 
                 if (content.Type == JTokenType.String)
                 {
                     builder.Append(content.Value<string>());
-                    return;
+                    return IsStreamingChoiceFinished(choice);
                 }
 
                 if (content is JArray contentItems)
@@ -236,11 +245,19 @@ namespace OfficeAgent.Infrastructure.Http
                         }
                     }
                 }
+
+                return IsStreamingChoiceFinished(choice);
             }
             catch (JsonException error)
             {
                 throw new InvalidOperationException("AI column mapping API returned a malformed streaming chunk.", error);
             }
+        }
+
+        private static bool IsStreamingChoiceFinished(JToken choice)
+        {
+            var finishReason = choice?["finish_reason"]?.Value<string>();
+            return !string.IsNullOrWhiteSpace(finishReason);
         }
 
         private static Uri BuildChatCompletionsEndpoint(Uri baseUri)
