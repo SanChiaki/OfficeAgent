@@ -51,6 +51,7 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
   model: 'gpt-5-mini',
+  apiFormat: 'openai-compatible',
   ssoUrl: '',
   ssoLoginSuccessPath: '',
   uiLanguageOverride: 'system',
@@ -251,6 +252,9 @@ export class NativeBridge {
           model: typeof (payload as AppSettings | undefined)?.model === 'string'
             ? (payload as AppSettings).model
             : BROWSER_PREVIEW_SETTINGS.model,
+          apiFormat: isValidApiFormat((payload as AppSettings | undefined)?.apiFormat)
+            ? (payload as AppSettings).apiFormat
+            : BROWSER_PREVIEW_SETTINGS.apiFormat,
           ssoUrl: typeof (payload as AppSettings | undefined)?.ssoUrl === 'string'
             ? (payload as AppSettings).ssoUrl
             : BROWSER_PREVIEW_SETTINGS.ssoUrl,
@@ -389,6 +393,10 @@ function normalizeError(error: BridgeErrorPayload | undefined): BridgeErrorPaylo
 
 function isValidUiLanguageOverride(value: unknown): value is NonNullable<AppSettings['uiLanguageOverride']> {
   return value === 'system' || value === 'zh' || value === 'en';
+}
+
+function isValidApiFormat(value: unknown): value is AppSettings['apiFormat'] {
+  return value === 'openai-compatible' || value === 'anthropic-messages';
 }
 
 function resolveBrowserPreviewLocale(uiLanguageOverride: AppSettings['uiLanguageOverride']): HostContext['resolvedUiLocale'] {

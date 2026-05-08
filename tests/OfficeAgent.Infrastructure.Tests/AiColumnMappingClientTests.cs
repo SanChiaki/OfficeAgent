@@ -58,6 +58,122 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void MapPostsAnthropicMessagesRequestsWhenConfigured()
+        {
+            var handler = new RecordingHandler(_ => CreateAnthropicMessageResponse(
+                "{\"Mappings\":[{\"ExcelColumn\":2,\"ActualL1\":\"项目负责人\",\"TargetHeaderId\":\"owner_name\",\"TargetApiFieldKey\":\"owner_name\",\"Confidence\":0.91,\"Reason\":\"same meaning\"}],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = " https://api.anthropic.com/ ",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.LastRequest.RequestUri.ToString());
+            Assert.Null(handler.LastRequest.Headers.Authorization);
+            Assert.True(handler.LastRequest.Headers.TryGetValues("x-api-key", out var apiKeyValues));
+            Assert.Contains("secret-token", apiKeyValues);
+            Assert.True(handler.LastRequest.Headers.TryGetValues("anthropic-version", out var versionValues));
+            Assert.Contains("2023-06-01", versionValues);
+            Assert.Contains("\"system\":", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"max_tokens\":4096", handler.LastBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("response_format", handler.LastBody, StringComparison.Ordinal);
+            Assert.Equal("owner_name", Assert.Single(result.Mappings).TargetHeaderId);
+        }
+
+        [Fact]
+        public void MapReadsStreamingAnthropicMessagesDeltas()
+        {
+            var handler = new RecordingHandler(_ => CreateStreamingChatCompletionResponse(
+                "event: message_start\n"
+                + "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_123\"}}\n\n"
+                + "event: content_block_delta\n"
+                + "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"{\\\"Mappings\\\":[]\"}}\n\n"
+                + "event: content_block_delta\n"
+                + "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\",\\\"Unmatched\\\":[]}\"}}\n\n"
+                + "event: message_stop\n"
+                + "data: {\"type\":\"message_stop\"}\n\n"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.anthropic.com",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.LastRequest.RequestUri.ToString());
+            Assert.Contains("\"stream\":true", handler.LastBody, StringComparison.Ordinal);
+            Assert.Empty(result.Mappings);
+            Assert.Empty(result.Unmatched);
+        }
+
+        [Fact]
+        public void MapAppendsAnthropicVersionPathAfterProxyPrefixes()
+        {
+            var handler = new RecordingHandler(_ => CreateAnthropicMessageResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example/anthropic/",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Map(CreateRequest());
+
+            Assert.Equal("https://api.internal.example/anthropic/v1/messages", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
+        public void MapDoesNotDuplicateAnthropicVersionPath()
+        {
+            var handler = new RecordingHandler(_ => CreateAnthropicMessageResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example/anthropic/v1/",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Map(CreateRequest());
+
+            Assert.Equal("https://api.internal.example/anthropic/v1/messages", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
+        public void MapDoesNotDuplicateRootAnthropicVersionPath()
+        {
+            var handler = new RecordingHandler(_ => CreateAnthropicMessageResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.anthropic.com/v1/",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Map(CreateRequest());
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
         public void MapUsesCompactJsonForColumnMappingPrompt()
         {
             var handler = new RecordingHandler(_ => CreateChatCompletionResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
@@ -364,6 +480,28 @@ namespace OfficeAgent.Infrastructure.Tests
                             finish_reason = "stop",
                         },
                     },
+                }).ToString()),
+            };
+        }
+
+        private static HttpResponseMessage CreateAnthropicMessageResponse(string contentJson)
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JObject.FromObject(new
+                {
+                    id = "msg_123",
+                    type = "message",
+                    role = "assistant",
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "text",
+                            text = contentJson,
+                        },
+                    },
+                    stop_reason = "end_turn",
                 }).ToString()),
             };
         }

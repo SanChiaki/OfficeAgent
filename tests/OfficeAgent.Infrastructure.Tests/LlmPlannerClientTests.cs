@@ -135,6 +135,158 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void CompletePostsAnthropicMessagesRequestsWhenConfigured()
+        {
+            var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{"
+                    + "\"id\":\"msg_123\","
+                    + "\"type\":\"message\","
+                    + "\"role\":\"assistant\","
+                    + "\"content\":[{\"type\":\"text\",\"text\":\"{\\\"mode\\\":\\\"message\\\",\\\"assistantMessage\\\":\\\"ok\\\",\\\"step\\\":null,\\\"plan\\\":null}\"}],"
+                    + "\"stop_reason\":\"end_turn\""
+                    + "}"),
+            });
+            var client = new LlmPlannerClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = " https://api.anthropic.com/ ",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            var response = client.Complete(new PlannerRequest
+            {
+                SessionId = "session-1",
+                UserInput = "Create a summary sheet",
+            });
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.LastRequest.RequestUri.ToString());
+            Assert.Null(handler.LastRequest.Headers.Authorization);
+            Assert.True(handler.LastRequest.Headers.TryGetValues("x-api-key", out var apiKeyValues));
+            Assert.Contains("secret-token", apiKeyValues);
+            Assert.True(handler.LastRequest.Headers.TryGetValues("anthropic-version", out var versionValues));
+            Assert.Contains("2023-06-01", versionValues);
+            Assert.Contains("\"system\":", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"messages\":[", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"max_tokens\":4096", handler.LastBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("response_format", handler.LastBody, StringComparison.Ordinal);
+            Assert.Equal("{\"mode\":\"message\",\"assistantMessage\":\"ok\",\"step\":null,\"plan\":null}", response);
+        }
+
+        [Fact]
+        public void CompleteBuildsAnthropicMessagesFromUserFirstConversationHistory()
+        {
+            var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{"
+                    + "\"id\":\"msg_123\","
+                    + "\"type\":\"message\","
+                    + "\"role\":\"assistant\","
+                    + "\"content\":[{\"type\":\"text\",\"text\":\"{\\\"mode\\\":\\\"message\\\",\\\"assistantMessage\\\":\\\"ok\\\",\\\"step\\\":null,\\\"plan\\\":null}\"}],"
+                    + "\"stop_reason\":\"end_turn\""
+                    + "}"),
+            });
+            var client = new LlmPlannerClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.anthropic.com",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Complete(new PlannerRequest
+            {
+                SessionId = "session-1",
+                UserInput = "Create a summary sheet",
+                ConversationHistory = new[]
+                {
+                    new ConversationTurn { Role = "assistant", Content = "Welcome" },
+                    new ConversationTurn { Role = "user", Content = "First request" },
+                    new ConversationTurn { Role = "user", Content = "Extra context" },
+                    new ConversationTurn { Role = "assistant", Content = "Assistant answer" },
+                },
+            });
+
+            Assert.DoesNotContain("\"role\":\"assistant\",\"content\":\"Welcome\"", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"role\":\"user\",\"content\":\"First request\\n\\nExtra context\"", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"role\":\"assistant\",\"content\":\"Assistant answer\"", handler.LastBody, StringComparison.Ordinal);
+            Assert.Contains("\"role\":\"user\",\"content\":\"Planner request:", handler.LastBody, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CompleteAppendsAnthropicVersionPathAfterProxyPrefixes()
+        {
+            var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{"
+                    + "\"id\":\"msg_123\","
+                    + "\"type\":\"message\","
+                    + "\"role\":\"assistant\","
+                    + "\"content\":[{\"type\":\"text\",\"text\":\"{\\\"mode\\\":\\\"message\\\",\\\"assistantMessage\\\":\\\"ok\\\",\\\"step\\\":null,\\\"plan\\\":null}\"}],"
+                    + "\"stop_reason\":\"end_turn\""
+                    + "}"),
+            });
+            var client = new LlmPlannerClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example/anthropic/",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Complete(new PlannerRequest
+            {
+                SessionId = "session-1",
+                UserInput = "Create a summary sheet",
+            });
+
+            Assert.Equal("https://api.internal.example/anthropic/v1/messages", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
+        public void CompleteDoesNotDuplicateAnthropicVersionPath()
+        {
+            var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{"
+                    + "\"id\":\"msg_123\","
+                    + "\"type\":\"message\","
+                    + "\"role\":\"assistant\","
+                    + "\"content\":[{\"type\":\"text\",\"text\":\"{\\\"mode\\\":\\\"message\\\",\\\"assistantMessage\\\":\\\"ok\\\",\\\"step\\\":null,\\\"plan\\\":null}\"}],"
+                    + "\"stop_reason\":\"end_turn\""
+                    + "}"),
+            });
+            var client = new LlmPlannerClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.anthropic.com/v1/",
+                    Model = "claude-3-5-sonnet-latest",
+                    ApiFormat = "anthropic-messages",
+                });
+
+            client.Complete(new PlannerRequest
+            {
+                SessionId = "session-1",
+                UserInput = "Create a summary sheet",
+            });
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.LastRequest.RequestUri.ToString());
+        }
+
+        [Fact]
         public void CompleteRejectsMissingApiKeys()
         {
             var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

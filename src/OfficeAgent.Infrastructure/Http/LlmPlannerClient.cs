@@ -1,8 +1,6 @@
 using System;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Security.Authentication;
-using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -61,6 +59,11 @@ namespace OfficeAgent.Infrastructure.Http
 
             try
             {
+                if (LlmApiFormat.IsAnthropicMessages(settings.ApiFormat))
+                {
+                    return await CompleteWithAnthropicMessagesAsync(baseUri, settings, request).ConfigureAwait(false);
+                }
+
                 return await CompleteWithOpenAiCompatibleChatCompletionsAsync(baseUri, settings, request).ConfigureAwait(false);
             }
             catch (LegacyPlannerFallbackException)
@@ -82,8 +85,33 @@ namespace OfficeAgent.Infrastructure.Http
                 },
             });
 
-            var responseBody = await SendRequestAsync(endpoint, settings.ApiKey, payload, allowLegacyFallback: true).ConfigureAwait(false);
+            var responseBody = await SendRequestAsync(
+                endpoint,
+                settings.ApiKey,
+                payload,
+                allowLegacyFallback: true,
+                apiFormat: settings.ApiFormat).ConfigureAwait(false);
             return ExtractChatCompletionsText(responseBody);
+        }
+
+        private async Task<string> CompleteWithAnthropicMessagesAsync(Uri baseUri, AppSettings settings, PlannerRequest request)
+        {
+            var endpoint = LlmApiFormat.BuildAnthropicMessagesEndpoint(baseUri);
+            var payload = JsonConvert.SerializeObject(new
+            {
+                model = settings.Model,
+                max_tokens = LlmApiFormat.DefaultMaxTokens,
+                system = BuildPlannerInstructions(),
+                messages = BuildAnthropicMessages(request),
+            });
+
+            var responseBody = await SendRequestAsync(
+                endpoint,
+                settings.ApiKey,
+                payload,
+                allowLegacyFallback: false,
+                apiFormat: settings.ApiFormat).ConfigureAwait(false);
+            return LlmApiFormat.ExtractAnthropicMessageText(responseBody, "Planner API");
         }
 
         private async Task<string> CompleteWithLegacyPlannerAsync(Uri baseUri, AppSettings settings, PlannerRequest request)
@@ -94,16 +122,18 @@ namespace OfficeAgent.Infrastructure.Http
                 model = settings.Model,
                 request,
             });
-            return await SendRequestAsync(endpoint, settings.ApiKey, payload, allowLegacyFallback: false).ConfigureAwait(false);
+            return await SendRequestAsync(
+                endpoint,
+                settings.ApiKey,
+                payload,
+                allowLegacyFallback: false,
+                apiFormat: settings.ApiFormat).ConfigureAwait(false);
         }
 
-        private async Task<string> SendRequestAsync(Uri endpoint, string apiKey, string payload, bool allowLegacyFallback)
+        private async Task<string> SendRequestAsync(Uri endpoint, string apiKey, string payload, bool allowLegacyFallback, string apiFormat)
         {
-            using (var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint))
+            using (var httpRequest = LlmApiFormat.CreateJsonRequest(endpoint, apiKey, payload, apiFormat))
             {
-                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-                httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-
                 using (var response = await httpClient.SendAsync(httpRequest).ConfigureAwait(false))
                 {
                     var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult(string.Empty)).ConfigureAwait(false);
@@ -131,14 +161,7 @@ namespace OfficeAgent.Infrastructure.Http
 
         private static Uri BuildChatCompletionsEndpoint(Uri baseUri)
         {
-            var absoluteUri = baseUri.AbsoluteUri.TrimEnd('/');
-            var absolutePath = baseUri.AbsolutePath?.Trim('/') ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(absolutePath))
-            {
-                return new Uri($"{absoluteUri}/v1/chat/completions");
-            }
-
-            return new Uri($"{absoluteUri}/chat/completions");
+            return LlmApiFormat.BuildChatCompletionsEndpoint(baseUri);
         }
 
         private static object CreateChatMessage(string role, string text)
@@ -176,6 +199,54 @@ namespace OfficeAgent.Infrastructure.Http
 
             messages.Add(CreateChatMessage("user", BuildPlannerPrompt(request)));
             return messages.ToArray();
+        }
+
+        private static object[] BuildAnthropicMessages(PlannerRequest request)
+        {
+            var turns = new System.Collections.Generic.List<Tuple<string, string>>();
+            var hasSeenUserTurn = false;
+            foreach (var turn in request.ConversationHistory ?? System.Array.Empty<ConversationTurn>())
+            {
+                if (string.IsNullOrWhiteSpace(turn.Role) || string.IsNullOrWhiteSpace(turn.Content))
+                {
+                    continue;
+                }
+
+                var role = string.Equals(turn.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
+                if (!hasSeenUserTurn)
+                {
+                    if (!string.Equals(role, "user", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    hasSeenUserTurn = true;
+                }
+
+                AddAnthropicTurn(turns, role, turn.Content);
+            }
+
+            AddAnthropicTurn(turns, "user", BuildPlannerPrompt(request));
+
+            var messages = new System.Collections.Generic.List<object>();
+            foreach (var turn in turns)
+            {
+                messages.Add(CreateChatMessage(turn.Item1, turn.Item2));
+            }
+
+            return messages.ToArray();
+        }
+
+        private static void AddAnthropicTurn(System.Collections.Generic.List<Tuple<string, string>> turns, string role, string content)
+        {
+            if (turns.Count > 0 && string.Equals(turns[turns.Count - 1].Item1, role, StringComparison.Ordinal))
+            {
+                var last = turns[turns.Count - 1];
+                turns[turns.Count - 1] = Tuple.Create(last.Item1, $"{last.Item2}\n\n{content}");
+                return;
+            }
+
+            turns.Add(Tuple.Create(role, content));
         }
 
         private static string BuildPlannerInstructions()

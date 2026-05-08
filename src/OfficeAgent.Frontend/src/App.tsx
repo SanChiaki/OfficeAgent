@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
   model: 'gpt-5-mini',
+  apiFormat: 'openai-compatible',
   ssoUrl: '',
   ssoLoginSuccessPath: '',
   uiLanguageOverride: 'system',
@@ -1151,6 +1152,19 @@ export function App() {
             </label>
 
             <label className="settings-field">
+              <span>{strings.apiFormatFieldLabel}</span>
+              <select
+                aria-label={strings.apiFormatFieldLabel}
+                value={draftSettings.apiFormat}
+                disabled={isSettingsSaving}
+                onChange={(event) => updateDraftSettings({ apiFormat: event.target.value as AppSettings['apiFormat'] })}
+              >
+                <option value="openai-compatible">{strings.apiFormatOpenAiCompatible}</option>
+                <option value="anthropic-messages">{strings.apiFormatAnthropicMessages}</option>
+              </select>
+            </label>
+
+            <label className="settings-field">
               <span>{strings.ssoUrlFieldLabel}</span>
               <input
                 aria-label={strings.ssoUrlFieldLabel}
@@ -1664,9 +1678,14 @@ function createMessageId() {
 }
 
 function normalizeSettings(settings: Partial<AppSettings> | null | undefined): AppSettings {
+  const apiFormat = settings?.apiFormat === 'anthropic-messages'
+    ? 'anthropic-messages'
+    : DEFAULT_SETTINGS.apiFormat;
+
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
+    apiFormat,
     uiLanguageOverride: settings?.uiLanguageOverride ?? DEFAULT_SETTINGS.uiLanguageOverride,
   };
 }

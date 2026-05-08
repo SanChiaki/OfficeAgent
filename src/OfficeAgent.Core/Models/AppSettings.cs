@@ -5,6 +5,7 @@ namespace OfficeAgent.Core.Models
     public sealed class AppSettings
     {
         public const string DefaultBaseUrl = "https://api.example.com";
+        public const string DefaultApiFormat = "openai-compatible";
         public const string DefaultUiLanguageOverride = "system";
 
         public string ApiKey { get; set; } = string.Empty;
@@ -14,6 +15,8 @@ namespace OfficeAgent.Core.Models
         public string BusinessBaseUrl { get; set; } = string.Empty;
 
         public string Model { get; set; } = "gpt-5-mini";
+
+        public string ApiFormat { get; set; } = DefaultApiFormat;
 
         public string UiLanguageOverride { get; set; } = DefaultUiLanguageOverride;
 
@@ -66,6 +69,30 @@ namespace OfficeAgent.Core.Models
             }
 
             return DefaultUiLanguageOverride;
+        }
+
+        public static string NormalizeApiFormat(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return DefaultApiFormat;
+            }
+
+            var normalized = value.Trim();
+            if (string.Equals(normalized, DefaultApiFormat, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "openai", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "chat-completions", StringComparison.OrdinalIgnoreCase))
+            {
+                return DefaultApiFormat;
+            }
+
+            if (string.Equals(normalized, "anthropic-messages", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "anthropic", StringComparison.OrdinalIgnoreCase))
+            {
+                return "anthropic-messages";
+            }
+
+            return DefaultApiFormat;
         }
     }
 }

@@ -1,5 +1,6 @@
 export type UiLocale = 'zh' | 'en';
 export type UiLanguageOverride = 'system' | UiLocale;
+export type ApiFormat = 'openai-compatible' | 'anthropic-messages';
 
 export interface BridgeRequestEnvelope<TPayload = unknown> {
   type: string;
@@ -17,6 +18,7 @@ export interface AppSettings {
   baseUrl: string;
   businessBaseUrl: string;
   model: string;
+  apiFormat: ApiFormat;
   ssoUrl: string;
   ssoLoginSuccessPath: string;
   uiLanguageOverride?: UiLanguageOverride;

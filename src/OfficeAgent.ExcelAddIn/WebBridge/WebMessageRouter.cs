@@ -638,6 +638,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                    IsStringToken(payloadObject["baseUrl"]) &&
                    IsStringToken(payloadObject["businessBaseUrl"]) &&
                    IsStringToken(payloadObject["model"]) &&
+                   IsOptionalStringToken(payloadObject["apiFormat"]) &&
                    IsOptionalStringToken(payloadObject["uiLanguageOverride"]) &&
                    payloadObject.Count >= 4;
         }

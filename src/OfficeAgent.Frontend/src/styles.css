@@ -430,7 +430,8 @@ body {
 .ghost-button:disabled,
 .send-button:disabled,
 .composer textarea:disabled,
-.settings-field input:disabled {
+.settings-field input:disabled,
+.settings-field select:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -494,7 +495,8 @@ body {
   align-items: center;
 }
 
-.settings-field input {
+.settings-field input,
+.settings-field select {
   width: 100%;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 8px;
@@ -503,6 +505,10 @@ body {
   font-size: 0.9rem;
   color: inherit;
   background: #fff;
+}
+
+.settings-field select {
+  padding-right: 12px;
 }
 
 .settings-field__toggle {

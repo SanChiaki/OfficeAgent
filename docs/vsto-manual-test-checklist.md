@@ -37,8 +37,9 @@
 
 ## Session And Settings
 
-- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `SSO URL`, and `登录成功路径` / `Login success path`.
+- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
 - Confirm `Base URL` stays reserved for the LLM endpoint and `Business Base URL` points to the business API or mock server.
+- Confirm `API Format = OpenAI Compatible` keeps existing OpenAI-compatible planner behavior, then switch to `API Format = Anthropic Messages` with an Anthropic Messages-compatible endpoint and confirm ordinary planner chat still returns a valid response.
 - Restart Excel and confirm settings reload correctly.
 - Create or switch sessions and confirm existing thread history is preserved per session.
 
@@ -90,7 +91,8 @@
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized sign-in-required status (`请先登录` / `Sign in first`).
 - Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `xISDP_Setting` changes; the business area should remain untouched.
-- Configure `Base URL`, `API Key`, and `Model` in the existing Settings UI for an OpenAI-compatible model endpoint, then use `AI映射列` / `AI map columns` and confirm it reuses those settings rather than asking for a separate AI mapping configuration.
+- Configure `Base URL`, `API Key`, `Model`, and `API Format` in the existing Settings UI for an OpenAI-compatible model endpoint, then use `AI映射列` / `AI map columns` and confirm it reuses those settings rather than asking for a separate AI mapping configuration.
+- Switch `API Format` to `Anthropic Messages` with a compatible model endpoint, run `AI映射列` / `AI map columns`, and confirm the preview appears after the Anthropic Messages response completes.
 - On an initialized sheet, rename one visible business header so it no longer matches `ISDP L1` / `ISDP L2`, click `AI映射列` / `AI map columns`, and confirm the preview dialog appears before any metadata is saved.
 - In the AI mapping preview, cancel the dialog and confirm `xISDP_Setting.SheetFieldMappings` remains unchanged.
 - Run `AI映射列` / `AI map columns` again, confirm the preview, and verify only `Excel L1` / `Excel L2` are updated for accepted recommendations; `ISDP L1` / `ISDP L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, and `PropertyId` must remain unchanged.

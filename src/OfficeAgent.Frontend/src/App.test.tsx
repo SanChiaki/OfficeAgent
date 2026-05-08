@@ -95,6 +95,7 @@ beforeEach(() => {
     baseUrl: 'https://api.example.com',
     businessBaseUrl: 'https://business.example.com',
     model: 'gpt-5-mini',
+    apiFormat: 'openai-compatible',
     ssoUrl: '',
     ssoLoginSuccessPath: '',
     uiLanguageOverride: 'system',
@@ -283,6 +284,7 @@ describe('App shell', () => {
     expect(within(settingsDialog).getAllByLabelText(/^(api key|api 密钥)$/i)[0]).toHaveValue('');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(base url|基础 url)$/i })).toHaveValue('https://api.example.com');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(business base url|业务基础 url)$/i })).toHaveValue('https://business.example.com');
+    expect(within(settingsDialog).getByRole('combobox', { name: /^(api format|api 格式)$/i })).toHaveValue('openai-compatible');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(model|模型)$/i })).toHaveValue('gpt-5-mini');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(sso url|sso 地址)$/i })).toHaveValue('');
   });
@@ -462,6 +464,23 @@ describe('App shell', () => {
     }));
   });
 
+  it('saves the selected llm api format', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /^(api format|api 格式)$/i }),
+      'anthropic-messages',
+    );
+    await user.click(screen.getByRole('button', { name: /保存|save/i }));
+
+    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      apiFormat: 'anthropic-messages',
+    }));
+  });
+
   it('switches the active session when a session chip is clicked', async () => {
     const user = userEvent.setup();
 
@@ -573,6 +592,7 @@ describe('App shell', () => {
       baseUrl: string;
       businessBaseUrl: string;
       model: string;
+      apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
       ssoLoginSuccessPath: string;
     }>();
@@ -590,6 +610,7 @@ describe('App shell', () => {
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
       model: 'gpt-5-mini',
+      apiFormat: 'openai-compatible',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
     });
@@ -646,6 +667,7 @@ describe('App shell', () => {
       baseUrl: string;
       businessBaseUrl: string;
       model: string;
+      apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
       ssoLoginSuccessPath: string;
     }>();
@@ -661,6 +683,7 @@ describe('App shell', () => {
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
       model: 'gpt-5-mini',
+      apiFormat: 'openai-compatible',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
     });
@@ -690,6 +713,7 @@ describe('App shell', () => {
       baseUrl: string;
       businessBaseUrl: string;
       model: string;
+      apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
       ssoLoginSuccessPath: string;
     }>();
@@ -713,6 +737,7 @@ describe('App shell', () => {
       baseUrl: 'https://api.example.com',
       businessBaseUrl: 'https://business.example.com',
       model: 'gpt-5-mini',
+      apiFormat: 'openai-compatible',
       ssoUrl: '',
       ssoLoginSuccessPath: '',
     });

@@ -36,6 +36,9 @@ export type UiStrings = {
   apiKeyFieldLabel: string;
   baseUrlFieldLabel: string;
   businessBaseUrlFieldLabel: string;
+  apiFormatFieldLabel: string;
+  apiFormatOpenAiCompatible: string;
+  apiFormatAnthropicMessages: string;
   modelFieldLabel: string;
   ssoUrlFieldLabel: string;
   showApiKey: string;
@@ -137,6 +140,9 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
     apiKeyFieldLabel: 'API 密钥',
     baseUrlFieldLabel: '基础 URL',
     businessBaseUrlFieldLabel: '业务基础 URL',
+    apiFormatFieldLabel: 'API 格式',
+    apiFormatOpenAiCompatible: 'OpenAI 兼容',
+    apiFormatAnthropicMessages: 'Anthropic Messages',
     modelFieldLabel: '模型',
     ssoUrlFieldLabel: 'SSO 地址',
     showApiKey: '显示 API Key',
@@ -248,6 +254,9 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
     apiKeyFieldLabel: 'API Key',
     baseUrlFieldLabel: 'Base URL',
     businessBaseUrlFieldLabel: 'Business Base URL',
+    apiFormatFieldLabel: 'API Format',
+    apiFormatOpenAiCompatible: 'OpenAI Compatible',
+    apiFormatAnthropicMessages: 'Anthropic Messages',
     modelFieldLabel: 'Model',
     ssoUrlFieldLabel: 'SSO URL',
     showApiKey: 'Show API Key',
