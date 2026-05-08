@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Authentication;
@@ -65,34 +66,48 @@ namespace OfficeAgent.Infrastructure.Http
             }
 
             var endpoint = BuildChatCompletionsEndpoint(baseUri);
-            var payload = JsonConvert.SerializeObject(new
+            var mappingJson = await TrySendStreamingRequestAsync(endpoint, settings.ApiKey, settings.Model, request).ConfigureAwait(false);
+            if (mappingJson == null)
             {
-                model = settings.Model,
-                messages = BuildChatMessages(request),
-                response_format = new
-                {
-                    type = "json_object",
-                },
-            });
-            var responseBody = await SendRequestAsync(endpoint, settings.ApiKey, payload).ConfigureAwait(false);
-            var mappingJson = ExtractChatCompletionsText(responseBody);
+                var responseBody = await SendRequestAsync(endpoint, settings.ApiKey, BuildPayload(settings.Model, request, stream: false)).ConfigureAwait(false);
+                mappingJson = ExtractChatCompletionsText(responseBody);
+            }
+
             return ParseMappingResponse(mappingJson);
+        }
+
+        private async Task<string> TrySendStreamingRequestAsync(Uri endpoint, string apiKey, string model, AiColumnMappingRequest request)
+        {
+            using (var httpRequest = CreateRequest(endpoint, apiKey, BuildPayload(model, request, stream: true)))
+            {
+                using (var response = await httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if (ShouldFallbackToNonStreaming(response.StatusCode))
+                        {
+                            return null;
+                        }
+
+                        var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult(string.Empty)).ConfigureAwait(false);
+                        throw FormatRequestFailure(response, responseBody);
+                    }
+
+                    return await ReadStreamingMappingTextAsync(response).ConfigureAwait(false);
+                }
+            }
         }
 
         private async Task<string> SendRequestAsync(Uri endpoint, string apiKey, string payload)
         {
-            using (var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint))
+            using (var httpRequest = CreateRequest(endpoint, apiKey, payload))
             {
-                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-                httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-
                 using (var response = await httpClient.SendAsync(httpRequest).ConfigureAwait(false))
                 {
                     var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult(string.Empty)).ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode)
                     {
-                        throw new InvalidOperationException(
-                            $"AI column mapping API request failed ({(int)response.StatusCode} {response.ReasonPhrase}): {responseBody}");
+                        throw FormatRequestFailure(response, responseBody);
                     }
 
                     if (string.IsNullOrWhiteSpace(responseBody))
@@ -102,6 +117,129 @@ namespace OfficeAgent.Infrastructure.Http
 
                     return responseBody;
                 }
+            }
+        }
+
+        private static HttpRequestMessage CreateRequest(Uri endpoint, string apiKey, string payload)
+        {
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+            return httpRequest;
+        }
+
+        private static string BuildPayload(string model, AiColumnMappingRequest request, bool stream)
+        {
+            return JsonConvert.SerializeObject(new
+            {
+                model,
+                messages = BuildChatMessages(request),
+                response_format = new
+                {
+                    type = "json_object",
+                },
+                stream,
+            });
+        }
+
+        private static bool ShouldFallbackToNonStreaming(System.Net.HttpStatusCode statusCode)
+        {
+            return statusCode == System.Net.HttpStatusCode.BadRequest ||
+                   statusCode == System.Net.HttpStatusCode.NotFound ||
+                   statusCode == System.Net.HttpStatusCode.NotAcceptable ||
+                   statusCode == System.Net.HttpStatusCode.UnsupportedMediaType ||
+                   (int)statusCode == 422;
+        }
+
+        private static InvalidOperationException FormatRequestFailure(HttpResponseMessage response, string responseBody)
+        {
+            return new InvalidOperationException(
+                $"AI column mapping API request failed ({(int)response.StatusCode} {response.ReasonPhrase}): {responseBody}");
+        }
+
+        private static async Task<string> ReadStreamingMappingTextAsync(HttpResponseMessage response)
+        {
+            var builder = new StringBuilder();
+            var rawBody = new StringBuilder();
+            using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+            {
+                while (!reader.EndOfStream)
+                {
+                    var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                    if (line == null)
+                    {
+                        break;
+                    }
+
+                    rawBody.AppendLine(line);
+                    var trimmed = line.Trim();
+                    if (trimmed.Length == 0 || trimmed.StartsWith(":", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!trimmed.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var data = trimmed.Substring("data:".Length).Trim();
+                    if (string.Equals(data, "[DONE]", StringComparison.Ordinal))
+                    {
+                        break;
+                    }
+
+                    AppendStreamingDeltaContent(builder, data);
+                }
+            }
+
+            if (builder.Length == 0)
+            {
+                var fallbackBody = rawBody.ToString();
+                if (!string.IsNullOrWhiteSpace(fallbackBody))
+                {
+                    return ExtractChatCompletionsText(fallbackBody);
+                }
+
+                throw new InvalidOperationException("AI column mapping API returned an empty streaming response.");
+            }
+
+            return builder.ToString();
+        }
+
+        private static void AppendStreamingDeltaContent(StringBuilder builder, string data)
+        {
+            try
+            {
+                var parsed = JObject.Parse(data);
+                var content = parsed["choices"]?[0]?["delta"]?["content"] ?? parsed["choices"]?[0]?["message"]?["content"];
+                if (content == null)
+                {
+                    return;
+                }
+
+                if (content.Type == JTokenType.String)
+                {
+                    builder.Append(content.Value<string>());
+                    return;
+                }
+
+                if (content is JArray contentItems)
+                {
+                    foreach (var contentItem in contentItems)
+                    {
+                        var contentText = contentItem["text"]?.Value<string>();
+                        if (!string.IsNullOrEmpty(contentText))
+                        {
+                            builder.Append(contentText);
+                        }
+                    }
+                }
+            }
+            catch (JsonException error)
+            {
+                throw new InvalidOperationException("AI column mapping API returned a malformed streaming chunk.", error);
             }
         }
 

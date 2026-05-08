@@ -77,6 +77,65 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void MapReadsStreamingChatCompletionDeltas()
+        {
+            var handler = new RecordingHandler(_ => CreateStreamingChatCompletionResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"Mappings\\\":[\"}}]}\n\n"
+                + "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"ExcelColumn\\\":2,\\\"ActualL1\\\":\\\"项目负责人\\\",\\\"TargetHeaderId\\\":\\\"owner_name\\\",\\\"TargetApiFieldKey\\\":\\\"owner_name\\\",\\\"Confidence\\\":0.91}\"}}]}\n\n"
+                + "data: {\"choices\":[{\"delta\":{\"content\":\"],\\\"Unmatched\\\":[]}\"}}]}\n\n"
+                + "data: [DONE]\n\n"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Contains("\"stream\":true", handler.LastBody, StringComparison.Ordinal);
+            var mapping = Assert.Single(result.Mappings);
+            Assert.Equal(2, mapping.ExcelColumn);
+            Assert.Equal("owner_name", mapping.TargetHeaderId);
+            Assert.Equal(0.91, mapping.Confidence);
+        }
+
+        [Fact]
+        public void MapFallsBackToNonStreamingWhenStreamingRequestIsRejected()
+        {
+            RecordingHandler handler = null;
+            handler = new RecordingHandler(request =>
+            {
+                if (handler.CallCount == 1)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent("{\"error\":{\"message\":\"stream unsupported\"}}"),
+                    };
+                }
+
+                return CreateChatCompletionResponse(
+                    "{\"Mappings\":[{\"ExcelColumn\":2,\"ActualL1\":\"项目负责人\",\"TargetHeaderId\":\"owner_name\",\"TargetApiFieldKey\":\"owner_name\",\"Confidence\":0.91}],\"Unmatched\":[]}");
+            });
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            var result = client.Map(CreateRequest());
+
+            Assert.Equal(2, handler.CallCount);
+            Assert.Contains("\"stream\":false", handler.LastBody, StringComparison.Ordinal);
+            Assert.Equal("owner_name", Assert.Single(result.Mappings).TargetHeaderId);
+        }
+
+        [Fact]
         public void MapParsesTextFromContentArrays()
         {
             var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -263,6 +322,14 @@ namespace OfficeAgent.Infrastructure.Tests
                         },
                     },
                 }).ToString()),
+            };
+        }
+
+        private static HttpResponseMessage CreateStreamingChatCompletionResponse(string content)
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content),
             };
         }
 
