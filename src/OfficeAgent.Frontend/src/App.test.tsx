@@ -623,6 +623,22 @@ describe('App shell', () => {
     expect(settingsButton).toHaveFocus();
   });
 
+  it('keeps the settings dialog scrollable within short task pane viewports', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /设置对话框|settings dialog/i });
+
+    expect(dialog).toHaveClass('settings-dialog');
+    expect(dialog).toHaveStyle({
+      maxHeight: 'calc(100vh - 32px)',
+      overflowY: 'auto',
+    });
+  });
+
   it('disables save until settings finish loading', async () => {
     const user = userEvent.setup();
     const delayedSettings = createDeferred<{

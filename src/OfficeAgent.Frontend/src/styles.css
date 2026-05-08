@@ -440,16 +440,20 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 16px;
   background: rgba(15, 23, 42, 0.24);
+  overflow: hidden;
 }
 
 .settings-dialog {
   width: min(480px, 100%);
+  max-height: calc(100vh - 32px);
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 16px;
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
@@ -478,10 +482,10 @@ body {
 
 .settings-field {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   color: #334155;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .settings-field__input-wrapper {
@@ -493,8 +497,8 @@ body {
 .settings-field input {
   width: 100%;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  padding: 10px 40px 10px 12px;
+  border-radius: 8px;
+  padding: 8px 40px 8px 10px;
   font: inherit;
   font-size: 0.9rem;
   color: inherit;

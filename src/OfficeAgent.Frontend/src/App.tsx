@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { nativeBridge } from './bridge/nativeBridge';
 import { ConfirmationCard } from './components/ConfirmationCard';
 import { getUiStrings, UNTITLED_SESSION_STORAGE_TITLE } from './i18n/uiStrings';
@@ -30,6 +30,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   ssoUrl: '',
   ssoLoginSuccessPath: '',
   uiLanguageOverride: 'system',
+};
+
+const SETTINGS_DIALOG_VIEWPORT_STYLE: CSSProperties = {
+  maxHeight: 'calc(100vh - 32px)',
+  overflowY: 'auto',
 };
 
 type ThreadMessage = {
@@ -1065,6 +1070,7 @@ export function App() {
             ref={settingsDialogRef}
             className="settings-dialog"
             role="dialog"
+            style={SETTINGS_DIALOG_VIEWPORT_STYLE}
             aria-modal="true"
             aria-label={strings.settingsDialogLabel}
             onKeyDown={handleSettingsDialogKeyDown}
