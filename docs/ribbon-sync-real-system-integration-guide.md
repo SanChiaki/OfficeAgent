@@ -242,7 +242,8 @@ Ribbon 点击链路：
 - 表头扫描按 `SheetBindings.HeaderStartRow + HeaderRowCount` 扫描完整表头区域，不依赖当前选区。
 - 用户必须先确认预览；取消预览不会写入 `xISDP_Setting`。
 - 确认后只更新 `Excel L1 / Excel L2`，不会覆盖 `ISDP L1 / ISDP L2`、HeaderId、ApiFieldKey、ID 列标记或活动字段标识。
-- 低置信度、未匹配、重复目标、重复 Excel 列、ID 列和不符合当前表头层级的建议会被跳过。
+- 低置信度、未匹配、重复目标、重复 Excel 列和 ID 列建议会被跳过。
+- `Excel L1 / Excel L2` 是可自由分配的当前显示名；AI 映射确认写回时不会因为候选行是 `activityProperty`、`single` 或其他类型而限制 L1 / L2 组合，也不会因为当前 `HeaderRowCount` 限制模型推荐的 L2。
 
 这意味着真实系统不应把 AI 映射当成字段定义来源。字段定义仍然来自连接器和业务接口；AI 只帮助把用户 Excel 中的实际显示名填回当前显示文本列。
 

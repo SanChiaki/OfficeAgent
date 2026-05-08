@@ -94,6 +94,7 @@
 - On an initialized sheet, rename one visible business header so it no longer matches `ISDP L1` / `ISDP L2`, click `AI映射列` / `AI map columns`, and confirm the preview dialog appears before any metadata is saved.
 - In the AI mapping preview, cancel the dialog and confirm `xISDP_Setting.SheetFieldMappings` remains unchanged.
 - Run `AI映射列` / `AI map columns` again, confirm the preview, and verify only `Excel L1` / `Excel L2` are updated for accepted recommendations; `ISDP L1` / `ISDP L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, and `PropertyId` must remain unchanged.
+- Include one model recommendation that writes an L1/L2 combination different from the original field type or visible header depth, such as mapping a single-level actual header to an `activityProperty` row or mapping a two-level actual header to a `single` row, and confirm accepted recommendations still update only `Excel L1` / `Excel L2`.
 - Prepare headers outside the current selection but inside the configured header rows, select an unrelated cell, run `AI映射列` / `AI map columns`, and confirm the preview still includes the full configured header area rather than only the selected cell.
 - Include one low-confidence or unmatched actual header in the model response or test fixture and confirm it remains visible in preview but is skipped after confirmation.
 - Click `下载` / `Download` and `上传` / `Upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.

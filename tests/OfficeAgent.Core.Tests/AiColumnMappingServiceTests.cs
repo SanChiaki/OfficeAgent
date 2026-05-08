@@ -415,7 +415,7 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
-        public void ApplyConfirmedPreviewUsesRowHeaderTypeInsteadOfPreviewHeaderType()
+        public void ApplyConfirmedPreviewWritesL1AndL2WithoutUsingHeaderType()
         {
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
@@ -441,13 +441,13 @@ namespace OfficeAgent.Core.Tests
             var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 2);
 
             Assert.Equal(1, result.AppliedCount);
-            Assert.Equal(string.Empty, result.Rows[0].Values["current_single"]);
+            Assert.Equal("实际开始", result.Rows[0].Values["current_single"]);
             Assert.Equal("实际开始", result.Rows[0].Values["current_parent"]);
             Assert.Equal("实际结束", result.Rows[0].Values["current_child"]);
         }
 
         [Fact]
-        public void ActivityPropertyMappingsAreRejectedWhenHeaderRowCountIsOne()
+        public void ActivityPropertyMappingsCanUseSingleLevelModelRecommendationWhenHeaderRowCountIsOne()
         {
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
@@ -471,17 +471,17 @@ namespace OfficeAgent.Core.Tests
             var preview = service.CreatePreview(request, response, headerRowCount: 1);
             var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 1);
 
-            Assert.Equal(AiColumnMappingPreviewStatuses.Rejected, Assert.Single(preview.Items).Status);
-            Assert.Equal(0, result.AppliedCount);
-            Assert.Equal(string.Empty, result.Rows[0].Values["current_single"]);
-            Assert.Equal("测试活动111", result.Rows[0].Values["current_parent"]);
-            Assert.Equal("开始时间", result.Rows[0].Values["current_child"]);
+            Assert.Equal(AiColumnMappingPreviewStatuses.Accepted, Assert.Single(preview.Items).Status);
+            Assert.Equal(1, result.AppliedCount);
+            Assert.Equal("实际开始", result.Rows[0].Values["current_single"]);
+            Assert.Equal("实际开始", result.Rows[0].Values["current_parent"]);
+            Assert.Equal(string.Empty, result.Rows[0].Values["current_child"]);
         }
 
         [Theory]
         [InlineData("", "开始时间")]
         [InlineData("测试活动111", "")]
-        public void ApplyConfirmedPreviewRejectsActivityPropertyWithoutBothParentAndChildHeaders(string actualL1, string actualL2)
+        public void ApplyConfirmedPreviewAllowsPartialL1AndL2ForAnyHeaderType(string actualL1, string actualL2)
         {
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
@@ -506,10 +506,10 @@ namespace OfficeAgent.Core.Tests
 
             var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 2);
 
-            Assert.Equal(0, result.AppliedCount);
-            Assert.Equal(string.Empty, result.Rows[0].Values["current_single"]);
-            Assert.Equal("测试活动111", result.Rows[0].Values["current_parent"]);
-            Assert.Equal("开始时间", result.Rows[0].Values["current_child"]);
+            Assert.Equal(1, result.AppliedCount);
+            Assert.Equal(actualL1, result.Rows[0].Values["current_single"]);
+            Assert.Equal(actualL1, result.Rows[0].Values["current_parent"]);
+            Assert.Equal(actualL2, result.Rows[0].Values["current_child"]);
         }
 
         [Fact]
@@ -923,7 +923,7 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
-        public void ApplyConfirmedPreviewRejectsL2SuggestionsWhenHeaderRowCountIsOne()
+        public void ApplyConfirmedPreviewAllowsL2SuggestionsWhenHeaderRowCountIsOne()
         {
             var service = new AiColumnMappingService();
             var definition = CreateDefinition();
@@ -948,11 +948,11 @@ namespace OfficeAgent.Core.Tests
             var preview = service.CreatePreview(request, response, headerRowCount: 1);
             var result = service.ApplyConfirmedPreview("Sheet1", definition, rows, preview, headerRowCount: 1);
 
-            Assert.Equal(AiColumnMappingPreviewStatuses.Rejected, Assert.Single(preview.Items).Status);
-            Assert.Equal(0, result.AppliedCount);
-            Assert.Equal("负责人", result.Rows[0].Values["current_single"]);
-            Assert.Equal("负责人", result.Rows[0].Values["current_parent"]);
-            Assert.Equal(string.Empty, result.Rows[0].Values["current_child"]);
+            Assert.Equal(AiColumnMappingPreviewStatuses.Accepted, Assert.Single(preview.Items).Status);
+            Assert.Equal(1, result.AppliedCount);
+            Assert.Equal("项目", result.Rows[0].Values["current_single"]);
+            Assert.Equal("项目", result.Rows[0].Values["current_parent"]);
+            Assert.Equal("负责人", result.Rows[0].Values["current_child"]);
         }
 
         private static AiColumnMappingRequest CreateRequest(

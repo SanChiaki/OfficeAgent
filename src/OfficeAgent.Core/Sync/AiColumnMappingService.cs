@@ -176,10 +176,9 @@ namespace OfficeAgent.Core.Sync
                 var key = CreateTargetKey(
                     accessor.GetValue(definition, row, FieldMappingSemanticRole.HeaderIdentity),
                     accessor.GetValue(definition, row, FieldMappingSemanticRole.ApiFieldKey));
-                var headerType = accessor.GetValue(definition, row, FieldMappingSemanticRole.HeaderType);
-                if (acceptedByTarget.TryGetValue(key, out var accepted) && MatchesTarget(definition, row, accepted) && CanApplyToRowHeaderType(headerType, headerRowCount, accepted))
+                if (acceptedByTarget.TryGetValue(key, out var accepted) && MatchesTarget(definition, row, accepted))
                 {
-                    ApplyAccepted(definition, row, accepted, headerType);
+                    ApplyAccepted(definition, row, accepted);
                     appliedCount++;
                 }
             }
@@ -308,16 +307,6 @@ namespace OfficeAgent.Core.Sync
                 return AiColumnMappingPreviewStatuses.Rejected;
             }
 
-            if (headerRowCount <= 1 && IsActivityProperty(candidate.HeaderType))
-            {
-                return AiColumnMappingPreviewStatuses.Rejected;
-            }
-
-            if (headerRowCount <= 1 && !string.IsNullOrWhiteSpace(item.ActualL2))
-            {
-                return AiColumnMappingPreviewStatuses.Rejected;
-            }
-
             return item.Confidence >= ConfidenceThreshold
                 ? AiColumnMappingPreviewStatuses.Accepted
                 : AiColumnMappingPreviewStatuses.LowConfidence;
@@ -357,16 +346,6 @@ namespace OfficeAgent.Core.Sync
                 return "Rejected duplicate Excel column.";
             }
 
-            if (headerRowCount <= 1 && IsActivityProperty(candidate.HeaderType))
-            {
-                return "Rejected header row count incompatible suggestion.";
-            }
-
-            if (headerRowCount <= 1 && !string.IsNullOrWhiteSpace(item.ActualL2))
-            {
-                return "Rejected header row count incompatible suggestion.";
-            }
-
             return "Rejected suggestion.";
         }
 
@@ -376,8 +355,7 @@ namespace OfficeAgent.Core.Sync
                 && item.ExcelColumn > 0
                 && !string.IsNullOrWhiteSpace(item.TargetHeaderId)
                 && !string.IsNullOrWhiteSpace(item.TargetApiFieldKey)
-                && item.Confidence >= ConfidenceThreshold
-                && !(headerRowCount <= 1 && !string.IsNullOrWhiteSpace(item.ActualL2));
+                && item.Confidence >= ConfidenceThreshold;
         }
 
         private static HashSet<string> CreateDuplicateTargetIdentities(IEnumerable<AiColumnMappingCandidate> candidates)
@@ -448,24 +426,6 @@ namespace OfficeAgent.Core.Sync
                    duplicateTargets.Contains(value);
         }
 
-        private static bool CanApplyToRowHeaderType(string headerType, int headerRowCount, AiColumnMappingPreviewItem item)
-        {
-            if (!IsActivityProperty(headerType))
-            {
-                return true;
-            }
-
-            return headerRowCount > 1
-                && item != null
-                && !string.IsNullOrWhiteSpace(item.ActualL1)
-                && !string.IsNullOrWhiteSpace(item.ActualL2);
-        }
-
-        private static bool IsActivityProperty(string headerType)
-        {
-            return string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase);
-        }
-
         private bool MatchesTarget(
             FieldMappingTableDefinition definition,
             SheetFieldMappingRow row,
@@ -499,8 +459,7 @@ namespace OfficeAgent.Core.Sync
         private static void ApplyAccepted(
             FieldMappingTableDefinition definition,
             SheetFieldMappingRow row,
-            AiColumnMappingPreviewItem accepted,
-            string headerType)
+            AiColumnMappingPreviewItem accepted)
         {
             var values = row.Values as IDictionary<string, string>;
             if (values == null)
@@ -509,25 +468,9 @@ namespace OfficeAgent.Core.Sync
                 row.Values = (IReadOnlyDictionary<string, string>)values;
             }
 
-            if (string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase))
-            {
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentSingleHeaderText, string.Empty);
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentParentHeaderText, accepted.ActualL1);
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentChildHeaderText, accepted.ActualL2);
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(accepted.ActualL2))
-            {
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentSingleHeaderText, string.Empty);
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentParentHeaderText, accepted.ActualL1);
-                SetValue(definition, values, FieldMappingSemanticRole.CurrentChildHeaderText, accepted.ActualL2);
-                return;
-            }
-
             SetValue(definition, values, FieldMappingSemanticRole.CurrentSingleHeaderText, accepted.ActualL1);
             SetValue(definition, values, FieldMappingSemanticRole.CurrentParentHeaderText, accepted.ActualL1);
-            SetValue(definition, values, FieldMappingSemanticRole.CurrentChildHeaderText, string.Empty);
+            SetValue(definition, values, FieldMappingSemanticRole.CurrentChildHeaderText, accepted.ActualL2);
         }
 
         private static void SetValue(
