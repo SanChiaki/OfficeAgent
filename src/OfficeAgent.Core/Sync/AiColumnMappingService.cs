@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using OfficeAgent.Core.Models;
 
 namespace OfficeAgent.Core.Sync
@@ -8,6 +9,8 @@ namespace OfficeAgent.Core.Sync
     public sealed class AiColumnMappingService
     {
         private const double ConfidenceThreshold = 0.75;
+        private const int CandidatePreselectionThreshold = 120;
+        private const int CandidateLimitPerActualHeader = 30;
 
         private readonly FieldMappingValueAccessor accessor = new FieldMappingValueAccessor();
 
@@ -22,17 +25,20 @@ namespace OfficeAgent.Core.Sync
                 throw new ArgumentNullException(nameof(definition));
             }
 
+            var actualHeaderList = (actualHeaders ?? Array.Empty<AiColumnMappingActualHeader>())
+                .Where(header => header != null)
+                .ToArray();
+            var candidates = (rows ?? Array.Empty<SheetFieldMappingRow>())
+                .Where(row => IsTargetSheet(row, sheetName))
+                .Select(row => CreateCandidate(definition, row))
+                .ToArray();
+
             return new AiColumnMappingRequest
             {
                 SystemKey = definition.SystemKey ?? string.Empty,
                 SheetName = sheetName ?? string.Empty,
-                ActualHeaders = (actualHeaders ?? Array.Empty<AiColumnMappingActualHeader>())
-                    .Where(header => header != null)
-                    .ToArray(),
-                Candidates = (rows ?? Array.Empty<SheetFieldMappingRow>())
-                    .Where(row => IsTargetSheet(row, sheetName))
-                    .Select(row => CreateCandidate(definition, row))
-                    .ToArray(),
+                ActualHeaders = actualHeaderList,
+                Candidates = PreselectCandidates(actualHeaderList, candidates),
             };
         }
 
@@ -211,6 +217,283 @@ namespace OfficeAgent.Core.Sync
                 ActivityId = accessor.GetValue(definition, row, FieldMappingSemanticRole.ActivityIdentity),
                 PropertyId = accessor.GetValue(definition, row, FieldMappingSemanticRole.PropertyIdentity),
             };
+        }
+
+        private static AiColumnMappingCandidate[] PreselectCandidates(
+            IReadOnlyList<AiColumnMappingActualHeader> actualHeaders,
+            IReadOnlyList<AiColumnMappingCandidate> candidates)
+        {
+            var candidateList = (candidates ?? Array.Empty<AiColumnMappingCandidate>())
+                .Where(candidate => candidate != null)
+                .ToArray();
+            if (candidateList.Length <= CandidatePreselectionThreshold ||
+                actualHeaders == null ||
+                actualHeaders.Count == 0)
+            {
+                return candidateList;
+            }
+
+            var bestScoresByIndex = new Dictionary<int, double>();
+            foreach (var actual in actualHeaders.Where(header => header != null))
+            {
+                foreach (var scoredCandidate in candidateList
+                    .Select((candidate, index) => new
+                    {
+                        Index = index,
+                        Score = ScoreCandidate(actual, candidate),
+                    })
+                    .OrderByDescending(candidate => candidate.Score)
+                    .ThenBy(candidate => candidate.Index)
+                    .Take(CandidateLimitPerActualHeader))
+                {
+                    if (!bestScoresByIndex.TryGetValue(scoredCandidate.Index, out var bestScore) ||
+                        scoredCandidate.Score > bestScore)
+                    {
+                        bestScoresByIndex[scoredCandidate.Index] = scoredCandidate.Score;
+                    }
+                }
+            }
+
+            if (bestScoresByIndex.Count == 0)
+            {
+                return candidateList.Take(CandidateLimitPerActualHeader).ToArray();
+            }
+
+            return bestScoresByIndex
+                .OrderByDescending(pair => pair.Value)
+                .ThenBy(pair => pair.Key)
+                .Select(pair => candidateList[pair.Key])
+                .ToArray();
+        }
+
+        private static double ScoreCandidate(
+            AiColumnMappingActualHeader actual,
+            AiColumnMappingCandidate candidate)
+        {
+            if (actual == null || candidate == null)
+            {
+                return 0;
+            }
+
+            var bestTextScore = MaxPairwiseSimilarity(BuildActualTexts(actual), BuildCandidateTexts(candidate));
+            var defaultScore = ScoreHeaderPair(actual.ActualL1, actual.ActualL2, candidate.IsdpL1, candidate.IsdpL2);
+            var currentScore = ScoreHeaderPair(actual.ActualL1, actual.ActualL2, candidate.CurrentExcelL1, candidate.CurrentExcelL2);
+            return Math.Max(bestTextScore, Math.Max(defaultScore, currentScore));
+        }
+
+        private static double ScoreHeaderPair(
+            string actualL1,
+            string actualL2,
+            string candidateL1,
+            string candidateL2)
+        {
+            var actualHasL2 = !string.IsNullOrWhiteSpace(actualL2);
+            var candidateHasL2 = !string.IsNullOrWhiteSpace(candidateL2);
+            if (!actualHasL2 && !candidateHasL2)
+            {
+                return Similarity(actualL1, candidateL1);
+            }
+
+            return 0.30 * Similarity(actualL1, candidateL1)
+                + 0.55 * Similarity(actualL2, candidateL2)
+                + 0.15 * Similarity(FormatDisplayText(actualL1, actualL2), FormatDisplayText(candidateL1, candidateL2));
+        }
+
+        private static IEnumerable<string> BuildActualTexts(AiColumnMappingActualHeader actual)
+        {
+            yield return actual.ActualL1;
+            yield return actual.ActualL2;
+            yield return actual.DisplayText;
+            yield return FormatDisplayText(actual.ActualL1, actual.ActualL2);
+        }
+
+        private static IEnumerable<string> BuildCandidateTexts(AiColumnMappingCandidate candidate)
+        {
+            yield return candidate.IsdpL1;
+            yield return candidate.IsdpL2;
+            yield return FormatDisplayText(candidate.IsdpL1, candidate.IsdpL2);
+            yield return candidate.CurrentExcelL1;
+            yield return candidate.CurrentExcelL2;
+            yield return FormatDisplayText(candidate.CurrentExcelL1, candidate.CurrentExcelL2);
+        }
+
+        private static double MaxPairwiseSimilarity(IEnumerable<string> leftTexts, IEnumerable<string> rightTexts)
+        {
+            var best = 0.0;
+            foreach (var left in leftTexts ?? Enumerable.Empty<string>())
+            {
+                foreach (var right in rightTexts ?? Enumerable.Empty<string>())
+                {
+                    best = Math.Max(best, Similarity(left, right));
+                }
+            }
+
+            return best;
+        }
+
+        private static double Similarity(string left, string right)
+        {
+            var normalizedLeft = NormalizeHeaderText(left);
+            var normalizedRight = NormalizeHeaderText(right);
+            if (string.IsNullOrEmpty(normalizedLeft) || string.IsNullOrEmpty(normalizedRight))
+            {
+                return 0;
+            }
+
+            if (string.Equals(normalizedLeft, normalizedRight, StringComparison.Ordinal))
+            {
+                return 1;
+            }
+
+            if (normalizedLeft.Contains(normalizedRight) || normalizedRight.Contains(normalizedLeft))
+            {
+                return 0.80;
+            }
+
+            return 0.65 * BigramDice(normalizedLeft, normalizedRight)
+                + 0.35 * NormalizedLevenshtein(normalizedLeft, normalizedRight);
+        }
+
+        private static string NormalizeHeaderText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Normalize(NormalizationForm.FormKC);
+            var builder = new StringBuilder(normalized.Length);
+            foreach (var character in normalized)
+            {
+                if (char.IsWhiteSpace(character) || IsIgnoredHeaderSeparator(character))
+                {
+                    continue;
+                }
+
+                builder.Append(char.ToLowerInvariant(character));
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool IsIgnoredHeaderSeparator(char character)
+        {
+            switch (character)
+            {
+                case '/':
+                case '\\':
+                case '-':
+                case '_':
+                case ':':
+                case '：':
+                case '|':
+                case '｜':
+                case ',':
+                case '，':
+                case '.':
+                case '。':
+                case ';':
+                case '；':
+                case '(':
+                case ')':
+                case '（':
+                case '）':
+                case '[':
+                case ']':
+                case '【':
+                case '】':
+                case '{':
+                case '}':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static double BigramDice(string left, string right)
+        {
+            if (left.Length == 1 || right.Length == 1)
+            {
+                return string.Equals(left, right, StringComparison.Ordinal) ? 1 : 0;
+            }
+
+            var leftBigrams = CreateBigramCounts(left);
+            var rightBigrams = CreateBigramCounts(right);
+            var intersection = 0;
+            foreach (var pair in leftBigrams)
+            {
+                if (rightBigrams.TryGetValue(pair.Key, out var matchingRightCount))
+                {
+                    intersection += Math.Min(pair.Value, matchingRightCount);
+                }
+            }
+
+            var leftCount = leftBigrams.Values.Sum();
+            var rightCount = rightBigrams.Values.Sum();
+            return leftCount + rightCount == 0
+                ? 0
+                : (2.0 * intersection) / (leftCount + rightCount);
+        }
+
+        private static Dictionary<string, int> CreateBigramCounts(string value)
+        {
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var index = 0; index < value.Length - 1; index++)
+            {
+                var bigram = value.Substring(index, 2);
+                result[bigram] = result.TryGetValue(bigram, out var count) ? count + 1 : 1;
+            }
+
+            return result;
+        }
+
+        private static double NormalizedLevenshtein(string left, string right)
+        {
+            var maxLength = Math.Max(left.Length, right.Length);
+            if (maxLength == 0)
+            {
+                return 1;
+            }
+
+            return 1.0 - ((double)LevenshteinDistance(left, right) / maxLength);
+        }
+
+        private static int LevenshteinDistance(string left, string right)
+        {
+            var previous = new int[right.Length + 1];
+            var current = new int[right.Length + 1];
+            for (var column = 0; column <= right.Length; column++)
+            {
+                previous[column] = column;
+            }
+
+            for (var row = 1; row <= left.Length; row++)
+            {
+                current[0] = row;
+                for (var column = 1; column <= right.Length; column++)
+                {
+                    var cost = left[row - 1] == right[column - 1] ? 0 : 1;
+                    current[column] = Math.Min(
+                        Math.Min(current[column - 1] + 1, previous[column] + 1),
+                        previous[column - 1] + cost);
+                }
+
+                var swap = previous;
+                previous = current;
+                current = swap;
+            }
+
+            return previous[right.Length];
+        }
+
+        private static string FormatDisplayText(string l1, string l2)
+        {
+            if (string.IsNullOrWhiteSpace(l2))
+            {
+                return l1 ?? string.Empty;
+            }
+
+            return (l1 ?? string.Empty) + "/" + l2;
         }
 
         private string ResolveCurrentL1(

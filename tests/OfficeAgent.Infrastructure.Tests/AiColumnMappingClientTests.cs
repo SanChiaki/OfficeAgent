@@ -58,6 +58,25 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void MapUsesCompactJsonForColumnMappingPrompt()
+        {
+            var handler = new RecordingHandler(_ => CreateChatCompletionResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
+            var client = new AiColumnMappingClient(
+                new HttpClient(handler),
+                () => new AppSettings
+                {
+                    ApiKey = "secret-token",
+                    BaseUrl = "https://api.internal.example",
+                    Model = "gpt-5-mini",
+                });
+
+            client.Map(CreateRequest());
+
+            Assert.Contains("Column mapping request:\\n{\\\"SystemKey\\\":", handler.LastBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("\\n  \\\"SystemKey\\\"", handler.LastBody, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void MapParsesTextFromContentArrays()
         {
             var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

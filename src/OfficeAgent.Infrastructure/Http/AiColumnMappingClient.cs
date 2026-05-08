@@ -139,7 +139,7 @@ namespace OfficeAgent.Infrastructure.Http
         {
             return "Column mapping request:\n" + JsonConvert.SerializeObject(
                 request ?? new AiColumnMappingRequest(),
-                Formatting.Indented,
+                Formatting.None,
                 new JsonSerializerSettings
                 {
                     NullValueHandling = NullValueHandling.Ignore,

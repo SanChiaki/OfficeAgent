@@ -282,6 +282,10 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 3. 单层表头读取实际单元格文本；双层表头读取父 / 子两行文本，并兼容父表头横向合并或只在第一列填写的常见布局。
 4. 读取当前 `SheetFieldMappings` 作为候选字段，包含默认 ISDP 表头、当前 Excel 表头、字段类型、HeaderId、ApiFieldKey、ID 字段和活动属性标识。
 5. 调用 AI 列映射客户端生成推荐。该客户端复用现有设置中的 `Base URL`、`API Key` 和 `Model`，并使用 OpenAI-compatible `chat/completions` JSON 响应。
+   - 当候选字段数量较少时，请求会保留当前 sheet 的全部候选字段。
+   - 当候选字段超过大表阈值时，插件会先用本地文本相似度给候选排序，只把每个实际表头最相关的一批候选拼进 prompt，减少模型输入规模。
+   - 本地相似度只用于候选召回和排序，不会直接决定最终映射；最终是否应用仍由模型推荐、预览确认和本地校验共同决定。
+   - prompt 中的映射 JSON 使用紧凑序列化，避免多余缩进增加 token。
 6. 弹出 WinForms 预览确认对话框，展示 Excel 列号、实际表头、目标 ISDP 表头、建议写入的 Excel 表头、置信度、状态和原因。
 7. 用户确认后，仅把状态为 accepted 的推荐写入 `SheetFieldMappings.Excel L1 / Excel L2`；取消则不会保存任何 metadata。
 8. 完成提示会显示应用数量和跳过数量；如果没有可应用推荐，则只显示没有可应用的推荐。

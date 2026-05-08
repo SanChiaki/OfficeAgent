@@ -238,6 +238,7 @@ Ribbon 点击链路：
 
 - 真实连接器必须给 `SheetFieldMappings` 列定义提供清晰的语义角色，包括默认表头、当前 Excel 表头、HeaderId、ApiFieldKey、ID 标记，以及活动字段的 ActivityId / PropertyId。
 - AI 映射请求会使用这些语义角色构造候选字段，不依赖固定列顺序。
+- 当当前 sheet 的候选字段较多时，AI 映射会先按实际表头和候选表头的本地文本相似度做候选召回，只把相关候选拼进 prompt；该本地排序不决定最终映射。
 - 当前实现复用插件设置里的 `Base URL`、`API Key` 和 `Model`，所以不需要为真实系统新增单独的模型配置；只要现有 LLM 设置可用即可。
 - 表头扫描按 `SheetBindings.HeaderStartRow + HeaderRowCount` 扫描完整表头区域，不依赖当前选区。
 - 用户必须先确认预览；取消预览不会写入 `xISDP_Setting`。

@@ -61,6 +61,50 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void BuildRequestPreselectsRelevantCandidatesForLargeCandidateSets()
+        {
+            var service = new AiColumnMappingService();
+            var definition = CreateDefinition();
+            var rows = new List<SheetFieldMappingRow> { CreateOwnerRow() };
+            for (var index = 0; index < 140; index++)
+            {
+                rows.Add(CreateSingleRow(
+                    "noise_" + index.ToString("D3"),
+                    "无关字段" + index.ToString("D3")));
+            }
+
+            var request = service.BuildRequest(
+                "Sheet1",
+                definition,
+                rows,
+                new[] { new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "项目负责人", DisplayText = "项目负责人" } });
+
+            Assert.True(request.Candidates.Length <= 30);
+            Assert.Contains(request.Candidates, candidate => string.Equals(candidate.HeaderId, "owner_name", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void BuildRequestKeepsAllCandidatesForSmallCandidateSets()
+        {
+            var service = new AiColumnMappingService();
+            var definition = CreateDefinition();
+            var rows = new[]
+            {
+                CreateOwnerRow(),
+                CreateStatusRow(),
+                CreateActivityPropertyRow(),
+            };
+
+            var request = service.BuildRequest(
+                "Sheet1",
+                definition,
+                rows,
+                new[] { new AiColumnMappingActualHeader { ExcelColumn = 2, ActualL1 = "完全不同", DisplayText = "完全不同" } });
+
+            Assert.Equal(3, request.Candidates.Length);
+        }
+
+        [Fact]
         public void JsonSerializationOmitsCompatibilityAliasProperties()
         {
             var response = new AiColumnMappingResponse
@@ -1083,6 +1127,29 @@ namespace OfficeAgent.Core.Tests
                     ["current_parent"] = "状态",
                     ["current_child"] = string.Empty,
                     ["api_field_key"] = "status",
+                    ["is_id_column"] = "false",
+                    ["activity_id"] = string.Empty,
+                    ["property_id"] = string.Empty,
+                },
+            };
+        }
+
+        private static SheetFieldMappingRow CreateSingleRow(string headerId, string headerText)
+        {
+            return new SheetFieldMappingRow
+            {
+                SheetName = "Sheet1",
+                Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["header_id"] = headerId,
+                    ["header_type"] = "single",
+                    ["default_l1"] = headerText,
+                    ["default_parent"] = headerText,
+                    ["default_l2"] = string.Empty,
+                    ["current_single"] = headerText,
+                    ["current_parent"] = headerText,
+                    ["current_child"] = string.Empty,
+                    ["api_field_key"] = headerId,
                     ["is_id_column"] = "false",
                     ["activity_id"] = string.Empty,
                     ["property_id"] = string.Empty,
