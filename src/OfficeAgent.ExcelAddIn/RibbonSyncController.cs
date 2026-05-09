@@ -243,23 +243,46 @@ namespace OfficeAgent.ExcelAddIn
                 return;
             }
 
+            var sheetName = string.Empty;
+            var project = new ProjectOption
+            {
+                SystemKey = ActiveSystemKey,
+                ProjectId = ActiveProjectId,
+                DisplayName = ActiveProjectDisplayName,
+            };
             try
             {
-                var sheetName = GetRequiredSheetName();
-                EnsureExecutionService().InitializeCurrentSheet(sheetName, new ProjectOption
-                {
-                    SystemKey = ActiveSystemKey,
-                    ProjectId = ActiveProjectId,
-                    DisplayName = ActiveProjectDisplayName,
-                });
+                sheetName = GetRequiredSheetName();
+                OfficeAgentLog.Info(
+                    "ribbon_sync",
+                    "initialize_sheet.begin",
+                    "Initializing current worksheet.",
+                    BuildInitializeSheetDetails(sheetName, project));
+                EnsureExecutionService().InitializeCurrentSheet(sheetName, project);
+                OfficeAgentLog.Info(
+                    "ribbon_sync",
+                    "initialize_sheet.completed",
+                    "Current worksheet initialized.",
+                    BuildInitializeSheetDetails(sheetName, project));
                 dialogService.ShowInfo(GetStrings().InitializeCurrentSheetCompletedMessage);
             }
             catch (AuthenticationRequiredException ex)
             {
+                OfficeAgentLog.Warn(
+                    "ribbon_sync",
+                    "initialize_sheet.authentication_required",
+                    "Authentication is required while initializing current worksheet.",
+                    BuildInitializeSheetDetails(sheetName, project));
                 HandleAuthenticationRequired(ex);
             }
             catch (Exception ex)
             {
+                OfficeAgentLog.Error(
+                    "ribbon_sync",
+                    "initialize_sheet.failed",
+                    "Failed to initialize current worksheet.",
+                    ex,
+                    BuildInitializeSheetDetails(sheetName, project));
                 dialogService.ShowError(ex.Message);
             }
         }
@@ -577,6 +600,16 @@ namespace OfficeAgent.ExcelAddIn
                 AppendDetail(builder, "DataStartRow", layoutBinding.DataStartRow.ToString());
             }
 
+            return builder.ToString();
+        }
+
+        private static string BuildInitializeSheetDetails(string sheetName, ProjectOption project)
+        {
+            var builder = new StringBuilder();
+            AppendDetail(builder, "SheetName", sheetName);
+            AppendDetail(builder, "SystemKey", project?.SystemKey);
+            AppendDetail(builder, "ProjectId", project?.ProjectId);
+            AppendDetail(builder, "ProjectName", project?.DisplayName);
             return builder.ToString();
         }
 

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Infrastructure.Http;
 using Xunit;
@@ -157,6 +158,33 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void BuildFieldMappingSeedLogsRequestTimeoutWithEndpointAndProject()
+        {
+            var handler = new TimeoutOnPathHandler("/find");
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+
+            var capture = CaptureLogEntriesAllowingFailure(() => connector.BuildFieldMappingSeed("Sheet1", "performance"));
+
+            var error = Assert.IsType<TaskCanceledException>(capture.Failure);
+            Assert.Equal("A task was canceled.", error.Message);
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "info" &&
+                entry.Component == "business_api" &&
+                entry.EventName == "request.begin" &&
+                entry.Details.Contains("Method=POST") &&
+                entry.Details.Contains("Path=/find") &&
+                entry.Details.Contains("ProjectId=performance"));
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "error" &&
+                entry.Component == "business_api" &&
+                entry.EventName == "request.timeout" &&
+                entry.Details.Contains("Method=POST") &&
+                entry.Details.Contains("Path=/find") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Exception.Contains("TaskCanceledException"));
+        }
+
+        [Fact]
         public void FindUsesBusinessBaseUrlInsteadOfTheLlmBaseUrl()
         {
             var handler = new RecordingHandler();
@@ -249,6 +277,26 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(0, handler.CallCount);
             Assert.Equal(string.Empty, handler.LastPath);
             Assert.Equal(string.Empty, handler.LastBody);
+        }
+
+        private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
+        {
+            var entries = new List<OfficeAgentLogEntry>();
+            OfficeAgentLog.Configure(entries.Add);
+
+            try
+            {
+                action();
+                return new LogCaptureResult(entries, null);
+            }
+            catch (Exception ex)
+            {
+                return new LogCaptureResult(entries, ex);
+            }
+            finally
+            {
+                OfficeAgentLog.Reset();
+            }
         }
 
         private sealed class RecordingHandler : HttpMessageHandler
@@ -354,6 +402,48 @@ namespace OfficeAgent.Infrastructure.Tests
                     Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 });
             }
+        }
+
+        private sealed class TimeoutOnPathHandler : HttpMessageHandler
+        {
+            private readonly string timeoutPath;
+
+            public TimeoutOnPathHandler(string timeoutPath)
+            {
+                this.timeoutPath = timeoutPath;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (string.Equals(request.RequestUri?.AbsolutePath, timeoutPath, StringComparison.Ordinal))
+                {
+                    throw new TaskCanceledException("A task was canceled.");
+                }
+
+                var responseBody = request.RequestUri?.AbsolutePath switch
+                {
+                    "/head" => @"{""headList"":[{""fieldKey"":""row_id"",""headerText"":""ID"",""headType"":""single"",""isId"":true}]}",
+                    _ => "[]",
+                };
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
+                });
+            }
+        }
+
+        private sealed class LogCaptureResult
+        {
+            public LogCaptureResult(List<OfficeAgentLogEntry> entries, Exception failure)
+            {
+                Entries = entries;
+                Failure = failure;
+            }
+
+            public List<OfficeAgentLogEntry> Entries { get; }
+
+            public Exception Failure { get; }
         }
     }
 }

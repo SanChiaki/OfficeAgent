@@ -412,6 +412,51 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteInitializeCurrentSheetFailureWritesDiagnostics()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BuildFieldMappingSeedException = new TaskCanceledException("A task was canceled."),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 9,
+            };
+
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+            InvokeRefresh(controller);
+
+            var logs = CaptureLogEntries(() => InvokeExecuteInitializeCurrentSheet(controller));
+
+            Assert.Single(dialogService.ErrorMessages);
+            Assert.Equal("A task was canceled.", dialogService.ErrorMessages[0]);
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "initialize_sheet.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("SystemKey=current-business-system") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Details.Contains("ProjectName=绩效项目"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "error" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "initialize_sheet.failed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Exception.Contains("TaskCanceledException") &&
+                entry.Exception.Contains("A task was canceled."));
+        }
+
+        [Fact]
         public void ExecuteInitializeCurrentSheetLocalizesLoginPromptWhenAuthenticationIsRequired()
         {
             var connector = new FakeSystemConnector

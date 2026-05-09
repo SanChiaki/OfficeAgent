@@ -279,12 +279,47 @@ namespace OfficeAgent.Infrastructure.Http
         {
             var baseUri = ResolveBaseUri();
             using var request = new HttpRequestMessage(method, new Uri(baseUri, path));
+            var projectId = ExtractProjectId(payload);
             if (payload != null)
             {
                 request.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
             }
 
-            return httpClient.SendAsync(request).GetAwaiter().GetResult();
+            OfficeAgentLog.Info(
+                "business_api",
+                "request.begin",
+                "Business API request started.",
+                BuildRequestDetails(method, path, projectId));
+            try
+            {
+                var response = httpClient.SendAsync(request).GetAwaiter().GetResult();
+                OfficeAgentLog.Info(
+                    "business_api",
+                    "request.completed",
+                    $"Business API request completed with {(int)response.StatusCode} {response.ReasonPhrase}.",
+                    BuildRequestDetails(method, path, projectId));
+                return response;
+            }
+            catch (OperationCanceledException ex)
+            {
+                OfficeAgentLog.Error(
+                    "business_api",
+                    "request.timeout",
+                    "Business API request timed out or was canceled.",
+                    ex,
+                    BuildRequestDetails(method, path, projectId));
+                throw;
+            }
+            catch (HttpRequestException ex)
+            {
+                OfficeAgentLog.Error(
+                    "business_api",
+                    "request.exception",
+                    "Business API request failed with an HTTP transport error.",
+                    ex,
+                    BuildRequestDetails(method, path, projectId));
+                throw;
+            }
         }
 
         private static bool ShouldRetryLegacyBatchSave(HttpStatusCode statusCode, string responseBody)
@@ -332,6 +367,40 @@ namespace OfficeAgent.Infrastructure.Http
             {
                 throw new InvalidOperationException("Project id is required for current business system.");
             }
+        }
+
+        private static string BuildRequestDetails(HttpMethod method, string path, string projectId)
+        {
+            var builder = new StringBuilder();
+            AppendDetail(builder, "Method", method?.Method);
+            AppendDetail(builder, "Path", path);
+            AppendDetail(builder, "ProjectId", projectId);
+            return builder.ToString();
+        }
+
+        private static string ExtractProjectId(object payload)
+        {
+            if (payload == null)
+            {
+                return string.Empty;
+            }
+
+            var property = payload.GetType().GetProperty("projectId") ??
+                payload.GetType().GetProperty("ProjectId");
+            return property?.GetValue(payload)?.ToString() ?? string.Empty;
+        }
+
+        private static void AppendDetail(StringBuilder builder, string name, string value)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append("; ");
+            }
+
+            builder
+                .Append(name)
+                .Append('=')
+                .Append(string.IsNullOrWhiteSpace(value) ? "<empty>" : value);
         }
     }
 }
