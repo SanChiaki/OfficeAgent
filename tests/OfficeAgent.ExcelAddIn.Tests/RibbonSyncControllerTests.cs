@@ -8,6 +8,7 @@ using System.Runtime.Remoting.Proxies;
 using System.Threading;
 using System.Threading.Tasks;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -15,6 +16,13 @@ using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
 {
+    [CollectionDefinition(Name)]
+    public sealed class OfficeAgentLogCollection
+    {
+        public const string Name = "OfficeAgentLog";
+    }
+
+    [Collection(OfficeAgentLogCollection.Name)]
     public sealed class RibbonSyncControllerTests
     {
         [Fact]
@@ -183,6 +191,140 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Null(metadataStore.LastSavedBinding);
             Assert.Equal("old-project", ReadActiveProjectId(controller));
             Assert.Equal("旧项目", ReadActiveProjectDisplayName(controller));
+        }
+
+        [Fact]
+        public void SelectProjectCancelWritesProjectLayoutDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = null,
+            };
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "old-project",
+                ProjectName = "旧项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 7,
+            };
+
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+            InvokeRefresh(controller);
+
+            var logs = CaptureLogEntries(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "new-project",
+                DisplayName = "新项目",
+            }));
+
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.select.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=new-project") &&
+                entry.Details.Contains("ExistingProjectId=old-project"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.layout_dialog.show" &&
+                entry.Details.Contains("HeaderStartRow=5") &&
+                entry.Details.Contains("DataStartRow=7"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "warn" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.layout_dialog.cancelled" &&
+                entry.Details.Contains("RestoredProjectId=old-project"));
+        }
+
+        [Fact]
+        public void SelectProjectConfirmedWritesBindingSaveDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "performance",
+                    ProjectName = "绩效项目",
+                    HeaderStartRow = 4,
+                    HeaderRowCount = 1,
+                    DataStartRow = 5,
+                },
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+
+            var logs = CaptureLogEntries(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            }));
+
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Details.Contains("HeaderStartRow=4"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.completed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Details.Contains("DataStartRow=5"));
+        }
+
+        [Fact]
+        public void SelectProjectSaveBindingFailureWritesErrorDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore
+            {
+                SaveBindingException = new InvalidOperationException("metadata write failed"),
+            };
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "performance",
+                    ProjectName = "绩效项目",
+                    HeaderStartRow = 4,
+                    HeaderRowCount = 1,
+                    DataStartRow = 5,
+                },
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+
+            var capture = CaptureLogEntriesAllowingFailure(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            }));
+
+            var failure = Assert.IsType<TargetInvocationException>(capture.Failure);
+            Assert.IsType<InvalidOperationException>(failure.InnerException);
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "error" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.failed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Exception.Contains("metadata write failed"));
         }
 
         [Fact]
@@ -1008,6 +1150,37 @@ namespace OfficeAgent.ExcelAddIn.Tests
             method.Invoke(controller, new object[] { option });
         }
 
+        private static List<OfficeAgentLogEntry> CaptureLogEntries(Action action)
+        {
+            var capture = CaptureLogEntriesAllowingFailure(action);
+            if (capture.Failure != null)
+            {
+                throw capture.Failure;
+            }
+
+            return capture.Entries;
+        }
+
+        private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
+        {
+            var entries = new List<OfficeAgentLogEntry>();
+            OfficeAgentLog.Configure(entries.Add);
+
+            try
+            {
+                action();
+                return new LogCaptureResult(entries, null);
+            }
+            catch (Exception ex)
+            {
+                return new LogCaptureResult(entries, ex);
+            }
+            finally
+            {
+                OfficeAgentLog.Reset();
+            }
+        }
+
         private static void InvokeRefresh(object controller)
         {
             var method = controller.GetType().GetMethod(
@@ -1364,8 +1537,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public SheetFieldMappingRow[] LastSavedFieldMappings { get; private set; } = Array.Empty<SheetFieldMappingRow>();
 
+            public Exception SaveBindingException { get; set; }
+
             public void SaveBinding(SheetBinding binding)
             {
+                if (SaveBindingException != null)
+                {
+                    throw SaveBindingException;
+                }
+
                 LastSavedBinding = binding;
                 Bindings[binding.SheetName] = binding;
             }
@@ -1524,6 +1704,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     DataStartRow = binding.DataStartRow,
                 };
             }
+        }
+
+        private sealed class LogCaptureResult
+        {
+            public LogCaptureResult(List<OfficeAgentLogEntry> entries, Exception failure)
+            {
+                Entries = entries;
+                Failure = failure;
+            }
+
+            public List<OfficeAgentLogEntry> Entries { get; }
+
+            public Exception Failure { get; }
         }
 
         private sealed class FakeWorksheetSelectionReader : IWorksheetSelectionReader

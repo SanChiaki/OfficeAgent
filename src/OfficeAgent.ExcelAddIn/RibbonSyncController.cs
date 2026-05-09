@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -109,24 +110,70 @@ namespace OfficeAgent.ExcelAddIn
             var sheetName = GetRequiredSheetName();
             var existingBinding = TryLoadBinding(sheetName);
 
+            OfficeAgentLog.Info(
+                "ribbon_sync",
+                "project.select.begin",
+                "Project selection started.",
+                BuildProjectSelectionDetails(sheetName, project, existingBinding));
+
             if (IsSameProject(existingBinding, project))
             {
                 lastRefreshedSheetName = sheetName;
                 ApplyBindingState(existingBinding);
+                OfficeAgentLog.Info(
+                    "ribbon_sync",
+                    "project.select.same_project",
+                    "Selected project already matches the active worksheet binding.",
+                    BuildProjectSelectionDetails(sheetName, project, existingBinding));
                 return;
             }
 
             var suggestedBinding = worksheetSyncService.CreateBindingSeed(sheetName, project);
+            OfficeAgentLog.Info(
+                "ribbon_sync",
+                "project.layout_dialog.show",
+                "Showing project layout dialog.",
+                BuildProjectSelectionDetails(sheetName, project, existingBinding, suggestedBinding));
+
             var confirmedBinding = dialogService.ShowProjectLayoutDialog(suggestedBinding);
 
             if (confirmedBinding == null)
             {
+                OfficeAgentLog.Warn(
+                    "ribbon_sync",
+                    "project.layout_dialog.cancelled",
+                    "Project layout dialog returned without confirmation.",
+                    BuildProjectSelectionDetails(sheetName, project, existingBinding, suggestedBinding, includeRestoredProject: true));
                 RestoreBindingState(existingBinding, sheetName);
                 return;
             }
 
-            metadataStore.ClearFieldMappings(sheetName);
-            metadataStore.SaveBinding(confirmedBinding);
+            OfficeAgentLog.Info(
+                "ribbon_sync",
+                "project.binding.save.begin",
+                "Saving selected project binding.",
+                BuildProjectSelectionDetails(sheetName, project, existingBinding, confirmedBinding));
+            try
+            {
+                metadataStore.ClearFieldMappings(sheetName);
+                metadataStore.SaveBinding(confirmedBinding);
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Error(
+                    "ribbon_sync",
+                    "project.binding.save.failed",
+                    "Failed to save selected project binding.",
+                    ex,
+                    BuildProjectSelectionDetails(sheetName, project, existingBinding, confirmedBinding));
+                throw;
+            }
+
+            OfficeAgentLog.Info(
+                "ribbon_sync",
+                "project.binding.save.completed",
+                "Selected project binding saved.",
+                BuildProjectSelectionDetails(sheetName, project, existingBinding, confirmedBinding));
             lastRefreshedSheetName = sheetName;
             ApplyBindingState(confirmedBinding);
         }
@@ -500,6 +547,50 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             return plan?.Schema?.Columns?.Length ?? 0;
+        }
+
+        private static string BuildProjectSelectionDetails(
+            string sheetName,
+            ProjectOption targetProject,
+            SheetBinding existingBinding,
+            SheetBinding layoutBinding = null,
+            bool includeRestoredProject = false)
+        {
+            var builder = new StringBuilder();
+            AppendDetail(builder, "SheetName", sheetName);
+            AppendDetail(builder, "TargetSystemKey", targetProject?.SystemKey);
+            AppendDetail(builder, "TargetProjectId", targetProject?.ProjectId);
+            AppendDetail(builder, "TargetProjectName", targetProject?.DisplayName);
+            AppendDetail(builder, "ExistingSystemKey", existingBinding?.SystemKey);
+            AppendDetail(builder, "ExistingProjectId", existingBinding?.ProjectId);
+            AppendDetail(builder, "ExistingProjectName", existingBinding?.ProjectName);
+
+            if (layoutBinding != null)
+            {
+                if (includeRestoredProject)
+                {
+                    AppendDetail(builder, "RestoredProjectId", existingBinding?.ProjectId);
+                }
+
+                AppendDetail(builder, "HeaderStartRow", layoutBinding.HeaderStartRow.ToString());
+                AppendDetail(builder, "HeaderRowCount", layoutBinding.HeaderRowCount.ToString());
+                AppendDetail(builder, "DataStartRow", layoutBinding.DataStartRow.ToString());
+            }
+
+            return builder.ToString();
+        }
+
+        private static void AppendDetail(StringBuilder builder, string name, string value)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append("; ");
+            }
+
+            builder
+                .Append(name)
+                .Append('=')
+                .Append(string.IsNullOrWhiteSpace(value) ? "<empty>" : value);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Localization;
 
@@ -128,6 +129,17 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         }
 
         public SheetBinding ResultBinding { get; private set; }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            OfficeAgentLog.Info(
+                "ribbon_sync",
+                "project.layout_dialog.closed",
+                "Project layout dialog closed.",
+                $"DialogResult={DialogResult}; CloseReason={e?.CloseReason}; SheetName={suggestedBinding.SheetName ?? string.Empty}; ProjectId={suggestedBinding.ProjectId ?? string.Empty}; ProjectName={suggestedBinding.ProjectName ?? string.Empty}; HeaderStartRow={suggestedBinding.HeaderStartRow}; HeaderRowCount={suggestedBinding.HeaderRowCount}; DataStartRow={suggestedBinding.DataStartRow}");
+
+            base.OnFormClosed(e);
+        }
 
         private void HandleOkClick(object sender, EventArgs e)
         {

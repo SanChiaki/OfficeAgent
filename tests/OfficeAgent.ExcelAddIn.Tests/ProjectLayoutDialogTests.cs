@@ -6,11 +6,13 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
 {
+    [Collection(OfficeAgentLogCollection.Name)]
     public sealed class ProjectLayoutDialogTests
     {
         [Fact]
@@ -133,6 +135,38 @@ namespace OfficeAgent.ExcelAddIn.Tests
             });
         }
 
+        [Fact]
+        public void DialogCloseWritesDiagnosticResult()
+        {
+            var logs = new List<OfficeAgentLogEntry>();
+            OfficeAgentLog.Configure(logs.Add);
+
+            try
+            {
+                RunInSta(() =>
+                {
+                    using (var dialog = CreateDialog())
+                    {
+                        dialog.DialogResult = DialogResult.Cancel;
+                        InvokeOnFormClosed(dialog, CloseReason.UserClosing);
+                    }
+                });
+            }
+            finally
+            {
+                OfficeAgentLog.Reset();
+            }
+
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.layout_dialog.closed" &&
+                entry.Details.Contains("DialogResult=Cancel") &&
+                entry.Details.Contains("CloseReason=UserClosing") &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("ProjectId=performance"));
+        }
+
         private static MethodInfo GetTryCreateBindingMethod()
         {
             return GetProjectLayoutDialogType()
@@ -162,6 +196,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var forLocale = hostStringsType.GetMethod("ForLocale", BindingFlags.Public | BindingFlags.Static);
 
             return forLocale.Invoke(null, new object[] { locale });
+        }
+
+        private static void InvokeOnFormClosed(Form dialog, CloseReason closeReason)
+        {
+            var onFormClosed = GetProjectLayoutDialogType()
+                .GetMethod("OnFormClosed", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("ProjectLayoutDialog.OnFormClosed was not found.");
+            onFormClosed.Invoke(dialog, new object[] { new FormClosedEventArgs(closeReason) });
         }
 
         private static Type GetProjectLayoutDialogType()
