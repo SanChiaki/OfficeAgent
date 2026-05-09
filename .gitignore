@@ -10,4 +10,5 @@
 !/installer/OfficeAgent.SetupBundle/prereqs/README.md
 *.user
 *.suo
+.vs/
 .env
