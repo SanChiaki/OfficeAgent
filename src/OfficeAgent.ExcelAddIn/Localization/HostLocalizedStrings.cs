@@ -54,6 +54,49 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "初始化当前表完成。"
             : "Initialize sheet completed.";
 
+        public string InitializationRequiredMessage => Locale == "zh"
+            ? "当前 sheet 未初始化，请先执行初始化当前表。"
+            : "The current sheet is not initialized. Initialize the current sheet first.";
+
+        public string SheetNameRequiredMessage => Locale == "zh"
+            ? "Sheet 名称不能为空。"
+            : "Sheet name is required.";
+
+        public string AiColumnMappingNotConfiguredMessage => Locale == "zh"
+            ? "AI 映射列功能未配置。"
+            : "AI column mapping is not configured.";
+
+        public string ConfiguredHeaderAreaMissingTextMessage => Locale == "zh"
+            ? "在已配置的表头区域中未找到表头文字，请检查 HeaderStartRow 和 HeaderRowCount。"
+            : "No header text was found in the configured header area. Check HeaderStartRow and HeaderRowCount.";
+
+        public string SheetFieldMappingsMissingIdColumnMessage => Locale == "zh"
+            ? "SheetFieldMappings 缺少 ID 列定义，无法继续。"
+            : "SheetFieldMappings is missing an ID column definition, so the operation cannot continue.";
+
+        public string SheetHeaderMatchFailedMessage(string metadataSheetName)
+        {
+            return Locale == "zh"
+                ? $"当前表头无法与映射表匹配，请先修正 {metadataSheetName}。"
+                : $"The current sheet headers could not be matched to the mapping table. Fix {metadataSheetName} first.";
+        }
+
+        public string SheetBindingsMissingMessage => Locale == "zh"
+            ? "SheetBindings 缺少必要配置。"
+            : "SheetBindings is missing required configuration.";
+
+        public string SheetBindingsHeaderStartRowInvalidMessage => Locale == "zh"
+            ? "SheetBindings.HeaderStartRow 必须大于 0。"
+            : "SheetBindings.HeaderStartRow must be greater than 0.";
+
+        public string SheetBindingsHeaderRowCountInvalidMessage => Locale == "zh"
+            ? "SheetBindings.HeaderRowCount 必须大于 0。"
+            : "SheetBindings.HeaderRowCount must be greater than 0.";
+
+        public string SheetBindingsDataStartRowInvalidMessage => Locale == "zh"
+            ? "SheetBindings.DataStartRow 必须大于 0。"
+            : "SheetBindings.DataStartRow must be greater than 0.";
+
         public string AiColumnMappingPreviewDialogTitle => Locale == "zh" ? "确认 AI 映射列" : "Confirm AI column mapping";
 
         public string AiColumnMappingProgressDialogTitle => Locale == "zh" ? "AI 映射列处理中" : "AI column mapping";
@@ -148,6 +191,10 @@ namespace OfficeAgent.ExcelAddIn.Localization
         public string CloseButtonText => Locale == "zh" ? "关闭" : "Close";
 
         public string OkButtonText => "OK";
+
+        public string YesButtonText => Locale == "zh" ? "是" : "Yes";
+
+        public string NoButtonText => Locale == "zh" ? "否" : "No";
 
         public string CancelButtonText => Locale == "zh" ? "取消" : "Cancel";
 
@@ -386,6 +433,33 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 ? $"{localizedOperationName}完成。\r\n{SubmittedCellCountLine(submittedCellCount)}"
                 : $"{localizedOperationName} completed.\r\n{SubmittedCellCountLine(submittedCellCount)}";
         }
+
+        public string FormatUploadPreviewSummary(string operationName, int submittedCellCount, int skippedCellCount)
+        {
+            var localizedOperationName = LocalizeSyncOperationName(operationName);
+            return Locale == "zh"
+                ? $"{localizedOperationName}将提交 {submittedCellCount} 个单元格，跳过 {skippedCellCount} 个单元格。"
+                : $"{localizedOperationName} will submit {submittedCellCount} cell(s) and skip {skippedCellCount} cell(s).";
+        }
+
+        public string FormatUploadPreviewSummaryWithoutSkipped(string operationName, int submittedCellCount)
+        {
+            var localizedOperationName = LocalizeSyncOperationName(operationName);
+            return Locale == "zh"
+                ? $"{localizedOperationName}将提交 {submittedCellCount} 个单元格。"
+                : $"{localizedOperationName} will submit {submittedCellCount} cell(s).";
+        }
+
+        public string FormatSkippedUploadDetail(string rowId, string apiFieldKey, string reason)
+        {
+            return Locale == "zh"
+                ? $"{rowId} / {apiFieldKey}: 已跳过，{reason}"
+                : $"{rowId} / {apiFieldKey}: Skipped, {reason}";
+        }
+
+        public string ChangeModeDownload => Locale == "zh" ? "下载" : "Download";
+
+        public string ChangeModeUpload => Locale == "zh" ? "上传" : "Upload";
 
         public string TaskPaneRuntimeMissingMessage => Locale == "zh"
             ? "需要 WebView2 Runtime 才能显示 ISDP。"

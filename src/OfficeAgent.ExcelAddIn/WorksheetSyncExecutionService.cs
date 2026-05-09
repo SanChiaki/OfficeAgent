@@ -8,6 +8,7 @@ using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
 using OfficeAgent.ExcelAddIn.Excel;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn
 {
@@ -143,7 +144,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             if (aiColumnMappingClient == null)
             {
-                throw new InvalidOperationException("AI column mapping is not configured.");
+                throw new InvalidOperationException(GetStrings().AiColumnMappingNotConfiguredMessage);
             }
 
             var context = PrepareAiColumnMappingContext(sheetName);
@@ -162,7 +163,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             if (aiColumnMappingClient == null)
             {
-                throw new InvalidOperationException("AI column mapping is not configured.");
+                throw new InvalidOperationException(GetStrings().AiColumnMappingNotConfiguredMessage);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -182,7 +183,7 @@ namespace OfficeAgent.ExcelAddIn
             var actualHeaders = headerScanner.Scan(sheetName, context.Binding, gridAdapter);
             if (actualHeaders.Length == 0)
             {
-                throw new InvalidOperationException("No header text was found in the configured header area. Check HeaderStartRow and HeaderRowCount.");
+                throw new InvalidOperationException(GetStrings().ConfiguredHeaderAreaMissingTextMessage);
             }
 
             return new AiColumnMappingExecutionContext
@@ -209,7 +210,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             if (string.IsNullOrWhiteSpace(sheetName))
             {
-                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+                throw new ArgumentException(GetStrings().SheetNameRequiredMessage, nameof(sheetName));
             }
 
             if (project == null)
@@ -251,13 +252,13 @@ namespace OfficeAgent.ExcelAddIn
 
             return new WorksheetDownloadPlan
             {
-                OperationName = "全量下载",
+                OperationName = GetStrings().RibbonFullDownloadButtonLabel,
                 SheetName = sheetName,
                 Binding = context.Binding,
                 Schema = context.Schema,
                 RuntimeColumns = context.RuntimeColumns,
                 Rows = rows,
-                Preview = new SyncOperationPreview { OperationName = "全量下载" },
+                Preview = new SyncOperationPreview { OperationName = GetStrings().RibbonFullDownloadButtonLabel },
                 UsesExistingLayout = context.UsesExistingLayout,
             };
         }
@@ -273,13 +274,13 @@ namespace OfficeAgent.ExcelAddIn
 
             return new WorksheetDownloadPlan
             {
-                OperationName = "部分下载",
+                OperationName = GetStrings().RibbonPartialDownloadButtonLabel,
                 SheetName = sheetName,
                 Binding = context.Binding,
                 Schema = context.Schema,
                 RuntimeColumns = context.RuntimeColumns,
                 Rows = rows,
-                Preview = new SyncOperationPreview { OperationName = "部分下载" },
+                Preview = new SyncOperationPreview { OperationName = GetStrings().RibbonPartialDownloadButtonLabel },
                 Selection = selection,
                 UsesExistingLayout = true,
             };
@@ -310,10 +311,11 @@ namespace OfficeAgent.ExcelAddIn
                 readResult = ReadAllCurrentCells(sheetName, context.Binding, context.Schema);
             }
 
-            var preview = BuildUploadPreview("全量上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
+            var operationName = GetStrings().RibbonFullUploadButtonLabel;
+            var preview = BuildUploadPreview(operationName, context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
-                OperationName = "全量上传",
+                OperationName = operationName,
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
@@ -330,10 +332,11 @@ namespace OfficeAgent.ExcelAddIn
             var selection = ResolveCurrentSelection(context.Schema, rowIdAccessor);
             var readResult = ReadSelectionChanges(sheetName, context.Schema, selection, rowIdAccessor);
 
-            var preview = BuildUploadPreview("部分上传", context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
+            var operationName = GetStrings().RibbonPartialUploadButtonLabel;
+            var preview = BuildUploadPreview(operationName, context.Binding.SystemKey, context.Binding.ProjectId, readResult.Changes);
             return new WorksheetUploadPlan
             {
-                OperationName = "部分上传",
+                OperationName = operationName,
                 SheetName = sheetName,
                 ProjectId = context.Binding.ProjectId,
                 SystemKey = context.Binding.SystemKey,
@@ -768,7 +771,7 @@ namespace OfficeAgent.ExcelAddIn
                     {
                         Key = rowId,
                         HeaderText = BuildHeaderText(column),
-                        ChangeMode = "下载",
+                        ChangeMode = GetStrings().ChangeModeDownload,
                         NewValue = newValue,
                         OldValue = oldValue,
                     });
@@ -793,7 +796,7 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     Key = item.Cell.RowId,
                     HeaderText = item.Cell.HeaderText,
-                    ChangeMode = "下载",
+                    ChangeMode = GetStrings().ChangeModeDownload,
                     NewValue = item.NewValue,
                     OldValue = item.Cell.OldValue ?? string.Empty,
                 })
@@ -846,7 +849,7 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     Key = candidate.RowId,
                     HeaderText = candidate.HeaderText,
-                    ChangeMode = "上传",
+                    ChangeMode = GetStrings().ChangeModeUpload,
                     NewValue = candidate.NewValue,
                     OldValue = candidate.OldValue,
                 })
@@ -1131,7 +1134,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             if (!(columns ?? Array.Empty<WorksheetRuntimeColumn>()).Any(column => column != null && column.IsIdColumn))
             {
-                throw new InvalidOperationException("SheetFieldMappings 缺少 ID 列定义，无法继续。");
+                throw new InvalidOperationException(GetStrings().SheetFieldMappingsMissingIdColumnMessage);
             }
         }
 
@@ -1169,12 +1172,32 @@ namespace OfficeAgent.ExcelAddIn
                 filterResult.IncludedChanges,
                 filterResult.SkippedChanges);
             preview.OperationName = operationName;
-            if (preview.SkippedChanges.Length == 0)
-            {
-                preview.Summary = $"{operationName}将提交 {preview.Changes.Length} 个单元格。";
-            }
+            preview.Summary = preview.SkippedChanges.Length == 0
+                ? GetStrings().FormatUploadPreviewSummaryWithoutSkipped(operationName, preview.Changes.Length)
+                : GetStrings().FormatUploadPreviewSummary(operationName, preview.Changes.Length, preview.SkippedChanges.Length);
+            preview.Details = BuildLocalizedUploadPreviewDetails(preview);
 
             return preview;
+        }
+
+        private static string[] BuildLocalizedUploadPreviewDetails(SyncOperationPreview preview)
+        {
+            if (preview == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var uploadedDetails = (preview.Changes ?? Array.Empty<CellChange>())
+                .Take(3)
+                .Select(item => $"{item.RowId} / {item.ApiFieldKey}: {item.OldValue} -> {item.NewValue}");
+            var skippedDetails = (preview.SkippedChanges ?? Array.Empty<SkippedCellChange>())
+                .Take(Math.Max(0, 10 - (preview.Changes ?? Array.Empty<CellChange>()).Take(3).Count()))
+                .Select(item => GetStrings().FormatSkippedUploadDetail(
+                    item.Change?.RowId ?? string.Empty,
+                    item.Change?.ApiFieldKey ?? string.Empty,
+                    item.Reason ?? string.Empty));
+
+            return uploadedDetails.Concat(skippedDetails).ToArray();
         }
 
         private static WorksheetUploadLogCandidate[] SelectIncludedLogCandidates(
@@ -1442,40 +1465,45 @@ namespace OfficeAgent.ExcelAddIn
 
         private static InvalidOperationException CreateInitializationRequiredException()
         {
-            return new InvalidOperationException("当前 sheet 未初始化，请先执行初始化当前表。");
+            return new InvalidOperationException(GetStrings().InitializationRequiredMessage);
         }
 
         private static InvalidOperationException CreateHeaderMatchException()
         {
-            return new InvalidOperationException($"当前表头无法与映射表匹配，请先修正 {MetadataWorksheetNames.Current}。");
+            return new InvalidOperationException(GetStrings().SheetHeaderMatchFailedMessage(MetadataWorksheetNames.Current));
         }
 
         private static void ValidateBinding(SheetBinding binding)
         {
             if (binding == null)
             {
-                throw new InvalidOperationException("SheetBindings 缺少必要配置。");
+                throw new InvalidOperationException(GetStrings().SheetBindingsMissingMessage);
             }
 
             if (binding.HeaderStartRow <= 0)
             {
-                throw new InvalidOperationException("SheetBindings.HeaderStartRow 必须大于 0。");
+                throw new InvalidOperationException(GetStrings().SheetBindingsHeaderStartRowInvalidMessage);
             }
 
             if (binding.HeaderRowCount <= 0)
             {
-                throw new InvalidOperationException("SheetBindings.HeaderRowCount 必须大于 0。");
+                throw new InvalidOperationException(GetStrings().SheetBindingsHeaderRowCountInvalidMessage);
             }
 
             if (binding.DataStartRow <= 0)
             {
-                throw new InvalidOperationException("SheetBindings.DataStartRow 必须大于 0。");
+                throw new InvalidOperationException(GetStrings().SheetBindingsDataStartRowInvalidMessage);
             }
         }
 
         private static bool IsActivityProperty(string headerType)
         {
             return string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static HostLocalizedStrings GetStrings()
+        {
+            return Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
         }
 
         private static string NormalizeHeaderType(string headerType)
