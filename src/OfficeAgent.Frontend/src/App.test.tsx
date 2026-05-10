@@ -163,7 +163,7 @@ describe('App shell', () => {
     render(<App />);
 
     expect(mockedBridge.getHostContext).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/欢迎使用\s*ISDP/)).toBeInTheDocument();
+    expect(await screen.findByText(/欢迎使用\s*xISDP/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /打开设置/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /发送/i })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('zh');
@@ -174,7 +174,7 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(await screen.findByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
@@ -190,7 +190,7 @@ describe('App shell', () => {
       screen.getByRole('region', { name: /消息线程/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/欢迎使用\s*ISDP/),
+      screen.getByText(/欢迎使用\s*xISDP/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('status', { name: /选区胶囊/i }),
@@ -205,8 +205,8 @@ describe('App shell', () => {
       screen.getByRole('button', { name: /打开设置/i }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(/未命名会话/i, { selector: 'h1' }),
-    ).toBeInTheDocument();
+      await screen.findByRole('heading', { name: '' }),
+    ).toHaveClass('title');
     expect(
       await screen.findByText(/sheet1 · a1:c4/i),
     ).toBeInTheDocument();
@@ -268,10 +268,10 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(await screen.findByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
-    expect(await screen.findByText(/untitled/i, { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '' })).toHaveClass('title');
     expect(await screen.findByText(/^sheet1 · a1:c4$/i)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
 
@@ -389,7 +389,7 @@ describe('App shell', () => {
       sessions: expect.arrayContaining([
         expect.objectContaining({
           id: expect.any(String),
-          title: 'New chat',
+          title: '',
         }),
       ]),
     }));
@@ -403,8 +403,7 @@ describe('App shell', () => {
     await user.click(await screen.findByRole('button', { name: /打开会话列表/i }));
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉/i });
     await user.click(within(sidebar).getAllByRole('button', { name: /重命名会话/i })[0]);
-    const renameInput = within(sidebar).getByDisplayValue('未命名会话');
-    await user.clear(renameInput);
+    const renameInput = within(sidebar).getByRole('textbox');
     await user.type(renameInput, '未命名会话');
     await user.click(screen.getByRole('button', { name: /确认重命名/i }));
     await user.click(within(sidebar).getByRole('button', { name: /关闭会话列表/i }));
@@ -489,8 +488,8 @@ describe('App shell', () => {
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉|sessions drawer/i });
 
     expect(
-      await screen.findByRole('heading', { name: /未命名会话|untitled/i }),
-    ).toBeInTheDocument();
+      await screen.findByRole('heading', { name: '' }),
+    ).toHaveClass('title');
 
     await user.click(within(sidebar).getByRole('button', { name: /review notes/i }));
 
@@ -552,7 +551,7 @@ describe('App shell', () => {
 
     await vi.advanceTimersByTimeAsync(1500);
 
-    expect(screen.getByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(screen.getByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
 
     await act(async () => {
@@ -563,7 +562,7 @@ describe('App shell', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText(/欢迎使用\s*ISDP/)).toBeInTheDocument();
+    expect(screen.getByText(/欢迎使用\s*xISDP/)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('zh');
   });
 
@@ -1086,7 +1085,7 @@ describe('App shell', () => {
 
     await user.click(await screen.findByRole('button', { name: /打开会话列表|open sessions drawer/i }));
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉|sessions drawer/i });
-    await screen.findByRole('heading', { name: /未命名会话|untitled/i });
+    await expect.poll(() => document.querySelector('h1.title')?.textContent).toBe('');
 
     await user.type(screen.getByRole('textbox', { name: /消息输入框|message composer/i }), 'read selection');
     await user.click(screen.getByRole('button', { name: /发送|send/i }));

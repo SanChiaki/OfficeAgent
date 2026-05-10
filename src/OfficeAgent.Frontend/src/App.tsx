@@ -164,7 +164,7 @@ export function App() {
           const allSessions = result.sessions;
           const latestSession = allSessions[0];
 
-          // Check if the most recent session is a usable new chat (empty " untitled and no messages)
+          // Check if the most recent session is a reusable empty system-owned draft.
           let reusableSession: ChatSession | undefined;
           if (latestSession && latestSession.isSystemUntitled === true && latestSession.messages.length === 0) {
             reusableSession = latestSession;
@@ -174,7 +174,7 @@ export function App() {
           let displaySessions: ChatSession[];
 
           if (reusableSession) {
-            // Reuse the latest "New chat" session, keep all sessions in sidebar for reusing
+            // Reuse the latest empty system-owned session, keep all sessions in sidebar for reusing.
             newSessionId = reusableSession.id;
             displaySessions = allSessions;
           } else {
@@ -428,7 +428,7 @@ export function App() {
 
   function handleRenameStart(session: ChatSession) {
     setRenamingSessionId(session.id);
-    setRenameValue(getSessionDisplayTitle(session, systemUntitledSessionIds, strings));
+    setRenameValue(getSessionDisplayTitle(session));
     setRenameValueDirty(false);
   }
 
@@ -443,9 +443,19 @@ export function App() {
     }
 
     const trimmed = renameValue.trim();
-    if (!trimmed) return;
     const isSystemUntitled = systemUntitledSessionIds[renamingSessionId] === true;
-    if (isSystemUntitled && !renameValueDirty && trimmed === strings.untitledSessionTitle) {
+    if (isSystemUntitled && !renameValueDirty && trimmed === session.title) {
+      setRenamingSessionId(null);
+      setRenameValue('');
+      setRenameValueDirty(false);
+      return;
+    }
+
+    if (!trimmed) {
+      if (!isSystemUntitled) {
+        return;
+      }
+
       setRenamingSessionId(null);
       setRenameValue('');
       setRenameValueDirty(false);
@@ -910,7 +920,7 @@ export function App() {
               <MenuIcon />
             </button>
 
-            <h1 className="title">{activeSession ? getSessionDisplayTitle(activeSession, systemUntitledSessionIds, strings) : strings.appHeadingFallback}</h1>
+            <h1 className="title">{activeSession ? getSessionDisplayTitle(activeSession) : strings.appHeadingFallback}</h1>
           </div>
 
           <button
@@ -1047,7 +1057,7 @@ export function App() {
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSessionSelect(session.id); } }}
                     >
-                      <span className="session-chip__title">{getSessionDisplayTitle(session, systemUntitledSessionIds, strings)}</span>
+                      <span className="session-chip__title">{getSessionDisplayTitle(session)}</span>
                       <div className="session-chip__actions">
                         <button type="button" className="session-chip__action-btn" aria-label={strings.renameSession} onClick={(e) => { e.stopPropagation(); handleRenameStart(session); }}>
                           <PencilIcon />
@@ -1234,7 +1244,7 @@ export function App() {
           <div className="delete-dialog">
             <h2 className="delete-dialog__title">{strings.deleteSessionDialogTitle}</h2>
             <p className="delete-dialog__message">
-              {strings.deleteSessionPrompt(getSessionDisplayTitle(sessions.find((s) => s.id === deleteConfirmSessionId), systemUntitledSessionIds, strings))}
+              {strings.deleteSessionPrompt(getSessionDisplayTitle(sessions.find((s) => s.id === deleteConfirmSessionId)))}
             </p>
             <div className="delete-dialog__actions">
               <button type="button" className="ghost-button" onClick={() => setDeleteConfirmSessionId(null)}>{strings.cancel}</button>
@@ -1342,16 +1352,12 @@ function deriveSystemUntitledSessionIds(sessions: ChatSession[]) {
   }, {});
 }
 
-function getSessionDisplayTitle(
-  session: ChatSession | undefined,
-  systemUntitledSessionIds: Record<string, true>,
-  strings: ReturnType<typeof getUiStrings>,
-) {
+function getSessionDisplayTitle(session: ChatSession | undefined) {
   if (!session) {
     return '';
   }
 
-  return systemUntitledSessionIds[session.id] === true ? strings.untitledSessionTitle : session.title;
+  return session.title;
 }
 
 function createResultMessage(result: ExcelCommandResult): ThreadMessage {

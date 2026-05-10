@@ -9,7 +9,6 @@ export type UiStrings = {
   settingsSaveFailed: string;
   loginFailed: string;
   appHeadingFallback: string;
-  untitledSessionTitle: string;
   welcomeMessage: string;
   messageThreadLabel: string;
   loadingThinking: string;
@@ -100,8 +99,7 @@ export type UiStrings = {
   formatPlanStepUploadData: string;
 };
 
-export const UNTITLED_SESSION_STORAGE_TITLE = 'New chat';
-export const LEGACY_SYSTEM_UNTITLED_SESSION_TITLES = ['New chat', 'Untitled'] as const;
+export const UNTITLED_SESSION_STORAGE_TITLE = '';
 
 export const uiStrings: Record<UiLocale, UiStrings> = {
   zh: {
@@ -113,8 +111,7 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
     settingsSaveFailed: '保存设置失败。',
     loginFailed: '登录失败。',
     appHeadingFallback: 'xISDP AI',
-    untitledSessionTitle: '未命名会话',
-    welcomeMessage: '欢迎使用ISDP，我是能和Excel交互的Agent。你选中的单元格会被我优先识别，尽情尝试吧~',
+    welcomeMessage: '欢迎使用xISDP，我是能和Excel交互的Agent。你选中的单元格会被我优先识别，尽情尝试吧~',
     messageThreadLabel: '消息线程',
     loadingThinking: '正在思考…',
     messageComposerLabel: '消息输入框',
@@ -227,8 +224,7 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
     settingsSaveFailed: 'Failed to save settings.',
     loginFailed: 'Login failed.',
     appHeadingFallback: 'xISDP AI',
-    untitledSessionTitle: 'Untitled',
-    welcomeMessage: 'Welcome to ISDP. I am an agent that can work with Excel. I will prioritize your current selection, so try anything you need.',
+    welcomeMessage: 'Welcome to xISDP. I am an agent that can work with Excel. I will prioritize your current selection, so try anything you need.',
     messageThreadLabel: 'Message thread',
     loadingThinking: 'Thinking…',
     messageComposerLabel: 'Message composer',
@@ -321,8 +317,4 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
 
 export function getUiStrings(locale: UiLocale): UiStrings {
   return uiStrings[locale];
-}
-
-export function isLegacySystemUntitledSessionTitle(title: string) {
-  return LEGACY_SYSTEM_UNTITLED_SESSION_TITLES.includes(title as (typeof LEGACY_SYSTEM_UNTITLED_SESSION_TITLES)[number]);
 }
