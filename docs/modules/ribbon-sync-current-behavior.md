@@ -58,7 +58,7 @@ Ribbon 分组、按钮和项目选择框状态文案都会跟随当前宿主 UI 
 - 中文 Excel：`项目`、`配置`、`数据同步`、`账号`、`帮助`、`先选择项目`、`请先登录`
 - 英文 Excel：`Project`、`Setting`、`Data sync`、`Account`、`Help`、`Select project`、`Sign in first`
 
-所有 Ribbon 按钮都使用 Office 内置 `imageMso` 图标，并按按钮语义选择图标。项目选择入口、`初始化当前表` / `Initialize sheet`、`AI映射列` / `AI map columns` 以及 `配置` / `Setting` 组内的三个命令按钮使用 Office 常规小按钮布局；数据同步、账号、帮助等其余命令按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方。项目选择入口显示当前项目或状态文本，点击后打开项目搜索选择弹窗。
+所有 Ribbon 按钮都使用 Office 内置 `imageMso` 图标，并按按钮语义选择图标。项目选择入口、`初始化当前表` / `Initialize sheet`、`AI映射列` / `AI map columns` 以及 `配置` / `Setting` 组内的三个命令按钮使用 Office 常规小按钮布局；数据同步、账号、帮助等其余命令按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方。项目选择入口显示当前项目或状态文本，点击后打开项目搜索选择弹窗；当当前项目文本过长时，按钮可见文本会截断显示，完整文本保留在 ScreenTip 中。
 
 中文 UI 下，两个汉字的 Ribbon 按钮标签会在文本末尾追加 carriage return no-wrap 提示，等价于 Ribbon XML 中的 `&#13;`，用于避免 Office 把 `下载`、`上传`、`文档`、`关于`、`登录` 拆成逐字换行显示。该处理只发生在 Ribbon 按钮赋值层，不改变同步结果、确认弹窗等普通本地化文案。
 
@@ -239,6 +239,7 @@ Ribbon 分组、按钮和项目选择框状态文案都会跟随当前宿主 UI 
 - 选择项目不会激活 `xISDP_Setting`
 - Ribbon 项目选择入口内部使用 `systemKey + projectId` 复合键，避免未来多系统下同名 `projectId` 冲突
 - Ribbon 项目选择入口是一个显示当前项目或状态文本的按钮，不单独显示控件标题
+- Ribbon 项目选择入口的可见按钮文本最多保留 20 个显示宽度单位，ASCII 字符按 1 计算，中文等非 ASCII 字符按 2 计算，超过后在保留文本末尾追加 `…`；完整 `ProjectId-DisplayName` 只保留在 ScreenTip 和项目选择弹窗条目中，不写入 SuperTip
 - `401/403` 之外的项目加载异常仍走普通失败提示，不会触发登录引导
 - `请先登录` / `Sign in first`、`无可用项目` / `No projects available`、`项目加载失败` / `Failed to load projects` 都属于双语 sticky 状态文案；Ribbon 会按当前语言稳定识别并保持这些状态
 

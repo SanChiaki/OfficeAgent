@@ -531,9 +531,89 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
 
-            Assert.Contains("projectSelectorButton.Label = normalizedText;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("projectSelectorButton.Label = FormatProjectSelectorButtonLabel(normalizedText);", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("projectSelectorButton.ScreenTip = normalizedText;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("projectSelectorButton.SuperTip =", ribbonCodeText, StringComparison.Ordinal);
             Assert.DoesNotContain("projectDropDown.SelectedItem", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData("performance-绩效项目", "performance-绩效项目")]
+        [InlineData("", "")]
+        [InlineData(null, "")]
+        public void ProjectSelectorButtonLabelFormatterKeepsShortLabelsUnchanged(
+            string label,
+            string expectedLabel)
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
+            var method = ribbonType.GetMethod(
+                "FormatProjectSelectorButtonLabel",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.NotNull(method);
+            Assert.Equal(expectedLabel, (string)method.Invoke(null, new object[] { label }));
+        }
+
+        [Fact]
+        public void ProjectSelectorButtonLabelFormatterCapsLongLabelsAtTwentyDisplayWidth()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
+            var method = ribbonType.GetMethod(
+                "FormatProjectSelectorButtonLabel",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.NotNull(method);
+            var label = (string)method.Invoke(
+                null,
+                new object[] { "large-activity-benchmark-大型活动基准项目-超长展示名称" });
+
+            Assert.Equal("large-activity-bench…", label);
+            Assert.Equal(21, label.Length);
+            Assert.EndsWith("…", label, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ProjectSelectorButtonLabelFormatterCountsNonAsciiCharactersAsDoubleWidth()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "bin",
+                "Debug",
+                "OfficeAgent.ExcelAddIn.dll"));
+            var ribbonType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.AgentRibbon", throwOnError: true);
+            var method = ribbonType.GetMethod(
+                "FormatProjectSelectorButtonLabel",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.NotNull(method);
+            var label = (string)method.Invoke(
+                null,
+                new object[] { "performance-绩效项目加长字段" });
+
+            Assert.Equal("performance-绩效项目…", label);
+            Assert.EndsWith("…", label, StringComparison.Ordinal);
         }
 
         [Fact]

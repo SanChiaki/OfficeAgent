@@ -19,6 +19,8 @@ namespace OfficeAgent.ExcelAddIn
     public partial class AgentRibbon
     {
         private const string RibbonNoWrapLabelTerminator = "\r";
+        private const int ProjectSelectorButtonLabelMaxDisplayWidth = 20;
+        private const string ProjectSelectorButtonLabelEllipsis = "…";
         private static string ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText;
         private const string DocumentationUrl = "https://github.com/SanChiaki/OfficeAgent";
 
@@ -350,12 +352,53 @@ namespace OfficeAgent.ExcelAddIn
             var normalizedText = string.IsNullOrWhiteSpace(text)
                 ? ProjectDropDownPlaceholderText
                 : text;
-            projectSelectorButton.Label = normalizedText;
+            projectSelectorButton.Label = FormatProjectSelectorButtonLabel(normalizedText);
             projectSelectorButton.ScreenTip = normalizedText;
             lastControllerOwnedProjectDropDownText = string.IsNullOrWhiteSpace(normalizedText)
                 ? ProjectDropDownPlaceholderText
                 : normalizedText;
             RibbonUI?.InvalidateControl(projectSelectorButton.Name);
+        }
+
+        private static string FormatProjectSelectorButtonLabel(string text)
+        {
+            var normalizedText = text ?? string.Empty;
+            if (GetProjectSelectorButtonLabelDisplayWidth(normalizedText) <= ProjectSelectorButtonLabelMaxDisplayWidth)
+            {
+                return normalizedText;
+            }
+
+            var prefixWidth = 0;
+            var prefixLength = 0;
+            foreach (var character in normalizedText)
+            {
+                var characterWidth = GetProjectSelectorButtonLabelCharacterWidth(character);
+                if (prefixWidth + characterWidth > ProjectSelectorButtonLabelMaxDisplayWidth)
+                {
+                    break;
+                }
+
+                prefixWidth += characterWidth;
+                prefixLength++;
+            }
+
+            return normalizedText.Substring(0, prefixLength) + ProjectSelectorButtonLabelEllipsis;
+        }
+
+        private static int GetProjectSelectorButtonLabelDisplayWidth(string text)
+        {
+            var width = 0;
+            foreach (var character in text ?? string.Empty)
+            {
+                width += GetProjectSelectorButtonLabelCharacterWidth(character);
+            }
+
+            return width;
+        }
+
+        private static int GetProjectSelectorButtonLabelCharacterWidth(char character)
+        {
+            return character > 0x7f ? 2 : 1;
         }
 
         private string CreateProjectDropDownLabel(ProjectOption project, ISet<string> usedLabels)
@@ -584,7 +627,7 @@ namespace OfficeAgent.ExcelAddIn
             groupHelp.Label = strings.RibbonHelpGroupLabel;
             documentationButton.Label = FormatRibbonButtonLabel(strings.RibbonDocumentationButtonLabel);
             aboutButton.Label = FormatRibbonButtonLabel(strings.RibbonAboutButtonLabel);
-            projectSelectorButton.Label = ProjectDropDownPlaceholderText;
+            projectSelectorButton.Label = FormatProjectSelectorButtonLabel(ProjectDropDownPlaceholderText);
             projectSelectorButton.ScreenTip = ProjectDropDownPlaceholderText;
         }
 
