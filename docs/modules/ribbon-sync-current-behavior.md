@@ -239,7 +239,7 @@ Ribbon 分组、按钮和项目选择框状态文案都会跟随当前宿主 UI 
 - 选择项目不会激活 `xISDP_Setting`
 - Ribbon 项目选择入口内部使用 `systemKey + projectId` 复合键，避免未来多系统下同名 `projectId` 冲突
 - Ribbon 项目选择入口是一个显示当前项目或状态文本的按钮，不单独显示控件标题
-- Ribbon 项目选择入口的可见按钮文本最多保留 20 个显示宽度单位，ASCII 字符按 1 计算，中文等非 ASCII 字符按 2 计算，超过后在保留文本末尾追加 `…`；完整 `ProjectId-DisplayName` 只保留在 ScreenTip 和项目选择弹窗条目中，不写入 SuperTip
+- Ribbon 项目选择入口的可见按钮文本最多保留 30 个显示宽度单位，ASCII 字符按 1 计算，中文等非 ASCII 字符按 2 计算，超过后在保留文本末尾追加 `…`；完整 `ProjectId-DisplayName` 只保留在 ScreenTip 和项目选择弹窗条目中，不写入 SuperTip
 - `401/403` 之外的项目加载异常仍走普通失败提示，不会触发登录引导
 - `请先登录` / `Sign in first`、`无可用项目` / `No projects available`、`项目加载失败` / `Failed to load projects` 都属于双语 sticky 状态文案；Ribbon 会按当前语言稳定识别并保持这些状态
 

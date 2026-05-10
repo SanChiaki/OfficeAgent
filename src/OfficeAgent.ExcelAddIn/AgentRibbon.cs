@@ -19,7 +19,7 @@ namespace OfficeAgent.ExcelAddIn
     public partial class AgentRibbon
     {
         private const string RibbonNoWrapLabelTerminator = "\r";
-        private const int ProjectSelectorButtonLabelMaxDisplayWidth = 20;
+        private const int ProjectSelectorButtonLabelMaxDisplayWidth = 30;
         private const string ProjectSelectorButtonLabelEllipsis = "…";
         private static string ProjectDropDownPlaceholderText => GetStrings().ProjectDropDownPlaceholderText;
         private const string DocumentationUrl = "https://github.com/SanChiaki/OfficeAgent";

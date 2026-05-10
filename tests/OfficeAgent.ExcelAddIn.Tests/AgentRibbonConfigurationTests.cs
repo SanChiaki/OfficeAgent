@@ -564,7 +564,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void ProjectSelectorButtonLabelFormatterCapsLongLabelsAtTwentyDisplayWidth()
+        public void ProjectSelectorButtonLabelFormatterCapsLongLabelsAtThirtyDisplayWidth()
         {
             var addInAssembly = Assembly.LoadFrom(ResolveRepositoryPath(
                 "src",
@@ -585,8 +585,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 null,
                 new object[] { "large-activity-benchmark-大型活动基准项目-超长展示名称" });
 
-            Assert.Equal("large-activity-bench…", label);
-            Assert.Equal(21, label.Length);
+            Assert.Equal("large-activity-benchmark-大型…", label);
+            Assert.Equal(28, label.Length);
             Assert.EndsWith("…", label, StringComparison.Ordinal);
         }
 
@@ -610,9 +610,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.NotNull(method);
             var label = (string)method.Invoke(
                 null,
-                new object[] { "performance-绩效项目加长字段" });
+                new object[] { "performance-绩效项目加长字段更多内容" });
 
-            Assert.Equal("performance-绩效项目…", label);
+            Assert.Equal("performance-绩效项目加长字段更…", label);
             Assert.EndsWith("…", label, StringComparison.Ordinal);
         }
 
