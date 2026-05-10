@@ -1014,6 +1014,80 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Empty(dialogService.ErrorMessages);
         }
 
+        [Fact]
+        public void ExecuteFullDownloadSkipsConfirmationAndWriteWhenNoRowsMatch()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+                FindResult = Array.Empty<IDictionary<string, object>>(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null);
+            grid.SetCell("Sheet1", 1, 1, "existing header");
+
+            InvokeRefresh(controller);
+            InvokeExecuteFullDownload(controller);
+
+            Assert.Equal(0, dialogService.ConfirmDownloadCallCount);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("query result is empty", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Equal("existing header", grid.GetCell("Sheet1", 1, 1));
+            Assert.Equal(0, grid.SetCellTextCallCount);
+            Assert.Equal(0, grid.ClearRangeCallCount);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadSkipsConfirmationAndWriteWhenNoRowsMatch()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+                FindResult = Array.Empty<IDictionary<string, object>>(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                Cells = new[]
+                {
+                    new SelectedVisibleCell { Row = 4, Column = 2 },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null,
+                selectionReader);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "负责人");
+            grid.SetCell("Sheet1", 4, 1, "row-1");
+            grid.SetCell("Sheet1", 4, 2, "old owner");
+
+            InvokeRefresh(controller);
+            InvokeExecutePartialDownload(controller);
+
+            Assert.Equal(0, dialogService.ConfirmDownloadCallCount);
+            Assert.Equal("performance", connector.LastFindProjectId);
+            Assert.Equal(new[] { "row-1" }, connector.LastFindRowIds);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("query result is empty", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Equal("old owner", grid.GetCell("Sheet1", 4, 2));
+            Assert.Equal(0, grid.WriteRangeValuesCallCount);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
@@ -1080,11 +1154,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeWorksheetMetadataStore metadataStore,
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
-            IAiColumnMappingClient aiClient)
+            IAiColumnMappingClient aiClient,
+            FakeWorksheetSelectionReader selectionReader = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
-            var (executionService, grid) = CreateExecutionService(addInAssembly, connector, metadataStore, aiClient);
+            var (executionService, grid) = CreateExecutionService(addInAssembly, connector, metadataStore, aiClient, selectionReader);
             var dialogInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Dialogs.IRibbonSyncDialogService", throwOnError: true);
             var syncService = new WorksheetSyncService(
                 new SystemConnectorRegistry(new ISystemConnector[] { connector }),
@@ -1116,7 +1191,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assembly addInAssembly,
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
-            IAiColumnMappingClient aiClient = null)
+            IAiColumnMappingClient aiClient = null,
+            FakeWorksheetSelectionReader selectionReader = null)
         {
             var serviceType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
             var gridInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
@@ -1161,7 +1237,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     syncService,
                     metadataStore,
-                    new FakeWorksheetSelectionReader(),
+                    selectionReader ?? new FakeWorksheetSelectionReader(),
                     grid.GetTransparentProxy(),
                     new SyncOperationPreviewFactory(),
                 }
@@ -1169,7 +1245,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     syncService,
                     metadataStore,
-                    new FakeWorksheetSelectionReader(),
+                    selectionReader ?? new FakeWorksheetSelectionReader(),
                     grid.GetTransparentProxy(),
                     new SyncOperationPreviewFactory(),
                     aiClient,
@@ -1280,6 +1356,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
             if (method == null)
             {
                 throw new InvalidOperationException("RibbonSyncController.ExecuteInitializeCurrentSheet() was not found.");
+            }
+
+            method.Invoke(controller, null);
+        }
+
+        private static void InvokeExecuteFullDownload(object controller)
+        {
+            var method = controller.GetType().GetMethod(
+                "ExecuteFullDownload",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.ExecuteFullDownload() was not found.");
+            }
+
+            method.Invoke(controller, null);
+        }
+
+        private static void InvokeExecutePartialDownload(object controller)
+        {
+            var method = controller.GetType().GetMethod(
+                "ExecutePartialDownload",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.ExecutePartialDownload() was not found.");
             }
 
             method.Invoke(controller, null);
@@ -1487,7 +1591,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public IReadOnlyList<SheetFieldMappingRow> FieldMappingSeedRows { get; set; }
 
+            public IReadOnlyList<IDictionary<string, object>> FindResult { get; set; } = Array.Empty<IDictionary<string, object>>();
+
             public string LastBuildFieldMappingSeedProjectId { get; private set; }
+
+            public string LastFindProjectId { get; private set; }
+
+            public IReadOnlyList<string> LastFindRowIds { get; private set; } = Array.Empty<string>();
+
+            public IReadOnlyList<string> LastFindFieldKeys { get; private set; } = Array.Empty<string>();
 
             public Exception BuildFieldMappingSeedException { get; set; }
 
@@ -1531,9 +1643,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 throw new NotSupportedException();
             }
 
-            public IReadOnlyList<IDictionary<string, object>> Find(string projectId, IReadOnlyList<string> rowIds, IReadOnlyList<string> fieldKeys)
+            public IReadOnlyList<IDictionary<string, object>> Find(
+                string projectId,
+                IReadOnlyList<string> rowIds,
+                IReadOnlyList<string> fieldKeys)
             {
-                throw new NotSupportedException();
+                LastFindProjectId = projectId;
+                LastFindRowIds = rowIds?.ToArray() ?? Array.Empty<string>();
+                LastFindFieldKeys = fieldKeys?.ToArray() ?? Array.Empty<string>();
+                return FindResult;
             }
 
             public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
@@ -1653,6 +1771,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<AiColumnMappingPreview> AiColumnMappingPreviews { get; } = new List<AiColumnMappingPreview>();
 
+            public int ConfirmDownloadCallCount { get; private set; }
+
             public int AiColumnMappingProgressRunCount { get; private set; }
 
             public CancellationToken LastProgressCancellationToken { get; private set; }
@@ -1673,6 +1793,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 switch (call.MethodName)
                 {
                     case "ConfirmDownload":
+                        ConfirmDownloadCallCount++;
+                        return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
                     case "ConfirmUpload":
                         return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
                     case "ConfirmAiColumnMapping":
@@ -1766,9 +1888,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private sealed class FakeWorksheetSelectionReader : IWorksheetSelectionReader
         {
+            public IReadOnlyList<SelectedVisibleCell> Cells { get; set; } = Array.Empty<SelectedVisibleCell>();
+
+            public WorksheetSelectionSnapshot SelectionSnapshot { get; set; } = new WorksheetSelectionSnapshot();
+
             public IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection()
             {
-                return Array.Empty<SelectedVisibleCell>();
+                return Cells;
+            }
+
+            public WorksheetSelectionSnapshot ReadSelectionSnapshot()
+            {
+                return SelectionSnapshot;
             }
         }
 
@@ -1787,6 +1918,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 cells[(sheetName, row, column)] = value ?? string.Empty;
             }
 
+            public int SetCellTextCallCount { get; private set; }
+
+            public int ClearRangeCallCount { get; private set; }
+
+            public int WriteRangeValuesCallCount { get; private set; }
+
+            public string GetCell(string sheetName, int row, int column)
+            {
+                cells.TryGetValue((sheetName, row, column), out var value);
+                return value ?? string.Empty;
+            }
+
             public override IMessage Invoke(IMessage msg)
             {
                 var call = (IMethodCallMessage)msg;
@@ -1799,7 +1942,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "GetLastUsedRow":
                         return HandleGetLastUsedRow(call);
                     case "SetCellText":
+                        SetCellTextCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "ClearRange":
+                        ClearRangeCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "WriteRangeValues":
+                        WriteRangeValuesCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "ClearWorksheet":
                     case "MergeCells":
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);

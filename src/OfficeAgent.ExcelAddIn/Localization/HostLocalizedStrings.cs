@@ -371,6 +371,13 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 : $"{localizedOperationName} completed.\r\n{RowCountLine(rowCount)}\r\n{FieldCountLine(fieldCount)}";
         }
 
+        public string FormatDownloadNoMatchingRowsMessage(string operationName)
+        {
+            return Locale == "zh"
+                ? "查询结果为空，请确认列名是否正确匹配。"
+                : "The query result is empty. Check whether the column names are mapped correctly.";
+        }
+
         public string FormatUploadNoChangesMessage(string operationName)
         {
             var localizedOperationName = LocalizeSyncOperationName(operationName);

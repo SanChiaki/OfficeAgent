@@ -309,6 +309,255 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecutePartialDownloadUsesSelectionAreaAndBatchReadsRowIdsForWholeColumnSelection()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[]
+            {
+                CreateRow("row-1", "张三", "2026-02-01", "2026-02-09"),
+                CreateRow("row-2", "李四", "2026-03-01", "2026-03-09"),
+            };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                ThrowOnReadVisibleSelection = true,
+                SelectionSnapshot = new WorksheetSelectionSnapshot
+                {
+                    Areas = new[]
+                    {
+                        new WorksheetSelectionArea
+                        {
+                            StartRow = 1,
+                            EndRow = 1048576,
+                            StartColumn = 3,
+                            EndColumn = 4,
+                        },
+                    },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 7, 1, "row-2");
+            grid.SetCell("Sheet1", 8, 1, string.Empty);
+            grid.SetCell("Sheet1", 8, 4, "formatted empty data row");
+            grid.SetCell("Sheet1", 6, 3, "旧开始时间1");
+            grid.SetCell("Sheet1", 6, 4, "旧结束时间1");
+            grid.SetCell("Sheet1", 7, 3, "旧开始时间2");
+            grid.SetCell("Sheet1", 7, 4, "旧结束时间2");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+
+            Assert.Equal("performance", connector.LastFindProjectId);
+            Assert.Equal(new[] { "row-1", "row-2" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "start_12345678", "end_12345678" }, connector.LastFindFieldKeys);
+            Assert.Contains(grid.ReadRangeCalls, call =>
+                call.MethodName == "ReadRangeValues" &&
+                call.StartRow == 6 &&
+                call.EndRow == 8 &&
+                call.StartColumn == 1 &&
+                call.EndColumn == 1);
+            Assert.DoesNotContain(grid.GetCellTextCalls, call => call.Column == 1 && call.Row >= 6);
+
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            var write = Assert.Single(grid.WriteRangeCalls);
+            Assert.Equal(6, write.StartRow);
+            Assert.Equal(3, write.StartColumn);
+            Assert.Equal(2, write.Values.GetLength(0));
+            Assert.Equal(2, write.Values.GetLength(1));
+            Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 6, 3));
+            Assert.Equal("2026-02-09", grid.GetCell("Sheet1", 6, 4));
+            Assert.Equal("2026-03-01", grid.GetCell("Sheet1", 7, 3));
+            Assert.Equal("2026-03-09", grid.GetCell("Sheet1", 7, 4));
+            Assert.Equal("formatted empty data row", grid.GetCell("Sheet1", 8, 4));
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadTreatsWholeSheetSelectionAsAllManagedNonIdFields()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-02-01", "2026-02-09") };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                ThrowOnReadVisibleSelection = true,
+                SelectionSnapshot = new WorksheetSelectionSnapshot
+                {
+                    Areas = new[]
+                    {
+                        new WorksheetSelectionArea
+                        {
+                            StartRow = 1,
+                            EndRow = 1048576,
+                            StartColumn = 1,
+                            EndColumn = 16384,
+                        },
+                    },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 6, 2, "旧负责人");
+            grid.SetCell("Sheet1", 6, 3, "旧开始时间");
+            grid.SetCell("Sheet1", 6, 4, "旧结束时间");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+
+            Assert.Equal(new[] { "row-1" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "owner_name", "start_12345678", "end_12345678" }, connector.LastFindFieldKeys);
+
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal("row-1", grid.GetCell("Sheet1", 6, 1));
+            Assert.DoesNotContain(grid.WriteRangeCalls, call => call.StartColumn == 1);
+            Assert.Equal("张三", grid.GetCell("Sheet1", 6, 2));
+            Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 6, 3));
+            Assert.Equal("2026-02-09", grid.GetCell("Sheet1", 6, 4));
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadDoesNotWriteRowsBetweenNonContiguousSelectionAreas()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[]
+            {
+                CreateRow("row-1", "张三", "2026-02-01", "2026-02-09"),
+                CreateRow("row-2", "李四", "2026-03-01", "2026-03-09"),
+                CreateRow("row-3", "王五", "2026-04-01", "2026-04-09"),
+            };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                ThrowOnReadVisibleSelection = true,
+                SelectionSnapshot = new WorksheetSelectionSnapshot
+                {
+                    Areas = new[]
+                    {
+                        new WorksheetSelectionArea { StartRow = 6, EndRow = 6, StartColumn = 3, EndColumn = 3 },
+                        new WorksheetSelectionArea { StartRow = 8, EndRow = 8, StartColumn = 3, EndColumn = 3 },
+                    },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 7, 1, "row-2");
+            grid.SetCell("Sheet1", 8, 1, "row-3");
+            grid.SetCell("Sheet1", 6, 3, "旧开始时间1");
+            grid.SetCell("Sheet1", 7, 3, "未选择行");
+            grid.SetCell("Sheet1", 8, 3, "旧开始时间3");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+
+            Assert.Equal(new[] { "row-1", "row-3" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "start_12345678" }, connector.LastFindFieldKeys);
+
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 6, 3));
+            Assert.Equal("未选择行", grid.GetCell("Sheet1", 7, 3));
+            Assert.Equal("2026-04-01", grid.GetCell("Sheet1", 8, 3));
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadDoesNotWriteCrossProductCellsBetweenNonContiguousAreas()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 2,
+                DataStartRow = 6,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildDefaultMappings("Sheet1");
+            connector.FindResult = new[]
+            {
+                CreateRow("row-1", "张三", "2026-02-01", "2026-02-09"),
+                CreateRow("row-3", "王五", "2026-04-01", "2026-04-09"),
+            };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                ThrowOnReadVisibleSelection = true,
+                SelectionSnapshot = new WorksheetSelectionSnapshot
+                {
+                    Areas = new[]
+                    {
+                        new WorksheetSelectionArea { StartRow = 6, EndRow = 6, StartColumn = 3, EndColumn = 3 },
+                        new WorksheetSelectionArea { StartRow = 8, EndRow = 8, StartColumn = 4, EndColumn = 4 },
+                    },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            SeedRecognizedHeaders(grid, "Sheet1", binding);
+            grid.SetCell("Sheet1", 6, 1, "row-1");
+            grid.SetCell("Sheet1", 8, 1, "row-3");
+            grid.SetCell("Sheet1", 6, 3, "旧开始时间1");
+            grid.SetCell("Sheet1", 6, 4, "未选择结束时间1");
+            grid.SetCell("Sheet1", 8, 3, "未选择开始时间3");
+            grid.SetCell("Sheet1", 8, 4, "旧结束时间3");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+
+            Assert.Equal(new[] { "row-1", "row-3" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "start_12345678", "end_12345678" }, connector.LastFindFieldKeys);
+
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 6, 3));
+            Assert.Equal("未选择结束时间1", grid.GetCell("Sheet1", 6, 4));
+            Assert.Equal("未选择开始时间3", grid.GetCell("Sheet1", 8, 3));
+            Assert.Equal("2026-04-09", grid.GetCell("Sheet1", 8, 4));
+        }
+
+        [Fact]
         public void ExecuteFullDownloadDoesNotRewriteExistingRecognizedHeaders()
         {
             var connector = new FakeSystemConnector();
@@ -2309,9 +2558,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             public IReadOnlyList<SelectedVisibleCell> VisibleCells { get; set; } = Array.Empty<SelectedVisibleCell>();
 
+            public WorksheetSelectionSnapshot SelectionSnapshot { get; set; } = new WorksheetSelectionSnapshot();
+
+            public bool ThrowOnReadVisibleSelection { get; set; }
+
             public IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection()
             {
+                if (ThrowOnReadVisibleSelection)
+                {
+                    throw new InvalidOperationException("Visible cell enumeration should not be used for large selection downloads.");
+                }
+
                 return VisibleCells;
+            }
+
+            public WorksheetSelectionSnapshot ReadSelectionSnapshot()
+            {
+                return SelectionSnapshot;
             }
         }
 

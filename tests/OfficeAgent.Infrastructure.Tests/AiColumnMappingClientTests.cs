@@ -391,6 +391,29 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public async Task MapAsyncTreatsStreamingReadFailureAfterCancellationAsCanceled()
+        {
+            using (var cancellationTokenSource = new CancellationTokenSource())
+            {
+                var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ThrowingStreamContent(cancellationTokenSource.Cancel),
+                });
+                var client = new AiColumnMappingClient(
+                    new HttpClient(handler),
+                    () => new AppSettings
+                    {
+                        ApiKey = "secret-token",
+                        BaseUrl = "https://api.internal.example",
+                        Model = "gpt-5-mini",
+                    });
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                    () => client.MapAsync(CreateRequest(), cancellationTokenSource.Token));
+            }
+        }
+
+        [Fact]
         public void MapRejectsMissingApiKeys()
         {
             var handler = new RecordingHandler(_ => CreateChatCompletionResponse("{\"Mappings\":[],\"Unmatched\":[]}"));
@@ -582,6 +605,81 @@ namespace OfficeAgent.Infrastructure.Tests
                 LastCancellationToken = cancellationToken;
                 LastBody = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
                 return Task.FromResult(responder(request));
+            }
+        }
+
+        private sealed class ThrowingStreamContent : HttpContent
+        {
+            private readonly Action beforeThrow;
+
+            public ThrowingStreamContent(Action beforeThrow)
+            {
+                this.beforeThrow = beforeThrow;
+            }
+
+            protected override Task SerializeToStreamAsync(System.IO.Stream stream, TransportContext context)
+            {
+                throw new NotSupportedException();
+            }
+
+            protected override bool TryComputeLength(out long length)
+            {
+                length = 0;
+                return false;
+            }
+
+            protected override Task<System.IO.Stream> CreateContentReadStreamAsync()
+            {
+                return Task.FromResult<System.IO.Stream>(new ThrowingReadStream(beforeThrow));
+            }
+        }
+
+        private sealed class ThrowingReadStream : System.IO.Stream
+        {
+            private readonly Action beforeThrow;
+
+            public ThrowingReadStream(Action beforeThrow)
+            {
+                this.beforeThrow = beforeThrow;
+            }
+
+            public override bool CanRead => true;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => false;
+
+            public override long Length => throw new NotSupportedException();
+
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                beforeThrow();
+                throw new InvalidOperationException("读取操作失败，请参见内部异常。");
+            }
+
+            public override long Seek(long offset, System.IO.SeekOrigin origin)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
             }
         }
     }

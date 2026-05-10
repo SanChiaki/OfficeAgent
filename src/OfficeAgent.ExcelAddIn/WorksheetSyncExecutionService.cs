@@ -52,6 +52,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly ExcelUploadValueNormalizer uploadValueNormalizer;
         private readonly IWorksheetChangeLogStore changeLogStore;
         private readonly WorksheetPendingEditTracker pendingEditTracker;
+        private const int RowIdReadBatchSize = 5000;
 
         public WorksheetSyncExecutionService(
             WorksheetSyncService worksheetSyncService,
@@ -265,8 +266,7 @@ namespace OfficeAgent.ExcelAddIn
         public WorksheetDownloadPlan PreparePartialDownload(string sheetName)
         {
             var context = ResolveMatchedSheetContext(sheetName);
-            var rowIdAccessor = CreateCachedRowIdAccessor(sheetName, context.Schema);
-            var selection = ResolveCurrentSelection(context.Schema, rowIdAccessor);
+            var selection = ResolveDownloadSelection(sheetName, context.Binding, context.Schema);
             var rows = selection.RowIds.Length == 0
                 ? Array.Empty<IDictionary<string, object>>()
                 : worksheetSyncService.Download(context.Binding.SystemKey, context.Binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
@@ -660,33 +660,53 @@ namespace OfficeAgent.ExcelAddIn
             var rowsById = (plan.Rows ?? Array.Empty<IDictionary<string, object>>())
                 .Where(row => !string.IsNullOrWhiteSpace(GetRowId(plan.Schema, row)))
                 .ToDictionary(row => GetRowId(plan.Schema, row), row => row, StringComparer.Ordinal);
-            var rowIdAccessor = CreateCachedRowIdAccessor(plan.SheetName, plan.Schema);
             writeCells = new List<PartialWorksheetWriteCell>();
 
-            foreach (var targetCell in plan.Selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
+            if (plan.Selection?.TargetRows?.Length > 0 && plan.Selection?.TargetColumns?.Length > 0)
             {
-                if (!columnsByIndex.TryGetValue(targetCell.Column, out var column))
+                foreach (var targetRow in plan.Selection.TargetRows)
                 {
-                    continue;
-                }
+                    if (targetRow == null ||
+                        string.IsNullOrWhiteSpace(targetRow.RowId) ||
+                        !rowsById.TryGetValue(targetRow.RowId, out var row))
+                    {
+                        continue;
+                    }
 
-                var rowId = rowIdAccessor(targetCell.Row);
-                if (string.IsNullOrWhiteSpace(rowId) || !rowsById.TryGetValue(rowId, out var row))
-                {
-                    continue;
-                }
+                    foreach (var targetColumn in plan.Selection.TargetColumns)
+                    {
+                        if (!IsCellSelected(targetRow.Row, targetColumn, plan.Selection.TargetAreas))
+                        {
+                            continue;
+                        }
 
-                var value = GetRowValue(row, column.ApiFieldKey);
-                writeCells.Add(new PartialWorksheetWriteCell
+                        if (!columnsByIndex.TryGetValue(targetColumn, out var column))
+                        {
+                            continue;
+                        }
+
+                        AddPartialWriteCell(writeCells, targetRow.Row, targetColumn, targetRow.RowId, column, row);
+                    }
+                }
+            }
+            else
+            {
+                var rowIdAccessor = CreateCachedRowIdAccessor(plan.SheetName, plan.Schema);
+                foreach (var targetCell in plan.Selection?.TargetCells ?? Array.Empty<SelectedVisibleCell>())
                 {
-                    Row = targetCell.Row,
-                    Column = targetCell.Column,
-                    RowId = rowId,
-                    HeaderText = BuildHeaderText(column),
-                    IsIdColumn = column.IsIdColumn,
-                    OldValue = gridAdapter.GetCellText(plan.SheetName, targetCell.Row, targetCell.Column),
-                    Value = value,
-                });
+                    if (!columnsByIndex.TryGetValue(targetCell.Column, out var column))
+                    {
+                        continue;
+                    }
+
+                    var rowId = rowIdAccessor(targetCell.Row);
+                    if (string.IsNullOrWhiteSpace(rowId) || !rowsById.TryGetValue(rowId, out var row))
+                    {
+                        continue;
+                    }
+
+                    AddPartialWriteCell(writeCells, targetCell.Row, targetCell.Column, rowId, column, row);
+                }
             }
 
             if (writeCells.Count == 0)
@@ -695,6 +715,113 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             var rowSegments = BuildPartialRowSegments(writeCells);
+            PopulatePartialOldValues(plan.SheetName, rowSegments, writeCells);
+            var batches = BuildPartialWriteBatches(rowSegments);
+            return batches;
+        }
+
+        private static void AddPartialWriteCell(
+            ICollection<PartialWorksheetWriteCell> writeCells,
+            int row,
+            int columnIndex,
+            string rowId,
+            WorksheetColumnBinding column,
+            IDictionary<string, object> sourceRow)
+        {
+            var value = GetRowValue(sourceRow, column.ApiFieldKey);
+            writeCells.Add(new PartialWorksheetWriteCell
+            {
+                Row = row,
+                Column = columnIndex,
+                RowId = rowId,
+                HeaderText = BuildHeaderText(column),
+                IsIdColumn = column.IsIdColumn,
+                Value = value,
+            });
+        }
+
+        private void PopulatePartialOldValues(
+            string sheetName,
+            IReadOnlyList<PartialWorksheetWriteRowSegment> rowSegments,
+            IReadOnlyList<PartialWorksheetWriteCell> writeCells)
+        {
+            var cellsByAddress = (writeCells ?? Array.Empty<PartialWorksheetWriteCell>())
+                .Where(cell => cell != null)
+                .GroupBy(cell => Tuple.Create(cell.Row, cell.Column))
+                .ToDictionary(group => group.Key, group => group.Last());
+
+            foreach (var segmentGroup in (rowSegments ?? Array.Empty<PartialWorksheetWriteRowSegment>())
+                .GroupBy(segment => new { segment.StartColumn, segment.EndColumn }))
+            {
+                var orderedSegments = segmentGroup.OrderBy(segment => segment.Row).ToArray();
+                if (orderedSegments.Length == 0)
+                {
+                    continue;
+                }
+
+                PartialWorksheetWriteRowSegment batchStart = null;
+                PartialWorksheetWriteRowSegment previous = null;
+                foreach (var segment in orderedSegments)
+                {
+                    if (batchStart == null)
+                    {
+                        batchStart = segment;
+                        previous = segment;
+                        continue;
+                    }
+
+                    if (segment.Row == previous.Row + 1)
+                    {
+                        previous = segment;
+                        continue;
+                    }
+
+                    PopulatePartialOldValues(sheetName, batchStart, previous, cellsByAddress);
+                    batchStart = segment;
+                    previous = segment;
+                }
+
+                if (batchStart != null && previous != null)
+                {
+                    PopulatePartialOldValues(sheetName, batchStart, previous, cellsByAddress);
+                }
+            }
+        }
+
+        private void PopulatePartialOldValues(
+            string sheetName,
+            PartialWorksheetWriteRowSegment startSegment,
+            PartialWorksheetWriteRowSegment endSegment,
+            IDictionary<Tuple<int, int>, PartialWorksheetWriteCell> cellsByAddress)
+        {
+            var values = gridAdapter.ReadRangeValues(
+                sheetName,
+                startSegment.Row,
+                endSegment.Row,
+                startSegment.StartColumn,
+                startSegment.EndColumn);
+            for (var row = startSegment.Row; row <= endSegment.Row; row++)
+            {
+                for (var column = startSegment.StartColumn; column <= startSegment.EndColumn; column++)
+                {
+                    if (!cellsByAddress.TryGetValue(Tuple.Create(row, column), out var cell))
+                    {
+                        continue;
+                    }
+
+                    cell.OldValue = Convert.ToString(GetRangeValue(values, row - startSegment.Row, column - startSegment.StartColumn)) ?? string.Empty;
+                }
+            }
+        }
+
+        private static List<PartialWorksheetWriteBatch> BuildPartialWriteBatches(
+            IReadOnlyList<PartialWorksheetWriteRowSegment> rowSegments)
+        {
+            if (rowSegments == null || rowSegments.Count == 0)
+            {
+                return new List<PartialWorksheetWriteBatch>();
+            }
+
             var batches = new List<PartialWorksheetWriteBatch>();
             PartialWorksheetWriteBatch currentBatch = null;
 
@@ -971,6 +1098,162 @@ namespace OfficeAgent.ExcelAddIn
         {
             var visibleCells = selectionReader.ReadVisibleSelection() ?? Array.Empty<SelectedVisibleCell>();
             return selectionResolver.Resolve(schema, visibleCells, rowIdAccessor);
+        }
+
+        private ResolvedSelection ResolveDownloadSelection(
+            string sheetName,
+            SheetBinding binding,
+            WorksheetSchema schema)
+        {
+            var snapshot = selectionReader.ReadSelectionSnapshot();
+            if (snapshot?.Areas == null || snapshot.Areas.Length == 0)
+            {
+                var rowIdAccessor = CreateCachedRowIdAccessor(sheetName, schema);
+                return ResolveCurrentSelection(schema, rowIdAccessor);
+            }
+
+            return ResolveSelectionAreas(sheetName, binding, schema, snapshot.Areas);
+        }
+
+        private ResolvedSelection ResolveSelectionAreas(
+            string sheetName,
+            SheetBinding binding,
+            WorksheetSchema schema,
+            IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            var columns = (schema?.Columns ?? Array.Empty<WorksheetColumnBinding>())
+                .Where(column => column != null)
+                .OrderBy(column => column.ColumnIndex)
+                .ToArray();
+            var selectedColumns = columns
+                .Where(column => IsColumnSelected(column.ColumnIndex, areas))
+                .ToArray();
+            var selectedDataColumns = selectedColumns
+                .Where(column => !column.IsIdColumn && !string.IsNullOrWhiteSpace(column.ApiFieldKey))
+                .ToArray();
+            var selectedFieldKeys = selectedDataColumns
+                .Select(column => column.ApiFieldKey)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var selectedColumnIndexes = selectedDataColumns
+                .Select(column => column.ColumnIndex)
+                .Distinct()
+                .OrderBy(column => column)
+                .ToArray();
+            if (selectedFieldKeys.Length == 0 || selectedColumnIndexes.Length == 0)
+            {
+                return new ResolvedSelection
+                {
+                    ApiFieldKeys = selectedFieldKeys,
+                    TargetColumns = selectedColumnIndexes,
+                    TargetAreas = NormalizeSelectionAreas(areas),
+                };
+            }
+
+            var lastUsedRow = gridAdapter.GetLastUsedRow(sheetName);
+            if (binding == null || lastUsedRow < binding.DataStartRow)
+            {
+                return new ResolvedSelection
+                {
+                    ApiFieldKeys = selectedFieldKeys,
+                    TargetColumns = selectedColumnIndexes,
+                    TargetAreas = NormalizeSelectionAreas(areas),
+                };
+            }
+
+            var rowStart = binding.DataStartRow;
+            var rowEnd = lastUsedRow;
+            var targetRows = ReadRowsWithIds(sheetName, schema, rowStart, rowEnd)
+                .Where(row => IsRowSelected(row.Row, areas))
+                .ToArray();
+            return new ResolvedSelection
+            {
+                RowIds = targetRows
+                    .Select(row => row.RowId)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                ApiFieldKeys = selectedFieldKeys,
+                TargetRows = targetRows,
+                TargetColumns = selectedColumnIndexes,
+                TargetAreas = NormalizeSelectionAreas(areas),
+            };
+        }
+
+        private WorksheetSelectionRow[] ReadRowsWithIds(
+            string sheetName,
+            WorksheetSchema schema,
+            int startRow,
+            int endRow)
+        {
+            var idColumn = GetIdColumn(schema);
+            if (idColumn == null || endRow < startRow)
+            {
+                return Array.Empty<WorksheetSelectionRow>();
+            }
+
+            var result = new List<WorksheetSelectionRow>();
+            for (var batchStartRow = startRow; batchStartRow <= endRow; batchStartRow += RowIdReadBatchSize)
+            {
+                var batchEndRow = Math.Min(endRow, batchStartRow + RowIdReadBatchSize - 1);
+                var values = gridAdapter.ReadRangeValues(sheetName, batchStartRow, batchEndRow, idColumn.ColumnIndex, idColumn.ColumnIndex);
+                var rowCount = values?.GetLength(0) ?? 0;
+                for (var rowOffset = 0; rowOffset < rowCount; rowOffset++)
+                {
+                    var rowId = Convert.ToString(GetRangeValue(values, rowOffset, 0)) ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(rowId))
+                    {
+                        continue;
+                    }
+
+                    result.Add(new WorksheetSelectionRow
+                    {
+                        Row = batchStartRow + rowOffset,
+                        RowId = rowId,
+                    });
+                }
+            }
+
+            return result.ToArray();
+        }
+
+        private static bool IsColumnSelected(int columnIndex, IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            return (areas ?? Array.Empty<WorksheetSelectionArea>())
+                .Any(area => area != null &&
+                             columnIndex >= area.StartColumn &&
+                             columnIndex <= area.EndColumn);
+        }
+
+        private static bool IsRowSelected(int row, IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            return (areas ?? Array.Empty<WorksheetSelectionArea>())
+                .Any(area => area != null &&
+                             row >= area.StartRow &&
+                             row <= area.EndRow);
+        }
+
+        private static bool IsCellSelected(int row, int columnIndex, IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            return (areas ?? Array.Empty<WorksheetSelectionArea>())
+                .Any(area => area != null &&
+                             row >= area.StartRow &&
+                             row <= area.EndRow &&
+                             columnIndex >= area.StartColumn &&
+                             columnIndex <= area.EndColumn);
+        }
+
+        private static WorksheetSelectionArea[] NormalizeSelectionAreas(IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            return (areas ?? Array.Empty<WorksheetSelectionArea>())
+                .Where(area => area != null)
+                .Select(area => new WorksheetSelectionArea
+                {
+                    StartRow = area.StartRow,
+                    EndRow = area.EndRow,
+                    StartColumn = area.StartColumn,
+                    EndColumn = area.EndColumn,
+                })
+                .ToArray();
         }
 
         private WorksheetUploadReadResult ReadAllCurrentCells(string sheetName, SheetBinding binding, WorksheetSchema schema)

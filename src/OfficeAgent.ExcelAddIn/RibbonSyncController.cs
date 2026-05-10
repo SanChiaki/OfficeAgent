@@ -350,11 +350,19 @@ namespace OfficeAgent.ExcelAddIn
             {
                 var strings = GetStrings();
                 var plan = preparePlan(EnsureExecutionService());
+                var rowCount = plan.Rows?.Count ?? 0;
+                if (rowCount == 0)
+                {
+                    dialogService.ShowInfo(strings.FormatDownloadNoMatchingRowsMessage(plan.OperationName));
+                    return;
+                }
+
+                var fieldCount = CountDownloadFields(plan);
                 if (!dialogService.ConfirmDownload(
                         strings.LocalizeSyncOperationName(plan.OperationName),
                         ActiveProjectDisplayName,
-                        plan.Rows?.Count ?? 0,
-                        CountDownloadFields(plan),
+                        rowCount,
+                        fieldCount,
                         plan.Preview))
                 {
                     return;
@@ -363,8 +371,8 @@ namespace OfficeAgent.ExcelAddIn
                 executionService.ExecuteDownload(plan);
                 dialogService.ShowInfo(strings.FormatDownloadCompletedMessage(
                     plan.OperationName,
-                    plan.Rows?.Count ?? 0,
-                    CountDownloadFields(plan)));
+                    rowCount,
+                    fieldCount));
             }
             catch (AuthenticationRequiredException ex)
             {
@@ -561,6 +569,13 @@ namespace OfficeAgent.ExcelAddIn
 
         private static int CountDownloadFields(WorksheetDownloadPlan plan)
         {
+            if (plan?.Selection?.TargetColumns?.Length > 0)
+            {
+                return plan.Selection.TargetColumns
+                    .Distinct()
+                    .Count();
+            }
+
             if (plan?.Selection?.TargetCells?.Length > 0)
             {
                 return plan.Selection.TargetCells

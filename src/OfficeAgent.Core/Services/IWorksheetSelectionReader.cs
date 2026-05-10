@@ -6,5 +6,7 @@ namespace OfficeAgent.Core.Services
     public interface IWorksheetSelectionReader
     {
         IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection();
+
+        WorksheetSelectionSnapshot ReadSelectionSnapshot();
     }
 }
