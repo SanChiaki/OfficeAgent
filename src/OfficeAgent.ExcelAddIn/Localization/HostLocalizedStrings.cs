@@ -23,16 +23,6 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string ProjectDropDownPlaceholderText => Locale == "zh" ? "先选择项目" : "Select project";
 
-        public string ProjectPickerDialogTitle => Locale == "zh" ? "选择项目" : "Select project";
-
-        public string ProjectPickerInstructionText => Locale == "zh"
-            ? "输入项目 ID 或名称搜索，然后选择一个项目。"
-            : "Search by project ID or name, then choose a project.";
-
-        public string ProjectPickerNoMatchesText => Locale == "zh" ? "无匹配项目" : "No matching projects";
-
-        public string ProjectPickerSelectionRequiredMessage => Locale == "zh" ? "请选择一个项目。" : "Select a project.";
-
         public string ProjectDropDownLoginRequiredText => Locale == "zh" ? "请先登录" : "Sign in first";
 
         public string ProjectDropDownNoAvailableProjectsText => Locale == "zh" ? "无可用项目" : "No projects available";

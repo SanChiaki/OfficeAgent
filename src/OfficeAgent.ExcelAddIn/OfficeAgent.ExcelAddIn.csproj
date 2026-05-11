@@ -143,7 +143,6 @@
     <Compile Include="Dialogs\ExcelDialogOwner.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
     <Compile Include="Dialogs\ProjectLayoutDialog.cs" />
-    <Compile Include="Dialogs\ProjectPickerDialog.cs" />
     <Compile Include="Dialogs\TemplateDialogService.cs" />
     <Compile Include="Dialogs\TemplateNameDialog.cs" />
     <Compile Include="Dialogs\TemplateOverwriteConfirmDialog.cs" />
@@ -208,7 +207,6 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="ProjectSelectionKey.cs" />
-    <Compile Include="ProjectSearchMatcher.cs" />
     <Compile Include="RibbonTemplateController.cs" />
     <Compile Include="WebBridge\WebMessageEnvelope.cs" />
     <Compile Include="WebBridge\WebMessageRouter.cs" />

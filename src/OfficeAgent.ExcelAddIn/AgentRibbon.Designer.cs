@@ -30,7 +30,7 @@ namespace OfficeAgent.ExcelAddIn
             this.group2 = Factory.CreateRibbonGroup();
             this.groupHelp = Factory.CreateRibbonGroup();
             this.toggleTaskPaneButton = Factory.CreateRibbonButton();
-            this.projectSelectorButton = Factory.CreateRibbonButton();
+            this.projectDropDown = Factory.CreateRibbonDropDown();
             this.initializeSheetButton = Factory.CreateRibbonButton();
             this.aiMapColumnsButton = Factory.CreateRibbonButton();
             this.applyTemplateButton = Factory.CreateRibbonButton();
@@ -51,9 +51,9 @@ namespace OfficeAgent.ExcelAddIn
             this.group2.SuspendLayout();
             this.groupHelp.SuspendLayout();
             this.SuspendLayout();
-            // 
+            //
             // tab1
-            // 
+            //
             this.tab1.Groups.Add(this.group1);
             this.tab1.Groups.Add(this.groupProject);
             this.tab1.Groups.Add(this.groupTemplate);
@@ -81,20 +81,21 @@ namespace OfficeAgent.ExcelAddIn
             // 
             // groupProject
             // 
-            this.groupProject.Items.Add(this.projectSelectorButton);
+            this.groupProject.Items.Add(this.projectDropDown);
             this.groupProject.Items.Add(this.initializeSheetButton);
             this.groupProject.Items.Add(this.aiMapColumnsButton);
             this.groupProject.Label = "Project";
             this.groupProject.Name = "groupProject";
             //
-            // projectSelectorButton
-            // 
-            this.projectSelectorButton.Label = "Select project";
-            this.projectSelectorButton.Name = "projectSelectorButton";
-            this.projectSelectorButton.OfficeImageId = "FindDialog";
-            this.projectSelectorButton.ShowImage = true;
-            this.projectSelectorButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
-            this.projectSelectorButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectSelectorButton_Click);
+            // projectDropDown
+            //
+            this.projectDropDown.Label = "Select project";
+            this.projectDropDown.Name = "projectDropDown";
+            this.projectDropDown.SizeString = "WWWWWWWWWWWWWWWWWWWW";
+            this.projectDropDown.ShowItemLabel = true;
+            this.projectDropDown.ShowLabel = false;
+            this.projectDropDown.ItemsLoading += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_ItemsLoading);
+            this.projectDropDown.SelectionChanged += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.ProjectDropDown_SelectionChanged);
             // 
             // initializeSheetButton
             // 
@@ -260,7 +261,7 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupHelp;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton toggleTaskPaneButton;
-        internal Microsoft.Office.Tools.Ribbon.RibbonButton projectSelectorButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonDropDown projectDropDown;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton initializeSheetButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton aiMapColumnsButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton applyTemplateButton;
