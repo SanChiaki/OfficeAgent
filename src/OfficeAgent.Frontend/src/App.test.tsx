@@ -95,7 +95,6 @@ beforeEach(() => {
     apiKey: '',
     baseUrl: 'https://api.example.com',
     businessBaseUrl: 'https://business.example.com',
-    analyticsBaseUrl: '',
     model: 'gpt-5-mini',
     apiFormat: 'openai-compatible',
     ssoUrl: '',
@@ -252,6 +251,9 @@ describe('App shell', () => {
       within(settingsDialog).getByRole('textbox', { name: /^业务基础 url$/i }),
     ).toHaveValue('https://business.example.com');
     expect(
+      within(settingsDialog).queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i }),
+    ).not.toBeInTheDocument();
+    expect(
       within(settingsDialog).getByText(/已连接 browser-preview \(dev\)/i),
     ).toBeInTheDocument();
     expect(
@@ -287,6 +289,7 @@ describe('App shell', () => {
     expect(within(settingsDialog).getAllByLabelText(/^(api key|api 密钥)$/i)[0]).toHaveValue('');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(base url|基础 url)$/i })).toHaveValue('https://api.example.com');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(business base url|业务基础 url)$/i })).toHaveValue('https://business.example.com');
+    expect(within(settingsDialog).queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i })).not.toBeInTheDocument();
     expect(within(settingsDialog).getByRole('combobox', { name: /^(api format|api 格式)$/i })).toHaveValue('openai-compatible');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(model|模型)$/i })).toHaveValue('gpt-5-mini');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(sso url|sso 地址)$/i })).toHaveValue('');
@@ -466,18 +469,17 @@ describe('App shell', () => {
     }));
   });
 
-  it('saves the analytics base URL setting', async () => {
+  it('does not expose the analytics URL in user settings', async () => {
     const user = userEvent.setup();
 
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
-    await user.clear(screen.getByRole('textbox', { name: /^(analytics base url|埋点 base url)$/i }));
-    await user.type(screen.getByRole('textbox', { name: /^(analytics base url|埋点 base url)$/i }), 'http://localhost:3200');
+    expect(screen.queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /保存|save/i }));
 
-    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
-      analyticsBaseUrl: 'http://localhost:3200',
+    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.not.objectContaining({
+      analyticsUrl: expect.any(String),
     }));
   });
 
@@ -608,7 +610,6 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
-      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -627,7 +628,6 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
-      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',
@@ -685,7 +685,6 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
-      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -702,7 +701,6 @@ describe('App shell', () => {
       apiKey: 'loaded-key',
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
-      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',
@@ -733,7 +731,6 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
-      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -758,7 +755,6 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://api.example.com',
       businessBaseUrl: 'https://business.example.com',
-      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',

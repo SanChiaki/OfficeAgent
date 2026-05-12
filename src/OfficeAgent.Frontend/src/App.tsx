@@ -27,7 +27,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
-  analyticsBaseUrl: '',
   model: 'gpt-5-mini',
   apiFormat: 'openai-compatible',
   ssoUrl: '',
@@ -580,7 +579,7 @@ export function App() {
     setSettingsSaveError('');
 
     try {
-      const savedSettings = normalizeSettings(await nativeBridge.saveSettings(draftSettings));
+      const savedSettings = normalizeSettings(await nativeBridge.saveSettings(toUserEditableSettings(draftSettings)));
       setSettings(savedSettings);
       setDraftSettings(savedSettings);
       isSettingsDirtyRef.current = false;
@@ -591,7 +590,6 @@ export function App() {
         apiFormat: savedSettings.apiFormat,
         hasBaseUrl: Boolean(savedSettings.baseUrl.trim()),
         hasBusinessBaseUrl: Boolean(savedSettings.businessBaseUrl.trim()),
-        hasAnalyticsBaseUrl: Boolean(savedSettings.analyticsBaseUrl.trim()),
       });
       void nativeBridge.getHostContext()
         .then((hostContext) => {
@@ -1197,17 +1195,6 @@ export function App() {
             </label>
 
             <label className="settings-field">
-              <span>{strings.analyticsBaseUrlFieldLabel}</span>
-              <input
-                aria-label={strings.analyticsBaseUrlFieldLabel}
-                type="text"
-                value={draftSettings.analyticsBaseUrl}
-                disabled={isSettingsSaving}
-                onChange={(event) => updateDraftSettings({ analyticsBaseUrl: event.target.value })}
-              />
-            </label>
-
-            <label className="settings-field">
               <span>{strings.modelFieldLabel}</span>
               <input
                 aria-label={strings.modelFieldLabel}
@@ -1751,6 +1738,13 @@ function normalizeSettings(settings: Partial<AppSettings> | null | undefined): A
     apiFormat,
     uiLanguageOverride: settings?.uiLanguageOverride ?? DEFAULT_SETTINGS.uiLanguageOverride,
   };
+}
+
+function toUserEditableSettings(settings: AppSettings): AppSettings {
+  const editableSettings = { ...settings } as AppSettings & { analyticsUrl?: string; analyticsBaseUrl?: string };
+  delete editableSettings.analyticsUrl;
+  delete editableSettings.analyticsBaseUrl;
+  return editableSettings;
 }
 
 function formatSelectionCapsule(selectionContext: SelectionContext | null, locale: UiLocale) {

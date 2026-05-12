@@ -17,7 +17,6 @@ export interface AppSettings {
   apiKey: string;
   baseUrl: string;
   businessBaseUrl: string;
-  analyticsBaseUrl: string;
   model: string;
   apiFormat: ApiFormat;
   ssoUrl: string;

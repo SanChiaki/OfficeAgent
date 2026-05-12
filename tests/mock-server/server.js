@@ -276,6 +276,7 @@ apiApp.post("/insertLog", function (req, res) {
     receivedAtUtc: new Date().toISOString(),
     payload: payload,
     answer: parsedAnswer,
+    cookies: req.cookies || {},
   });
 
   while (analyticsLogs.length > maxAnalyticsLogs) {
@@ -478,7 +479,7 @@ apiApp.listen(3200, function () {
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
-  console.log("  Analytics Base URL    = http://localhost:3200");
+  console.log("  Analytics URL         = http://localhost:3200/insertLog (hidden setting)");
   console.log("  SSO URL               = http://localhost:3100/login");
   console.log("  登录成功路径           = /rest/login");
   console.log("  API Key               = (留空，使用 SSO cookies)");

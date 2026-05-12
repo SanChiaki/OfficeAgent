@@ -53,7 +53,6 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
-  analyticsBaseUrl: '',
   model: 'gpt-5-mini',
   apiFormat: 'openai-compatible',
   ssoUrl: '',
@@ -257,9 +256,6 @@ export class NativeBridge {
           businessBaseUrl: typeof (payload as AppSettings | undefined)?.businessBaseUrl === 'string'
             ? (payload as AppSettings).businessBaseUrl
             : BROWSER_PREVIEW_SETTINGS.businessBaseUrl,
-          analyticsBaseUrl: typeof (payload as AppSettings | undefined)?.analyticsBaseUrl === 'string'
-            ? (payload as AppSettings).analyticsBaseUrl
-            : BROWSER_PREVIEW_SETTINGS.analyticsBaseUrl,
           model: typeof (payload as AppSettings | undefined)?.model === 'string'
             ? (payload as AppSettings).model
             : BROWSER_PREVIEW_SETTINGS.model,

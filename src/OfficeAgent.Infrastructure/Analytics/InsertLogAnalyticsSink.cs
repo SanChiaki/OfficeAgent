@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,13 +23,31 @@ namespace OfficeAgent.Infrastructure.Analytics
         private readonly Func<AppSettings> loadSettings;
         private readonly HttpClient httpClient;
 
-        public InsertLogAnalyticsSink(Func<AppSettings> loadSettings, HttpClient httpClient = null)
+        public InsertLogAnalyticsSink(Func<AppSettings> loadSettings, HttpClient httpClient = null, CookieContainer cookieContainer = null)
         {
             this.loadSettings = loadSettings ?? throw new ArgumentNullException(nameof(loadSettings));
-            this.httpClient = httpClient ?? new HttpClient
+            if (httpClient != null)
             {
-                Timeout = TimeSpan.FromSeconds(5),
-            };
+                this.httpClient = httpClient;
+            }
+            else if (cookieContainer != null)
+            {
+                this.httpClient = new HttpClient(new HttpClientHandler
+                {
+                    CookieContainer = cookieContainer,
+                    UseCookies = true,
+                })
+                {
+                    Timeout = TimeSpan.FromSeconds(5),
+                };
+            }
+            else
+            {
+                this.httpClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(5),
+                };
+            }
         }
 
         public async Task WriteAsync(AnalyticsEvent analyticsEvent, CancellationToken cancellationToken)
@@ -39,14 +58,13 @@ namespace OfficeAgent.Infrastructure.Analytics
             }
 
             var settings = loadSettings() ?? new AppSettings();
-            var baseUrl = AppSettings.NormalizeOptionalUrl(settings.AnalyticsBaseUrl);
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
-                (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+            var analyticsUrl = AppSettings.NormalizeOptionalEndpointUrl(settings.AnalyticsUrl);
+            if (!Uri.TryCreate(analyticsUrl, UriKind.Absolute, out var endpoint) ||
+                (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps))
             {
-                throw new InvalidOperationException("The configured Analytics Base URL is invalid. Update settings and try again.");
+                throw new InvalidOperationException("The configured Analytics URL is invalid. Update settings and try again.");
             }
 
-            var endpoint = new Uri($"{baseUri.AbsoluteUri.TrimEnd('/')}/insertLog");
             var payload = JsonConvert.SerializeObject(new
             {
                 frontEndIntent = "excelAi",

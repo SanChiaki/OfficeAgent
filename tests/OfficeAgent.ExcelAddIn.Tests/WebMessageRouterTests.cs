@@ -132,6 +132,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void SaveSettingsPreservesHiddenAnalyticsUrl()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+            settingsStore.Save(new AppSettings
+            {
+                ApiKey = "old-token",
+                BaseUrl = "https://old-llm.internal.example",
+                BusinessBaseUrl = "https://old-business.internal.example",
+                AnalyticsUrl = "https://analytics.internal.example/custom/insertLog",
+                Model = "gpt-5-mini",
+            });
+
+            var router = CreateRouter(sessionStore, settingsStore);
+            var responseJson = InvokeRoute(
+                router,
+                "{\"type\":\"bridge.saveSettings\",\"requestId\":\"req-1\",\"payload\":{\"apiKey\":\"secret-token\",\"baseUrl\":\"https://llm.internal.example\",\"businessBaseUrl\":\"https://business.internal.example\",\"model\":\"gpt-5-mini\",\"apiFormat\":\"anthropic-messages\",\"ssoUrl\":\"\",\"ssoLoginSuccessPath\":\"\"}}");
+
+            Assert.Contains("\"ok\":true", responseJson);
+
+            var settingsAfter = settingsStore.Load();
+            Assert.Equal("https://analytics.internal.example/custom/insertLog", settingsAfter.AnalyticsUrl);
+        }
+
+        [Fact]
         public void SaveSettingsRoundTripsUiLanguageOverride()
         {
             var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));

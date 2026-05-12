@@ -35,7 +35,6 @@ node server.js
 
 - `Base URL = 你的大模型服务地址`
 - `Business Base URL = http://localhost:3200`
-- `Analytics Base URL = http://localhost:3200`
 - `SSO URL = http://localhost:3100/login`
 - `登录成功路径 = /rest/login`
 - `API Key = 留空`
@@ -45,9 +44,11 @@ node server.js
 - `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
 - `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
 - `Business Base URL` 也是 `/projects` 项目列表接口的基地址
-- `Analytics Base URL` 是 `/insertLog` 埋点接口的基地址
-- 当前 mock 服务通过 SSO cookie 鉴权，不走 API Key
-- 业务接口在未登录时会返回 `401`
+- 埋点 URL 是隐藏配置，完整本地地址为 `http://localhost:3200/insertLog`
+- 业务接口通过 SSO cookie 鉴权，不走 API Key，未登录时会返回 `401`
+- `/insertLog` 会记录请求携带的 cookie，便于验证插件埋点请求是否复用登录态
+
+埋点隐藏配置保存在 `%LocalAppData%\OfficeAgent\settings.json`，字段名为 `AnalyticsUrl`。任务窗格 Settings UI 不展示该字段。
 
 ## 当前接口
 
@@ -82,7 +83,7 @@ node server.js
 
 #### `GET /analytics/logs`
 
-返回当前进程内最近 500 条埋点记录，包含原始外层 payload 和解析后的 `answer`。
+返回当前进程内最近 500 条埋点记录，包含原始外层 payload、解析后的 `answer` 和本次请求携带的 cookie。
 
 #### `DELETE /analytics/logs`
 

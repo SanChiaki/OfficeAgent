@@ -68,17 +68,16 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
             var initialSettings = SettingsStore.Load();
-            AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsBaseUrl)
-                ? NoopAnalyticsService.Instance
-                : new OfficeAgent.Core.Analytics.AnalyticsService(new InsertLogAnalyticsSink(() => SettingsStore.Load()));
-            var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
-            GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
-
             SharedCookies = new SharedCookieContainer();
             CookieStore = new FileCookieStore(
                 Path.Combine(appDataDirectory, "cookies.json"),
                 new DpapiSecretProtector());
             CookieStore.Load(SharedCookies.Container);
+            AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
+                ? NoopAnalyticsService.Instance
+                : new OfficeAgent.Core.Analytics.AnalyticsService(new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container));
+            var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
+            GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
             // Set SSO domain from settings for login status checks.
             if (!string.IsNullOrWhiteSpace(initialSettings.SsoUrl))

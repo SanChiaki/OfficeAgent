@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -19,7 +22,7 @@ namespace OfficeAgent.Infrastructure.Tests
         {
             var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
             var sink = new InsertLogAnalyticsSink(
-                () => new AppSettings { AnalyticsBaseUrl = "https://analytics.internal.example/v1/" },
+                () => new AppSettings { AnalyticsUrl = "https://analytics.internal.example/v1/insertLog" },
                 new HttpClient(handler));
             var analyticsEvent = new AnalyticsEvent
             {
@@ -49,17 +52,17 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
-        public async Task WriteAsyncRejectsMissingAnalyticsBaseUrl()
+        public async Task WriteAsyncRejectsMissingAnalyticsUrl()
         {
             var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
             var sink = new InsertLogAnalyticsSink(
-                () => new AppSettings { AnalyticsBaseUrl = " " },
+                () => new AppSettings { AnalyticsUrl = " " },
                 new HttpClient(handler));
 
             var error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => sink.WriteAsync(new AnalyticsEvent(), CancellationToken.None));
 
-            Assert.Equal("The configured Analytics Base URL is invalid. Update settings and try again.", error.Message);
+            Assert.Equal("The configured Analytics URL is invalid. Update settings and try again.", error.Message);
             Assert.Equal(0, handler.CallCount);
         }
 
@@ -71,13 +74,65 @@ namespace OfficeAgent.Infrastructure.Tests
                 Content = new StringContent("bad request"),
             });
             var sink = new InsertLogAnalyticsSink(
-                () => new AppSettings { AnalyticsBaseUrl = "https://analytics.internal.example" },
+                () => new AppSettings { AnalyticsUrl = "https://analytics.internal.example/insertLog" },
                 new HttpClient(handler));
 
             var error = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => sink.WriteAsync(new AnalyticsEvent(), CancellationToken.None));
 
             Assert.Contains("Analytics request failed (400 Bad Request): bad request", error.Message);
+        }
+
+        [Fact]
+        public async Task WriteAsyncSendsSharedCookiesToConfiguredAnalyticsUrl()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            try
+            {
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                var receivedRequestTask = AcceptSingleHttpRequestAsync(listener);
+
+                var cookieContainer = new CookieContainer();
+                cookieContainer.Add(new Uri($"http://127.0.0.1:{port}/"), new Cookie("sso-token", "token-123"));
+                var sink = new InsertLogAnalyticsSink(
+                    () => new AppSettings { AnalyticsUrl = $"http://127.0.0.1:{port}/custom/insertLog" },
+                    cookieContainer: cookieContainer);
+
+                await sink.WriteAsync(new AnalyticsEvent { EventName = "panel.opened" }, CancellationToken.None);
+                var receivedRequest = await receivedRequestTask;
+
+                Assert.StartsWith("POST /custom/insertLog HTTP/", receivedRequest, StringComparison.Ordinal);
+                Assert.Contains("Cookie: sso-token=token-123", receivedRequest);
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        private static async Task<string> AcceptSingleHttpRequestAsync(TcpListener listener)
+        {
+            using (var client = await listener.AcceptTcpClientAsync())
+            using (var stream = client.GetStream())
+            using (var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true))
+            {
+                var builder = new StringBuilder();
+                string line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (line.Length == 0)
+                    {
+                        break;
+                    }
+
+                    builder.AppendLine(line);
+                }
+
+                var responseBytes = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                return builder.ToString();
+            }
         }
 
         private sealed class RecordingHandler : HttpMessageHandler

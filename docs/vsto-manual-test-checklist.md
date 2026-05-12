@@ -37,9 +37,9 @@
 
 ## Session And Settings
 
-- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Analytics Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
+- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
 - Confirm `Base URL` stays reserved for the LLM endpoint and `Business Base URL` points to the business API or mock server.
-- Confirm `Analytics Base URL` points to the analytics `/insertLog` endpoint or stays empty when analytics is disabled.
+- Confirm the analytics URL is not shown in Settings; it is an internal hidden configuration.
 - Confirm `API Format = OpenAI Compatible` keeps existing OpenAI-compatible planner behavior, then switch to `API Format = Anthropic Messages` with an Anthropic Messages-compatible endpoint and confirm ordinary planner chat still returns a valid response.
 - Restart Excel and confirm settings reload correctly.
 - Create or switch sessions and confirm existing thread history is preserved per session.
@@ -136,8 +136,10 @@
 
 ## Analytics
 
-- Start `tests/mock-server` and set `Analytics Base URL = http://localhost:3200`.
+- Start `tests/mock-server` and set hidden `AnalyticsUrl = http://localhost:3200/insertLog`.
+- Confirm hidden `AnalyticsUrl` is stored in `%LocalAppData%\OfficeAgent\settings.json`, not in the task-pane Settings UI.
 - Clear existing events with `DELETE http://localhost:3200/analytics/logs`.
 - Click Ribbon initialize, download, and upload; confirm `/analytics/logs` contains `ribbon.initialize.*`, `ribbon.download.*`, and `ribbon.upload.*` events with `projectId` and `projectName`.
 - In the task pane, send a prompt, save settings, and confirm/cancel a preview card; confirm `/analytics/logs` contains `panel.*` events.
-- Confirm logged analytics entries do not contain API keys, cookies, raw prompt text, cell values, or business API request/response bodies.
+- After SSO login, confirm each mock analytics log entry includes the login cookie under `cookies`.
+- Confirm the analytics `payload.answer` content does not contain API keys, cookies, raw prompt text, cell values, or business API request/response bodies.

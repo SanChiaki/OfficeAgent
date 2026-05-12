@@ -218,7 +218,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetSettings));
                         }
 
-                        return Success(request.Type, request.RequestId, settingsStore.Load());
+                        return Success(request.Type, request.RequestId, ToUserVisibleSettings(settingsStore.Load()));
                     case BridgeMessageTypes.GetSessions:
                         if (HasUnexpectedPayload(request.Payload))
                         {
@@ -664,8 +664,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             try
             {
                 var settings = request.Payload.ToObject<AppSettings>() ?? new AppSettings();
+                settings.AnalyticsUrl = (settingsStore.Load() ?? new AppSettings()).AnalyticsUrl;
                 settingsStore.Save(settings);
-                return Success(request.Type, request.RequestId, settingsStore.Load());
+                return Success(request.Type, request.RequestId, ToUserVisibleSettings(settingsStore.Load()));
             }
             catch (JsonException)
             {
@@ -723,6 +724,23 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private static bool IsOptionalStringToken(JToken token)
         {
             return token == null || token.Type == JTokenType.String || token.Type == JTokenType.Null;
+        }
+
+        private static AppSettings ToUserVisibleSettings(AppSettings settings)
+        {
+            var source = settings ?? new AppSettings();
+            return new AppSettings
+            {
+                ApiKey = source.ApiKey,
+                BaseUrl = source.BaseUrl,
+                BusinessBaseUrl = source.BusinessBaseUrl,
+                AnalyticsUrl = null,
+                Model = source.Model,
+                ApiFormat = source.ApiFormat,
+                UiLanguageOverride = source.UiLanguageOverride,
+                SsoUrl = source.SsoUrl,
+                SsoLoginSuccessPath = source.SsoLoginSuccessPath,
+            };
         }
 
         private static IDictionary<string, object> CopyDictionary(IDictionary<string, object> values)

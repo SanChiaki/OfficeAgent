@@ -23,25 +23,31 @@ POST https://{HOST}/insertLog
 Content-Type: application/json
 ```
 
-插件 Settings 中配置：
+插件隐藏配置中保存完整埋点 URL：
 
 ```text
-Analytics Base URL = https://{HOST}
+AnalyticsUrl = https://{HOST}/insertLog
 ```
 
-不要在 Settings 中填写 `/insertLog`。当前插件会自动把 `Analytics Base URL` 和 `/insertLog` 拼成最终上报地址。
+当前不在任务窗格 Settings UI 中展示该配置。插件会直接请求 `AnalyticsUrl`，不会再自动拼接 `/insertLog`。
+
+本地配置文件路径为 `%LocalAppData%\OfficeAgent\settings.json`。可在该 JSON 中加入或更新：
+
+```json
+{
+  "AnalyticsUrl": "https://{HOST}/insertLog"
+}
+```
+
+保留文件中的其他字段不变。修改后需要重启 Excel。
 
 如果内网系统路径带前缀，例如：
 
 ```text
-https://analytics.internal.example/logging
-```
-
-最终请求地址会是：
-
-```text
 https://analytics.internal.example/logging/insertLog
 ```
+
+就把完整地址保存为 `AnalyticsUrl`。不要只保存域名或基地址。
 
 ## 2. 外层接口合同
 
@@ -68,6 +74,8 @@ https://analytics.internal.example/logging/insertLog
 | `askId` | string | 每条事件随机生成，URL-safe |
 | `talkId` | string | 每条事件随机生成，URL-safe |
 | `answer` | string | 埋点事件 JSON 的字符串形式 |
+
+埋点请求会复用插件 SSO 登录后的共享 cookie 容器。如果真实埋点接口和业务接口共用登录态，服务端可以直接按当前登录 cookie 鉴权。
 
 当前实现位置：
 
@@ -176,7 +184,7 @@ https://analytics.internal.example/logging/insertLog
 禁止上报：
 
 - API key
-- cookie
+- 把 cookie 内容写入 `answer`
 - SSO token
 - 用户 prompt 全文
 - 单元格原始值
@@ -186,7 +194,7 @@ https://analytics.internal.example/logging/insertLog
 
 允许上报：
 
-- 是否配置了某类 URL，例如 `hasAnalyticsBaseUrl`
+- 是否配置了某类用户可见 URL，例如 `hasBaseUrl`、`hasBusinessBaseUrl`
 - 用户输入长度，例如 `inputLength`
 - 行数、字段数、变更数量、跳过数量
 - `projectId`、`projectName`
@@ -221,11 +229,13 @@ npm install
 npm start
 ```
 
-插件 Settings：
+隐藏配置：
 
 ```text
-Analytics Base URL = http://localhost:3200
+AnalyticsUrl = http://localhost:3200/insertLog
 ```
+
+即在 `%LocalAppData%\OfficeAgent\settings.json` 中保存 `"AnalyticsUrl": "http://localhost:3200/insertLog"`。
 
 清空日志：
 
@@ -239,6 +249,8 @@ Invoke-RestMethod -Method Delete -Uri http://localhost:3200/analytics/logs
 Invoke-RestMethod -Method Get -Uri http://localhost:3200/analytics/logs |
   ConvertTo-Json -Depth 20
 ```
+
+如果先通过插件完成 SSO 登录，mock 日志里的单条记录会包含 `cookies` 字段，可用于确认埋点请求带上了登录 cookie。
 
 手工 POST 验证：
 
@@ -261,16 +273,16 @@ Invoke-RestMethod `
 
 ## 9. 切换到真实系统
 
-1. 确认真实系统域名，例如：
+1. 确认真实系统完整埋点地址，例如：
 
    ```text
-   https://analytics.internal.example
+   https://analytics.internal.example/insertLog
    ```
 
-2. 在插件 Settings 中设置：
+2. 在 `%LocalAppData%\OfficeAgent\settings.json` 中保存：
 
    ```text
-   Analytics Base URL = https://analytics.internal.example
+   AnalyticsUrl = https://analytics.internal.example/insertLog
    ```
 
 3. 重启 Excel，确保 `ThisAddIn` 启动时按最新配置创建 `InsertLogAnalyticsSink`。
@@ -299,7 +311,7 @@ Invoke-RestMethod `
 
 插件配置：
 
-- `Analytics Base URL` 不带 `/insertLog`
+- `AnalyticsUrl` 是完整埋点地址，包含 `/insertLog` 或真实系统要求的完整路径
 - 空配置时不发送埋点
 - 修改配置后重启 Excel 验证真实上报链路
 
@@ -312,7 +324,7 @@ Invoke-RestMethod `
 
 安全：
 
-- 不出现 API key、cookie、token
+- `answer` 中不出现 API key、cookie、token
 - 不出现业务接口 request / response 原文
 - 异常消息中不包含敏感数据
 
@@ -322,8 +334,9 @@ Invoke-RestMethod `
 
 检查：
 
-- `Analytics Base URL` 是否为空
-- 是否误填成 `https://{HOST}/insertLog`
+- `AnalyticsUrl` 是否为空
+- 是否误填成只包含域名或基地址
+- 真实埋点接口是否需要登录 cookie，插件是否已完成 SSO 登录
 - Excel 是否在保存配置后重启
 - `%LocalAppData%\OfficeAgent\logs\officeagent.log` 是否有 `analytics track.failed`
 
@@ -356,4 +369,3 @@ analyticsService.Track(
 ### 11.5 埋点失败会不会影响用户操作
 
 不会。埋点发送失败只写本地诊断日志，不改变用户当前操作结果。
-
