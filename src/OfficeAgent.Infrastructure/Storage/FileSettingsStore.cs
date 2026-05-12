@@ -38,6 +38,7 @@ namespace OfficeAgent.Infrastructure.Storage
                     ApiKey = string.Empty,
                     BaseUrl = AppSettings.NormalizeBaseUrl(persisted.BaseUrl),
                     BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(persisted.BusinessBaseUrl),
+                    AnalyticsBaseUrl = AppSettings.NormalizeOptionalUrl(persisted.AnalyticsBaseUrl),
                     Model = string.IsNullOrWhiteSpace(persisted.Model) ? "gpt-5-mini" : persisted.Model,
                     ApiFormat = AppSettings.NormalizeApiFormat(persisted.ApiFormat),
                     UiLanguageOverride = AppSettings.NormalizeUiLanguageOverride(persisted.UiLanguageOverride),
@@ -73,6 +74,7 @@ namespace OfficeAgent.Infrastructure.Storage
                 EncryptedApiKey = secretProtector.Protect(settings?.ApiKey ?? string.Empty),
                 BaseUrl = AppSettings.NormalizeBaseUrl(settings?.BaseUrl),
                 BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(settings?.BusinessBaseUrl),
+                AnalyticsBaseUrl = AppSettings.NormalizeOptionalUrl(settings?.AnalyticsBaseUrl),
                 Model = string.IsNullOrWhiteSpace(settings?.Model) ? "gpt-5-mini" : settings.Model,
                 ApiFormat = AppSettings.NormalizeApiFormat(settings?.ApiFormat),
                 UiLanguageOverride = AppSettings.NormalizeUiLanguageOverride(settings?.UiLanguageOverride),
@@ -96,6 +98,8 @@ namespace OfficeAgent.Infrastructure.Storage
             public string BaseUrl { get; set; } = string.Empty;
 
             public string BusinessBaseUrl { get; set; } = string.Empty;
+
+            public string AnalyticsBaseUrl { get; set; } = string.Empty;
 
             public string Model { get; set; } = string.Empty;
 

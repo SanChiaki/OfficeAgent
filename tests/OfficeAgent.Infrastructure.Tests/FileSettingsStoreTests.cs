@@ -80,6 +80,34 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void SaveRoundTripsAnalyticsBaseUrl()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            store.Save(new OfficeAgent.Core.Models.AppSettings
+            {
+                AnalyticsBaseUrl = " https://analytics.internal.example/// ",
+            });
+
+            var loaded = store.Load();
+            var persistedJson = File.ReadAllText(settingsPath);
+
+            Assert.Equal("https://analytics.internal.example", loaded.AnalyticsBaseUrl);
+            Assert.Contains("\"AnalyticsBaseUrl\": \"https://analytics.internal.example\"", persistedJson);
+        }
+
+        [Fact]
+        public void LoadDefaultsAnalyticsBaseUrlToEmptyString()
+        {
+            var store = new FileSettingsStore(Path.Combine(tempDirectory, "missing-settings.json"), new DpapiSecretProtector());
+
+            var settings = store.Load();
+
+            Assert.Equal(string.Empty, settings.AnalyticsBaseUrl);
+        }
+
+        [Fact]
         public void LoadNormalizesInvalidUiLanguageOverrideToSystem()
         {
             var settingsPath = Path.Combine(tempDirectory, "settings.json");

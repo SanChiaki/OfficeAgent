@@ -14,6 +14,8 @@ namespace OfficeAgent.Core.Models
 
         public string BusinessBaseUrl { get; set; } = string.Empty;
 
+        public string AnalyticsBaseUrl { get; set; } = string.Empty;
+
         public string Model { get; set; } = "gpt-5-mini";
 
         public string ApiFormat { get; set; } = DefaultApiFormat;
