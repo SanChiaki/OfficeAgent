@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -7,6 +8,7 @@ using System.Security.Authentication;
 using System.Text;
 using Newtonsoft.Json;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -37,9 +39,14 @@ namespace OfficeAgent.Infrastructure.Http
         private readonly CurrentBusinessFieldMappingSeedBuilder fieldMappingSeedBuilder;
         private readonly Func<AppSettings> loadSettings;
         private readonly HttpClient httpClient;
+        private readonly IAnalyticsService analyticsService;
 
-        public CurrentBusinessSystemConnector(Func<AppSettings> loadSettings, HttpClient httpClient = null, CookieContainer cookieContainer = null)
-            : this(loadSettings ?? throw new ArgumentNullException(nameof(loadSettings)), new CurrentBusinessSchemaMapper(PropertyLabels), new CurrentBusinessFieldMappingSeedBuilder(PropertyLabels), httpClient, handler: null, cookieContainer)
+        public CurrentBusinessSystemConnector(
+            Func<AppSettings> loadSettings,
+            HttpClient httpClient = null,
+            CookieContainer cookieContainer = null,
+            IAnalyticsService analyticsService = null)
+            : this(loadSettings ?? throw new ArgumentNullException(nameof(loadSettings)), new CurrentBusinessSchemaMapper(PropertyLabels), new CurrentBusinessFieldMappingSeedBuilder(PropertyLabels), httpClient, handler: null, cookieContainer, analyticsService)
         {
         }
 
@@ -49,7 +56,8 @@ namespace OfficeAgent.Infrastructure.Http
             CurrentBusinessFieldMappingSeedBuilder fieldMappingSeedBuilder,
             HttpClient httpClient,
             HttpMessageHandler handler,
-            CookieContainer cookieContainer)
+            CookieContainer cookieContainer,
+            IAnalyticsService analyticsService = null)
         {
             if (schemaMapper == null)
             {
@@ -64,6 +72,7 @@ namespace OfficeAgent.Infrastructure.Http
             this.loadSettings = loadSettings ?? throw new ArgumentNullException(nameof(loadSettings));
             this.schemaMapper = schemaMapper;
             this.fieldMappingSeedBuilder = fieldMappingSeedBuilder;
+            this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
             if (httpClient != null)
             {
                 this.httpClient = httpClient;
@@ -87,6 +96,11 @@ namespace OfficeAgent.Infrastructure.Http
 
         public static CurrentBusinessSystemConnector ForTests(string baseUrl, HttpMessageHandler handler)
         {
+            return ForTests(baseUrl, handler, analyticsService: null);
+        }
+
+        public static CurrentBusinessSystemConnector ForTests(string baseUrl, HttpMessageHandler handler, IAnalyticsService analyticsService)
+        {
             if (handler == null)
             {
                 throw new ArgumentNullException(nameof(handler));
@@ -98,23 +112,37 @@ namespace OfficeAgent.Infrastructure.Http
                 new CurrentBusinessFieldMappingSeedBuilder(PropertyLabels),
                 httpClient: null,
                 handler: handler,
-                cookieContainer: null);
+                cookieContainer: null,
+                analyticsService: analyticsService);
         }
 
         public string SystemKey => CurrentSystemKey;
 
         public IReadOnlyList<ProjectOption> GetProjects()
         {
-            var projects = Get<List<ProjectOption>>("/projects") ?? new List<ProjectOption>();
-            return projects
-                .Where(project => project != null && !string.IsNullOrWhiteSpace(project.ProjectId))
-                .Select(project => new ProjectOption
-                {
-                    SystemKey = CurrentSystemKey,
-                    ProjectId = project.ProjectId ?? string.Empty,
-                    DisplayName = project.DisplayName ?? string.Empty,
-                })
-                .ToArray();
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId: string.Empty);
+            try
+            {
+                var projects = Get<List<ProjectOption>>("/projects") ?? new List<ProjectOption>();
+                var normalizedProjects = projects
+                    .Where(project => project != null && !string.IsNullOrWhiteSpace(project.ProjectId))
+                    .Select(project => new ProjectOption
+                    {
+                        SystemKey = CurrentSystemKey,
+                        ProjectId = project.ProjectId ?? string.Empty,
+                        DisplayName = project.DisplayName ?? string.Empty,
+                    })
+                    .ToArray();
+                properties["projectCount"] = normalizedProjects.Length;
+                TrackBusinessEvent("business.current.projects.completed", properties, "/projects", "projects", stopwatch);
+                return normalizedProjects;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.projects.failed", properties, "/projects", "projects", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
         }
 
         public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
@@ -163,64 +191,122 @@ namespace OfficeAgent.Infrastructure.Http
 
         public IReadOnlyList<SheetFieldMappingRow> BuildFieldMappingSeed(string sheetName, string projectId)
         {
-            EnsureProjectId(projectId);
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            try
+            {
+                EnsureProjectId(projectId);
 
-            var headWrapper = Post<SchemaHeadWrapper>("/head", new { projectId });
-            var headList = headWrapper?.HeadList ?? Array.Empty<CurrentBusinessHeadDefinition>();
-            var sampleRows = Find(projectId, Array.Empty<string>(), Array.Empty<string>());
+                var headWrapper = Post<SchemaHeadWrapper>("/head", new { projectId });
+                var headList = headWrapper?.HeadList ?? Array.Empty<CurrentBusinessHeadDefinition>();
+                var sampleRows = Find(projectId, Array.Empty<string>(), Array.Empty<string>());
+                var rows = fieldMappingSeedBuilder.Build(sheetName, headList, sampleRows);
 
-            return fieldMappingSeedBuilder.Build(sheetName, headList, sampleRows);
+                properties["headCount"] = headList.Length;
+                properties["sampleRowCount"] = sampleRows?.Count ?? 0;
+                properties["fieldMappingRowCount"] = rows?.Count ?? 0;
+                TrackBusinessEvent("business.current.field_mapping_seed.completed", properties, "/head", "field_mapping_seed", stopwatch);
+                return rows;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.field_mapping_seed.failed", properties, "/head", "field_mapping_seed", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
         }
 
         public WorksheetSchema GetSchema(string projectId)
         {
-            var headWrapper = Post<SchemaHeadWrapper>("/head", new { projectId });
-            var headList = headWrapper?.HeadList ?? Array.Empty<CurrentBusinessHeadDefinition>();
-            var rows = Post<List<Dictionary<string, object>>>("/find", new
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            try
             {
-                projectId,
-                ids = Array.Empty<string>(),
-                fieldKeys = Array.Empty<string>(),
-            }) ?? new List<Dictionary<string, object>>();
+                var headWrapper = Post<SchemaHeadWrapper>("/head", new { projectId });
+                var headList = headWrapper?.HeadList ?? Array.Empty<CurrentBusinessHeadDefinition>();
+                var rows = Post<List<Dictionary<string, object>>>("/find", new
+                {
+                    projectId,
+                    ids = Array.Empty<string>(),
+                    fieldKeys = Array.Empty<string>(),
+                }) ?? new List<Dictionary<string, object>>();
 
-            return schemaMapper.Build(projectId, headList, rows);
+                var schema = schemaMapper.Build(projectId, headList, rows);
+                properties["headCount"] = headList.Length;
+                properties["rowCount"] = rows.Count;
+                properties["columnCount"] = schema?.Columns?.Length ?? 0;
+                TrackBusinessEvent("business.current.schema.completed", properties, "/head", "schema", stopwatch);
+                return schema;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.schema.failed", properties, "/head", "schema", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
         }
 
         public IReadOnlyList<IDictionary<string, object>> Find(string projectId, IReadOnlyList<string> rowIds, IReadOnlyList<string> fieldKeys)
         {
-            var requestedRowIds = rowIds ?? Array.Empty<string>();
-            var payload = new
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            properties["rowIdCount"] = rowIds?.Count ?? 0;
+            properties["fieldKeyCount"] = fieldKeys?.Count ?? 0;
+            try
             {
-                projectId,
-                ids = requestedRowIds,
-                rowIds = requestedRowIds,
-                fieldKeys = fieldKeys ?? Array.Empty<string>(),
-            };
+                var requestedRowIds = rowIds ?? Array.Empty<string>();
+                var payload = new
+                {
+                    projectId,
+                    ids = requestedRowIds,
+                    rowIds = requestedRowIds,
+                    fieldKeys = fieldKeys ?? Array.Empty<string>(),
+                };
 
-            return Post<List<Dictionary<string, object>>>("/find", payload) ?? new List<Dictionary<string, object>>();
+                var rows = Post<List<Dictionary<string, object>>>("/find", payload) ?? new List<Dictionary<string, object>>();
+                properties["resultRowCount"] = rows.Count;
+                TrackBusinessEvent("business.current.find.completed", properties, "/find", "find", stopwatch);
+                return rows;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.find.failed", properties, "/find", "find", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
         }
 
         public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
         {
-            if (changes == null)
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            properties["changeCount"] = changes?.Count ?? 0;
+            try
             {
-                throw new ArgumentNullException(nameof(changes));
+                if (changes == null)
+                {
+                    throw new ArgumentNullException(nameof(changes));
+                }
+
+                if (changes.Count == 0)
+                {
+                    TrackBusinessEvent("business.current.batch_save.completed", properties, "/batchSave", "batch_save", stopwatch);
+                    return;
+                }
+
+                var items = changes.Select(change => new CurrentBusinessBatchSaveItem
+                {
+                    ProjectId = projectId,
+                    Id = change.RowId,
+                    FieldKey = change.ApiFieldKey,
+                    Value = change.NewValue,
+                }).ToArray();
+
+                PostBatchSave(items);
+                TrackBusinessEvent("business.current.batch_save.completed", properties, "/batchSave", "batch_save", stopwatch);
             }
-
-            if (changes.Count == 0)
+            catch (Exception ex)
             {
-                return;
+                TrackBusinessEvent("business.current.batch_save.failed", properties, "/batchSave", "batch_save", stopwatch, ToAnalyticsError(ex));
+                throw;
             }
-
-            var items = changes.Select(change => new CurrentBusinessBatchSaveItem
-            {
-                ProjectId = projectId,
-                Id = change.RowId,
-                FieldKey = change.ApiFieldKey,
-                Value = change.NewValue,
-            }).ToArray();
-
-            PostBatchSave(items);
         }
 
         private T Post<T>(string path, object payload)
@@ -367,6 +453,47 @@ namespace OfficeAgent.Infrastructure.Http
             {
                 throw new InvalidOperationException("Project id is required for current business system.");
             }
+        }
+
+        private void TrackBusinessEvent(
+            string eventName,
+            Dictionary<string, object> properties,
+            string endpoint,
+            string module,
+            Stopwatch stopwatch,
+            AnalyticsError error = null)
+        {
+            stopwatch.Stop();
+            properties["durationMs"] = stopwatch.ElapsedMilliseconds;
+            analyticsService.Track(
+                eventName,
+                "connector",
+                properties,
+                new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["endpoint"] = endpoint ?? string.Empty,
+                    ["module"] = module ?? string.Empty,
+                },
+                error);
+        }
+
+        private static Dictionary<string, object> BuildBusinessProperties(string projectId)
+        {
+            return new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["systemKey"] = CurrentSystemKey,
+                ["projectId"] = projectId ?? string.Empty,
+            };
+        }
+
+        private static AnalyticsError ToAnalyticsError(Exception ex)
+        {
+            return new AnalyticsError
+            {
+                Code = "connector_failed",
+                Message = ex.Message,
+                ExceptionType = ex.GetType().Name,
+            };
         }
 
         private static string BuildRequestDetails(HttpMethod method, string path, string projectId)

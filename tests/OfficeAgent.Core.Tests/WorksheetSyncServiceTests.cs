@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -99,6 +100,23 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void DownloadTracksConnectorCompletedEvent()
+        {
+            var connector = new FakeSystemConnector();
+            var analytics = new RecordingAnalyticsService();
+            var service = CreateService(connector, analyticsService: analytics);
+
+            service.Download(connector.SystemKey, "performance", new[] { "row-1" }, new[] { "owner_name" });
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "connector.find.completed" &&
+                Equals(analyticsEvent.Properties["systemKey"], connector.SystemKey) &&
+                Equals(analyticsEvent.Properties["projectId"], "performance") &&
+                Equals(analyticsEvent.Properties["rowIdCount"], 1) &&
+                Equals(analyticsEvent.Properties["fieldKeyCount"], 1));
+        }
+
+        [Fact]
         public void UploadDelegatesToConnectorBatchSave()
         {
             var connector = new FakeSystemConnector();
@@ -119,6 +137,25 @@ namespace OfficeAgent.Core.Tests
 
             Assert.Equal("performance", connector.LastBatchSaveProjectId);
             Assert.Same(changes, connector.LastBatchSaveChanges);
+        }
+
+        [Fact]
+        public void UploadTracksConnectorFailedEventWhenBatchSaveThrows()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BatchSaveException = new InvalidOperationException("save failed"),
+            };
+            var analytics = new RecordingAnalyticsService();
+            var service = CreateService(connector, analyticsService: analytics);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                service.Upload(connector.SystemKey, "performance", new[] { new CellChange { RowId = "row-1", ApiFieldKey = "owner_name", NewValue = "李四" } }));
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "connector.batch_save.failed" &&
+                analyticsEvent.Error != null &&
+                analyticsEvent.Error.Message == "save failed");
         }
 
         [Fact]
@@ -175,13 +212,43 @@ namespace OfficeAgent.Core.Tests
 
         private static WorksheetSyncService CreateService(
             FakeSystemConnector connector,
-            FakeWorksheetMetadataStore metadataStore)
+            FakeWorksheetMetadataStore metadataStore = null,
+            IAnalyticsService analyticsService = null)
         {
+            metadataStore = metadataStore ?? new FakeWorksheetMetadataStore();
             return new WorksheetSyncService(
                 new SystemConnectorRegistry(new[] { connector }),
                 metadataStore,
                 new WorksheetChangeTracker(),
-                new SyncOperationPreviewFactory());
+                new SyncOperationPreviewFactory(),
+                analyticsService);
+        }
+
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                Events.Add(analyticsEvent);
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Events.Add(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    BusinessContext = businessContext ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    Error = error,
+                });
+            }
         }
 
         private sealed class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
@@ -257,6 +324,8 @@ namespace OfficeAgent.Core.Tests
 
             public IReadOnlyList<CellChange> LastBatchSaveChanges { get; private set; } = Array.Empty<CellChange>();
 
+            public Exception BatchSaveException { get; set; }
+
             public string SkippedApiFieldKey { get; set; } = string.Empty;
 
             public string SkipReason { get; set; } = string.Empty;
@@ -315,6 +384,11 @@ namespace OfficeAgent.Core.Tests
 
             public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
             {
+                if (BatchSaveException != null)
+                {
+                    throw BatchSaveException;
+                }
+
                 LastBatchSaveProjectId = projectId;
                 LastBatchSaveChanges = changes;
             }

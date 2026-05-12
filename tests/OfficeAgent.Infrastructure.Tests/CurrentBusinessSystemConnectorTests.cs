@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Infrastructure.Http;
@@ -249,6 +250,30 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void FindTracksBusinessContextWithoutRawPayload()
+        {
+            var handler = new RecordingHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[{\"row_id\":\"row-1\",\"owner_name\":\"张三\"}]")
+            });
+            var analytics = new RecordingAnalyticsService();
+            var connector = CurrentBusinessSystemConnector.ForTests(
+                "https://api.internal.example",
+                handler,
+                analytics);
+
+            connector.Find("performance", new[] { "row-1" }, new[] { "owner_name" });
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "business.current.find.completed" &&
+                Equals(analyticsEvent.BusinessContext["endpoint"], "/find") &&
+                Equals(analyticsEvent.Properties["projectId"], "performance"));
+            Assert.DoesNotContain(analytics.Events, analyticsEvent =>
+                analyticsEvent.BusinessContext.ContainsKey("requestBody") ||
+                analyticsEvent.BusinessContext.ContainsKey("responseBody"));
+        }
+
+        [Fact]
         public void BatchSaveRetriesWithLegacyItemsWrapperWhenArrayPayloadIsRejected()
         {
             var handler = new LegacyBatchSaveHandler();
@@ -279,6 +304,33 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(string.Empty, handler.LastBody);
         }
 
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                Events.Add(analyticsEvent);
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Events.Add(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    BusinessContext = businessContext ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    Error = error,
+                });
+            }
+        }
+
         private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
         {
             var entries = new List<OfficeAgentLogEntry>();
@@ -301,6 +353,13 @@ namespace OfficeAgent.Infrastructure.Tests
 
         private sealed class RecordingHandler : HttpMessageHandler
         {
+            private readonly Func<HttpRequestMessage, HttpResponseMessage> createResponse;
+
+            public RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> createResponse = null)
+            {
+                this.createResponse = createResponse;
+            }
+
             public string LastPath { get; private set; } = string.Empty;
             public string LastUri { get; private set; } = string.Empty;
             public string LastBody { get; private set; } = string.Empty;
@@ -326,7 +385,7 @@ namespace OfficeAgent.Infrastructure.Tests
                     _ => "[]",
                 };
 
-                var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                var response = createResponse?.Invoke(request) ?? new HttpResponseMessage(System.Net.HttpStatusCode.OK)
                 {
                     Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 };
