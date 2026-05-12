@@ -60,31 +60,59 @@ namespace OfficeAgent.Core.Analytics
 
         private static AnalyticsEvent Normalize(AnalyticsEvent analyticsEvent)
         {
-            analyticsEvent.SchemaVersion = analyticsEvent.SchemaVersion <= 0 ? 1 : analyticsEvent.SchemaVersion;
-            analyticsEvent.Source = analyticsEvent.Source ?? string.Empty;
-            analyticsEvent.OccurredAtUtc = analyticsEvent.OccurredAtUtc == default(DateTime)
-                ? DateTime.UtcNow
-                : analyticsEvent.OccurredAtUtc.ToUniversalTime();
-            analyticsEvent.Properties = NormalizeDictionary(analyticsEvent.Properties);
-            analyticsEvent.BusinessContext = NormalizeDictionary(analyticsEvent.BusinessContext);
-
-            return analyticsEvent;
+            return new AnalyticsEvent
+            {
+                SchemaVersion = analyticsEvent.SchemaVersion <= 0 ? 1 : analyticsEvent.SchemaVersion,
+                EventName = analyticsEvent.EventName,
+                Source = analyticsEvent.Source ?? string.Empty,
+                OccurredAtUtc = NormalizeTimestamp(analyticsEvent.OccurredAtUtc),
+                Properties = CopyDictionary(analyticsEvent.Properties),
+                BusinessContext = CopyDictionary(analyticsEvent.BusinessContext),
+                Error = CopyError(analyticsEvent.Error),
+            };
         }
 
-        private static IDictionary<string, object> NormalizeDictionary(IDictionary<string, object> values)
+        private static DateTime NormalizeTimestamp(DateTime occurredAtUtc)
         {
-            var normalized = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (occurredAtUtc == default(DateTime))
+            {
+                return DateTime.UtcNow;
+            }
+
+            return occurredAtUtc.Kind == DateTimeKind.Local
+                ? occurredAtUtc.ToUniversalTime()
+                : occurredAtUtc;
+        }
+
+        private static IDictionary<string, object> CopyDictionary(IDictionary<string, object> values)
+        {
+            var copy = new Dictionary<string, object>(StringComparer.Ordinal);
             if (values == null)
             {
-                return normalized;
+                return copy;
             }
 
             foreach (var value in values)
             {
-                normalized[value.Key ?? string.Empty] = value.Value;
+                copy[value.Key ?? string.Empty] = value.Value;
             }
 
-            return normalized;
+            return copy;
+        }
+
+        private static AnalyticsError CopyError(AnalyticsError error)
+        {
+            if (error == null)
+            {
+                return null;
+            }
+
+            return new AnalyticsError
+            {
+                Code = error.Code ?? string.Empty,
+                Message = error.Message ?? string.Empty,
+                ExceptionType = error.ExceptionType ?? string.Empty,
+            };
         }
     }
 }
