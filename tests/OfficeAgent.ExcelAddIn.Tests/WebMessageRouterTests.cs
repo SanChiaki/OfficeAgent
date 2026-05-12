@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Orchestration;
 using OfficeAgent.Core.Services;
@@ -236,6 +238,48 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("\"ok\":false", responseJson);
             Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
+        }
+
+        [Fact]
+        public void TrackAnalyticsRoutesPanelEventToAnalyticsService()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+            var analytics = new RecordingAnalyticsService();
+
+            var router = CreateRouter(sessionStore, settingsStore, analytics, resolvedUiLocale: "zh");
+            var responseJson = InvokeRoute(
+                router,
+                "{\"type\":\"bridge.trackAnalytics\",\"requestId\":\"req-1\",\"payload\":{\"eventName\":\"panel.composer.send.clicked\",\"source\":\"panel\",\"properties\":{\"inputLength\":12},\"businessContext\":{\"module\":\"demo\"}}}");
+
+            Assert.Contains("\"ok\":true", responseJson);
+            Assert.NotNull(analytics.LastEvent);
+            Assert.Equal("panel.composer.send.clicked", analytics.LastEvent.EventName);
+            Assert.Equal("panel", analytics.LastEvent.Source);
+            Assert.Equal(12L, analytics.LastEvent.Properties["inputLength"]);
+            Assert.Equal("zh", analytics.LastEvent.Properties["uiLocale"]);
+            Assert.Equal("demo", analytics.LastEvent.BusinessContext["module"]);
+        }
+
+        [Fact]
+        public void TrackAnalyticsRejectsBlankEventName()
+        {
+            var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
+            var settingsStore = new FileSettingsStore(
+                Path.Combine(tempDirectory, "settings.json"),
+                new DpapiSecretProtector());
+            var analytics = new RecordingAnalyticsService();
+
+            var router = CreateRouter(sessionStore, settingsStore, analytics);
+            var responseJson = InvokeRoute(
+                router,
+                "{\"type\":\"bridge.trackAnalytics\",\"requestId\":\"req-1\",\"payload\":{\"eventName\":\" \",\"source\":\"panel\"}}");
+
+            Assert.Contains("\"ok\":false", responseJson);
+            Assert.Contains("\"code\":\"malformed_payload\"", responseJson);
+            Assert.Null(analytics.LastEvent);
         }
 
         [Fact]
@@ -556,6 +600,22 @@ namespace OfficeAgent.ExcelAddIn.Tests
         private static object CreateRouter(
             FileSessionStore sessionStore,
             FileSettingsStore settingsStore,
+            IAnalyticsService analyticsService,
+            string resolvedUiLocale = "en")
+        {
+            return CreateRouter(
+                sessionStore,
+                settingsStore,
+                new FakeExcelContextService(SelectionContext.Empty("No selection available.")),
+                new FakeExcelCommandExecutor(),
+                new FakeAgentOrchestrator(),
+                settings => resolvedUiLocale,
+                analyticsService);
+        }
+
+        private static object CreateRouter(
+            FileSessionStore sessionStore,
+            FileSettingsStore settingsStore,
             Func<AppSettings, string> getResolvedUiLocale)
         {
             return CreateRouter(
@@ -610,7 +670,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             IExcelContextService selectionContextService,
             IExcelCommandExecutor excelCommandExecutor,
             IAgentOrchestrator agentOrchestrator,
-            Func<AppSettings, string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale,
+            IAnalyticsService analyticsService = null)
         {
             var sharedCookies = new SharedCookieContainer();
             var cookieStore = new FileCookieStore(
@@ -625,7 +686,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 routerType,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale },
+                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService },
                 culture: null);
         }
 
@@ -738,6 +799,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public System.Threading.Tasks.Task<AgentCommandResult> ExecuteAsync(AgentCommandEnvelope envelope)
             {
                 return System.Threading.Tasks.Task.FromResult(Execute(envelope));
+            }
+        }
+
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public AnalyticsEvent LastEvent { get; private set; }
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                LastEvent = analyticsEvent;
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Track(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties,
+                    BusinessContext = businessContext,
+                    Error = error,
+                });
             }
         }
     }

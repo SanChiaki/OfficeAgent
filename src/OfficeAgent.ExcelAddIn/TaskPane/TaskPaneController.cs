@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Office.Core;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -19,6 +20,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
         private readonly Func<AppSettings, string> getResolvedUiLocale;
+        private readonly IAnalyticsService analyticsService;
         private Microsoft.Office.Tools.CustomTaskPane taskPane;
         private TaskPaneHostControl hostControl;
 
@@ -31,7 +33,8 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<AppSettings, string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale,
+            IAnalyticsService analyticsService = null)
         {
             this.addIn = addIn;
             this.sessionStore = sessionStore;
@@ -42,6 +45,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             this.sharedCookies = sharedCookies;
             this.cookieStore = cookieStore;
             this.getResolvedUiLocale = getResolvedUiLocale;
+            this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
         }
 
         public void Toggle()
@@ -77,7 +81,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 return;
             }
 
-            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
+            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService);
             taskPane = addIn.CustomTaskPanes.Add(hostControl, "xISDP AI");
             taskPane.DockPosition = MsoCTPDockPosition.msoCTPDockPositionRight;
             taskPane.Width = 800;

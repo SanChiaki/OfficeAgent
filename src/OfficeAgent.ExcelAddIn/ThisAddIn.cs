@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Microsoft.Office.Core;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Orchestration;
@@ -13,6 +14,7 @@ using OfficeAgent.Core.Templates;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.ExcelAddIn.TaskPane;
+using OfficeAgent.Infrastructure.Analytics;
 using OfficeAgent.Infrastructure.Diagnostics;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Security;
@@ -29,6 +31,7 @@ namespace OfficeAgent.ExcelAddIn
         internal IExcelContextService ExcelContextService { get; private set; }
         internal IExcelCommandExecutor ExcelCommandExecutor { get; private set; }
         internal IAgentOrchestrator AgentOrchestrator { get; private set; }
+        internal IAnalyticsService AnalyticsService { get; private set; }
         internal ExcelFocusCoordinator ExcelFocusCoordinator { get; private set; }
         internal SharedCookieContainer SharedCookies { get; private set; }
         internal FileCookieStore CookieStore { get; private set; }
@@ -63,6 +66,8 @@ namespace OfficeAgent.ExcelAddIn
             SettingsStore = new FileSettingsStore(
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
+            AnalyticsService = new OfficeAgent.Core.Analytics.AnalyticsService(
+                new InsertLogAnalyticsSink(() => SettingsStore.Load()));
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
@@ -140,7 +145,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, GetResolvedUiLocale);
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, GetResolvedUiLocale, AnalyticsService);
             Application.WorkbookActivate += Application_WorkbookActivate;
             Application.SheetActivate += Application_SheetActivate;
             Application.SheetSelectionChange += Application_SheetSelectionChange;

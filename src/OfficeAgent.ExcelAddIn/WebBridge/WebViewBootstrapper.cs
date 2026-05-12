@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -34,12 +35,13 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<AppSettings, string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale,
+            IAnalyticsService analyticsService = null)
         {
             this.webView = webView;
             this.settingsStore = settingsStore;
             this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
-            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale);
+            messageRouter = new WebMessageRouter(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService);
         }
 
         public async Task InitializeAsync()
