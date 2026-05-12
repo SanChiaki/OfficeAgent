@@ -8,6 +8,7 @@ using System.Runtime.Remoting.Proxies;
 using System.Threading;
 using System.Threading.Tasks;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -409,6 +410,32 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(2, metadataStore.LastSavedBinding.HeaderRowCount);
             Assert.Equal(9, metadataStore.LastSavedBinding.DataStartRow);
             Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Initialize sheet completed.", StringComparison.Ordinal) >= 0);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTracksCompletedEventWithProjectName()
+        {
+            var connector = new FakeSystemConnector();
+            var analytics = new RecordingAnalyticsService();
+            var controller = CreateController(
+                connector,
+                activeSheetName: "Sheet1",
+                analyticsService: analytics);
+
+            InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            });
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "ribbon.initialize.completed" &&
+                Equals(analyticsEvent.Properties["projectId"], "performance") &&
+                Equals(analyticsEvent.Properties["projectName"], "绩效项目") &&
+                Equals(analyticsEvent.Properties["sheetName"], "Sheet1"));
         }
 
         [Fact]
@@ -1090,11 +1117,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private static object CreateController(
             FakeSystemConnector connector,
-            FakeWorksheetMetadataStore metadataStore,
-            FakeDialogService dialogService,
-            Func<string> sheetNameProvider)
+            string activeSheetName,
+            IAnalyticsService analyticsService = null)
         {
-            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null);
+            return CreateController(
+                connector,
+                new FakeWorksheetMetadataStore(),
+                new FakeDialogService { ConfirmProjectLayoutWithSuggestedBinding = true },
+                () => activeSheetName,
+                authenticationLoginAction: null,
+                analyticsService: analyticsService);
         }
 
         private static object CreateController(
@@ -1102,7 +1134,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeWorksheetMetadataStore metadataStore,
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
-            Action authenticationLoginAction)
+            IAnalyticsService analyticsService = null)
+        {
+            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null, analyticsService);
+        }
+
+        private static object CreateController(
+            FakeSystemConnector connector,
+            FakeWorksheetMetadataStore metadataStore,
+            FakeDialogService dialogService,
+            Func<string> sheetNameProvider,
+            Action authenticationLoginAction,
+            IAnalyticsService analyticsService = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
@@ -1114,7 +1157,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
 
-            var ctorTypes = authenticationLoginAction == null
+            var ctorTypes = analyticsService != null
                 ? new[]
                 {
                     typeof(IWorksheetMetadataStore),
@@ -1122,16 +1165,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     typeof(Func<string>),
                     executionService.GetType(),
                     dialogInterface,
-                }
-                : new[]
-                {
-                    typeof(IWorksheetMetadataStore),
-                    typeof(WorksheetSyncService),
-                    typeof(Func<string>),
-                    executionService.GetType(),
-                    dialogInterface,
                     typeof(Action),
-                };
+                    typeof(IAnalyticsService),
+                }
+                : authenticationLoginAction == null
+                    ? new[]
+                    {
+                        typeof(IWorksheetMetadataStore),
+                        typeof(WorksheetSyncService),
+                        typeof(Func<string>),
+                        executionService.GetType(),
+                        dialogInterface,
+                    }
+                    : new[]
+                    {
+                        typeof(IWorksheetMetadataStore),
+                        typeof(WorksheetSyncService),
+                        typeof(Func<string>),
+                        executionService.GetType(),
+                        dialogInterface,
+                        typeof(Action),
+                    };
 
             var ctor = controllerType.GetConstructor(
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
@@ -1142,6 +1196,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             if (ctor == null)
             {
                 throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
+            }
+
+            if (analyticsService != null)
+            {
+                return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction, analyticsService });
             }
 
             return authenticationLoginAction == null
@@ -1688,6 +1747,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                Events.Add(analyticsEvent);
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Track(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties,
+                    BusinessContext = businessContext,
+                    Error = error,
+                });
+            }
+        }
+
         private sealed class FakeWorksheetMetadataStore : IWorksheetMetadataStore
         {
             public Dictionary<string, SheetBinding> Bindings { get; } = new Dictionary<string, SheetBinding>(StringComparer.OrdinalIgnoreCase);
@@ -1779,6 +1865,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public SheetBinding NextProjectLayoutBinding { get; set; }
 
+            public bool ConfirmProjectLayoutWithSuggestedBinding { get; set; }
+
             public bool AuthenticationRequiredResult { get; set; }
 
             public bool AiColumnMappingConfirmResult { get; set; }
@@ -1824,7 +1912,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         }
                     case "ShowProjectLayoutDialog":
                         ProjectLayoutPrompts.Add(CloneBinding((SheetBinding)call.InArgs[0]));
-                        return new ReturnMessage(CloneBinding(NextProjectLayoutBinding), null, 0, call.LogicalCallContext, call);
+                        var layoutBinding = ConfirmProjectLayoutWithSuggestedBinding
+                            ? (SheetBinding)call.InArgs[0]
+                            : NextProjectLayoutBinding;
+                        return new ReturnMessage(CloneBinding(layoutBinding), null, 0, call.LogicalCallContext, call);
                     case "ShowInfo":
                         InfoMessages.Add((string)call.InArgs[0]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);

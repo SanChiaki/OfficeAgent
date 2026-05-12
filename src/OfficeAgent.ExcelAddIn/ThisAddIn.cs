@@ -19,6 +19,7 @@ using OfficeAgent.Infrastructure.Diagnostics;
 using OfficeAgent.Infrastructure.Http;
 using OfficeAgent.Infrastructure.Security;
 using OfficeAgent.Infrastructure.Storage;
+using OfficeAgent.ExcelAddIn.Analytics;
 using ExcelInterop = Microsoft.Office.Interop.Excel;
 
 namespace OfficeAgent.ExcelAddIn
@@ -106,14 +107,14 @@ namespace OfficeAgent.ExcelAddIn
                 new PlanExecutor(ExcelCommandExecutor, skillRegistry),
                 fetchClient,
                 () => SettingsStore.Load());
-            CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container);
+            CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
             SystemConnectorRegistry = new SystemConnectorRegistry(new[] { CurrentBusinessConnector });
             WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
             WorksheetSyncService = new WorksheetSyncService(
                 SystemConnectorRegistry,
                 WorksheetMetadataStore,
                 new WorksheetChangeTracker(),
-                new SyncOperationPreviewFactory());
+                new SyncOperationPreviewFactory(), AnalyticsService);
             var worksheetGridAdapter = new ExcelWorksheetGridAdapter(Application);
             WorksheetChangeLogStore = new WorksheetChangeLogStore(worksheetGridAdapter);
             WorksheetPendingEditTracker = new WorksheetPendingEditTracker();
@@ -132,7 +133,8 @@ namespace OfficeAgent.ExcelAddIn
                 GetActiveWorksheetName,
                 WorksheetSyncExecutionService,
                 new Dialogs.RibbonSyncDialogService(),
-                () => Globals.Ribbons.AgentRibbon?.BeginLoginFlow(refreshProjectsAfterSuccess: false));
+                () => Globals.Ribbons.AgentRibbon?.BeginLoginFlow(refreshProjectsAfterSuccess: false),
+                AnalyticsService);
             TemplateStore = new LocalJsonTemplateStore(Path.Combine(appDataDirectory, "templates"));
             TemplateCatalog = new WorksheetTemplateCatalog(
                 SystemConnectorRegistry,
@@ -141,7 +143,9 @@ namespace OfficeAgent.ExcelAddIn
                 TemplateStore);
             RibbonTemplateController = new RibbonTemplateController(
                 TemplateCatalog,
-                GetActiveWorksheetName);
+                GetActiveWorksheetName,
+                new Dialogs.RibbonTemplateDialogService(),
+                AnalyticsService);
             RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
@@ -244,6 +248,28 @@ namespace OfficeAgent.ExcelAddIn
             {
                 return string.Empty;
             }
+        }
+
+        private string GetActiveWorkbookName()
+        {
+            try
+            {
+                return Application?.ActiveWorkbook?.Name ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        internal RibbonAnalyticsHelper CreateRibbonAnalyticsHelper()
+        {
+            return new RibbonAnalyticsHelper(
+                AnalyticsService,
+                () => RibbonSyncController?.ActiveBinding,
+                GetActiveWorksheetName,
+                GetActiveWorkbookName,
+                () => HostLocalizedStrings);
         }
 
         private static string GetWorksheetName(object sheet)

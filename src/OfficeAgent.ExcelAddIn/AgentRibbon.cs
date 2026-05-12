@@ -11,6 +11,7 @@ using Microsoft.Office.Tools.Ribbon;
 using OfficeAgent.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
+using OfficeAgent.ExcelAddIn.Analytics;
 using OfficeAgent.ExcelAddIn.Dialogs;
 using OfficeAgent.ExcelAddIn.Localization;
 
@@ -35,9 +36,11 @@ namespace OfficeAgent.ExcelAddIn
         private bool isBoundToSyncController;
         private bool isBoundToTemplateController;
         private string lastControllerOwnedProjectDropDownText = HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText;
+        private RibbonAnalyticsHelper analytics;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
+            EnsureAnalyticsHelper();
             ApplyLocalizedLabels();
             SetProjectDropDownText(ProjectDropDownPlaceholderText);
             RefreshTemplateButtonsFromController();
@@ -46,16 +49,19 @@ namespace OfficeAgent.ExcelAddIn
 
         private void ToggleTaskPaneButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.taskpane.toggle.clicked");
             Globals.ThisAddIn.TaskPaneController?.Toggle();
         }
 
         private void LoginButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.login.clicked");
             BeginLoginFlow(refreshProjectsAfterSuccess: true);
         }
 
         private void DocumentationButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.documentation.clicked");
             try
             {
                 OpenUrlInDefaultBrowser(DocumentationUrl);
@@ -73,6 +79,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void AboutButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.about.clicked");
             var strings = GetStrings();
             MessageBox.Show(CreateAboutMessage(), strings.RibbonAboutDialogTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -440,6 +447,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void ProjectDropDown_ItemsLoading(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.project_dropdown.opened");
             PopulateProjectDropDown();
             RefreshProjectDropDownFromController();
         }
@@ -495,6 +503,20 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             Globals.ThisAddIn.RibbonSyncController?.SelectProject(project);
+            var syncController = Globals.ThisAddIn.RibbonSyncController;
+            if (string.Equals(syncController?.ActiveSystemKey, project.SystemKey, StringComparison.Ordinal) &&
+                string.Equals(syncController?.ActiveProjectId, project.ProjectId, StringComparison.Ordinal))
+            {
+                TrackRibbonClick(
+                    "ribbon.project_dropdown.selection.changed",
+                    new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["selectedKey"] = projectDropDown.SelectedItem?.Tag as string ?? string.Empty,
+                        ["projectId"] = project.ProjectId ?? string.Empty,
+                        ["projectName"] = project.DisplayName ?? string.Empty,
+                        ["systemKey"] = project.SystemKey ?? string.Empty,
+                    });
+            }
         }
 
         internal void BindToSyncControllerAndRefresh()
@@ -504,6 +526,7 @@ namespace OfficeAgent.ExcelAddIn
 
         internal void BindToControllersAndRefresh()
         {
+            EnsureAnalyticsHelper();
             ApplyLocalizedLabels();
             if (TryBindToSyncController())
             {
@@ -570,11 +593,13 @@ namespace OfficeAgent.ExcelAddIn
 
         private void InitializeSheetButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.initialize.clicked");
             Globals.ThisAddIn.RibbonSyncController?.ExecuteInitializeCurrentSheet();
         }
 
         private void AiMapColumnsButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.ai_map_columns.clicked");
             Globals.ThisAddIn.RibbonSyncController?.ExecuteAiColumnMapping();
         }
 
@@ -655,22 +680,40 @@ namespace OfficeAgent.ExcelAddIn
 
         private void FullDownloadButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.download.clicked", new Dictionary<string, object>(StringComparer.Ordinal) { ["scope"] = "full" });
             Globals.ThisAddIn.RibbonSyncController?.ExecuteFullDownload();
         }
 
         private void PartialDownloadButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.download.clicked", new Dictionary<string, object>(StringComparer.Ordinal) { ["scope"] = "partial" });
             Globals.ThisAddIn.RibbonSyncController?.ExecutePartialDownload();
         }
 
         private void FullUploadButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.upload.clicked", new Dictionary<string, object>(StringComparer.Ordinal) { ["scope"] = "full" });
             Globals.ThisAddIn.RibbonSyncController?.ExecuteFullUpload();
         }
 
         private void PartialUploadButton_Click(object sender, RibbonControlEventArgs e)
         {
+            TrackRibbonClick("ribbon.upload.clicked", new Dictionary<string, object>(StringComparer.Ordinal) { ["scope"] = "partial" });
             Globals.ThisAddIn.RibbonSyncController?.ExecutePartialUpload();
+        }
+
+        private void EnsureAnalyticsHelper()
+        {
+            if (analytics == null)
+            {
+                analytics = Globals.ThisAddIn?.CreateRibbonAnalyticsHelper();
+            }
+        }
+
+        private void TrackRibbonClick(string eventName, IDictionary<string, object> properties = null)
+        {
+            EnsureAnalyticsHelper();
+            analytics?.Track(eventName, properties);
         }
 
         private void ApplyLocalizedLabels()

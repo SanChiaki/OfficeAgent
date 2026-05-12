@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.ExcelAddIn.Dialogs;
@@ -13,12 +15,17 @@ namespace OfficeAgent.ExcelAddIn
         private readonly ITemplateCatalog templateCatalog;
         private readonly Func<string> activeSheetNameProvider;
         private readonly IRibbonTemplateDialogService dialogService;
+        private readonly IAnalyticsService analyticsService;
         private string lastRefreshedSheetName = string.Empty;
 
         public RibbonTemplateController(
             ITemplateCatalog templateCatalog,
             Func<string> activeSheetNameProvider)
-            : this(templateCatalog, activeSheetNameProvider, new RibbonTemplateDialogService())
+            : this(
+                templateCatalog,
+                activeSheetNameProvider,
+                new RibbonTemplateDialogService(),
+                NoopAnalyticsService.Instance)
         {
         }
 
@@ -26,10 +33,20 @@ namespace OfficeAgent.ExcelAddIn
             ITemplateCatalog templateCatalog,
             Func<string> activeSheetNameProvider,
             IRibbonTemplateDialogService dialogService)
+            : this(templateCatalog, activeSheetNameProvider, dialogService, analyticsService: null)
+        {
+        }
+
+        internal RibbonTemplateController(
+            ITemplateCatalog templateCatalog,
+            Func<string> activeSheetNameProvider,
+            IRibbonTemplateDialogService dialogService,
+            IAnalyticsService analyticsService = null)
         {
             this.templateCatalog = templateCatalog ?? throw new ArgumentNullException(nameof(templateCatalog));
             this.activeSheetNameProvider = activeSheetNameProvider ?? throw new ArgumentNullException(nameof(activeSheetNameProvider));
             this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+            this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
 
             ActiveTemplateDisplayName = GetStrings().DefaultTemplateDisplayName;
         }
@@ -74,10 +91,13 @@ namespace OfficeAgent.ExcelAddIn
 
         public void ExecuteApplyTemplate()
         {
+            SheetTemplateState state = null;
+            TemplateDefinition selectedTemplate = null;
             try
             {
                 var sheetName = GetRequiredSheetName();
-                var state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                TrackTemplateEvent("ribbon.template.apply.clicked", sheetName, state);
                 if (!state.CanApplyTemplate)
                 {
                     dialogService.ShowWarning(GetStrings().ProjectSelectionRequiredMessage);
@@ -97,7 +117,7 @@ namespace OfficeAgent.ExcelAddIn
                     return;
                 }
 
-                var selectedTemplate = templates.FirstOrDefault(template =>
+                selectedTemplate = templates.FirstOrDefault(template =>
                     string.Equals(template.TemplateId, templateId, StringComparison.Ordinal));
                 if (selectedTemplate == null)
                 {
@@ -113,20 +133,24 @@ namespace OfficeAgent.ExcelAddIn
                 templateCatalog.ApplyTemplateToSheet(sheetName, templateId);
                 InvalidateRefreshState();
                 RefreshActiveTemplateStateFromSheetMetadata();
+                TrackTemplateEvent("ribbon.template.apply.completed", sheetName, state, selectedTemplate);
                 dialogService.ShowInfo(GetStrings().ApplyTemplateCompletedMessage(selectedTemplate.TemplateName));
             }
             catch (Exception ex)
             {
+                TrackTemplateEvent("ribbon.template.apply.failed", GetOptionalSheetName(), state, selectedTemplate, CreateTemplateOperationFailedError(ex));
                 dialogService.ShowError(ex.Message);
             }
         }
 
         public void ExecuteSaveTemplate()
         {
+            SheetTemplateState state = null;
             try
             {
                 var sheetName = GetRequiredSheetName();
-                var state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                TrackTemplateEvent("ribbon.template.save.clicked", sheetName, state);
                 if (!state.CanSaveTemplate || string.IsNullOrWhiteSpace(state.TemplateId) || !state.TemplateRevision.HasValue)
                 {
                     dialogService.ShowWarning(GetStrings().TemplateNoSavableMessage);
@@ -156,16 +180,20 @@ namespace OfficeAgent.ExcelAddIn
             }
             catch (Exception ex)
             {
+                TrackTemplateEvent("ribbon.template.save.failed", GetOptionalSheetName(), state, error: CreateTemplateOperationFailedError(ex));
                 dialogService.ShowError(ex.Message);
             }
         }
 
         public void ExecuteSaveAsTemplate()
         {
+            SheetTemplateState state = null;
+            string templateName = string.Empty;
             try
             {
                 var sheetName = GetRequiredSheetName();
-                var state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                state = templateCatalog.GetSheetState(sheetName) ?? new SheetTemplateState();
+                TrackTemplateEvent("ribbon.template.save_as.clicked", sheetName, state);
                 if (!state.CanSaveAsTemplate)
                 {
                     dialogService.ShowWarning(GetStrings().ProjectSelectionRequiredMessage);
@@ -173,7 +201,7 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 var suggestedTemplateName = GetStrings().FormatSuggestedTemplateCopyName(state.TemplateName);
-                var templateName = dialogService.ShowSaveAsTemplateDialog(suggestedTemplateName);
+                templateName = dialogService.ShowSaveAsTemplateDialog(suggestedTemplateName);
                 if (string.IsNullOrWhiteSpace(templateName))
                 {
                     return;
@@ -182,10 +210,27 @@ namespace OfficeAgent.ExcelAddIn
                 templateCatalog.SaveSheetAsNewTemplate(sheetName, templateName);
                 InvalidateRefreshState();
                 RefreshActiveTemplateStateFromSheetMetadata();
+                TrackTemplateEvent(
+                    "ribbon.template.save_as.completed",
+                    sheetName,
+                    state,
+                    properties: new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["templateName"] = templateName,
+                    });
                 dialogService.ShowInfo(GetStrings().SaveAsTemplateCompletedMessage(templateName));
             }
             catch (Exception ex)
             {
+                TrackTemplateEvent(
+                    "ribbon.template.save_as.failed",
+                    GetOptionalSheetName(),
+                    state,
+                    properties: new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["templateName"] = templateName ?? string.Empty,
+                    },
+                    error: CreateTemplateOperationFailedError(ex));
                 dialogService.ShowError(ex.Message);
             }
         }
@@ -205,6 +250,14 @@ namespace OfficeAgent.ExcelAddIn
                     overwriteRevisionConflict);
                 InvalidateRefreshState();
                 RefreshActiveTemplateStateFromSheetMetadata();
+                TrackTemplateEvent(
+                    "ribbon.template.save.completed",
+                    sheetName,
+                    state,
+                    properties: new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["overwriteRevisionConflict"] = overwriteRevisionConflict,
+                    });
                 dialogService.ShowInfo(successMessage);
                 return true;
             }
@@ -245,6 +298,61 @@ namespace OfficeAgent.ExcelAddIn
 
             return string.Equals(message, "模板版本已变化。", StringComparison.Ordinal) ||
                    message.IndexOf("revision", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void TrackTemplateEvent(
+            string eventName,
+            string sheetName,
+            SheetTemplateState state,
+            TemplateDefinition template = null,
+            AnalyticsError error = null,
+            IDictionary<string, object> properties = null)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                return;
+            }
+
+            var merged = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["sheetName"] = sheetName ?? string.Empty,
+                ["projectName"] = state?.ProjectDisplayName ?? template?.ProjectName ?? string.Empty,
+                ["templateId"] = template?.TemplateId ?? state?.TemplateId ?? string.Empty,
+                ["templateName"] = template?.TemplateName ?? state?.TemplateName ?? string.Empty,
+                ["templateRevision"] = template?.Revision ?? state?.TemplateRevision ?? 0,
+            };
+
+            if (properties != null)
+            {
+                foreach (var property in properties)
+                {
+                    merged[property.Key ?? string.Empty] = property.Value;
+                }
+            }
+
+            analyticsService.Track(eventName, "ribbon", merged, error: error);
+        }
+
+        private string GetOptionalSheetName()
+        {
+            try
+            {
+                return activeSheetNameProvider.Invoke() ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static AnalyticsError CreateTemplateOperationFailedError(Exception ex)
+        {
+            return new AnalyticsError
+            {
+                Code = "template_operation_failed",
+                Message = ex?.Message ?? string.Empty,
+                ExceptionType = ex?.GetType().Name ?? string.Empty,
+            };
         }
 
         private static HostLocalizedStrings GetStrings()
