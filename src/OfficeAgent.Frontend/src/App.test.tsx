@@ -21,6 +21,7 @@ vi.mock('./bridge/nativeBridge', () => ({
     login: vi.fn(),
     logout: vi.fn(),
     getLoginStatus: vi.fn(),
+    trackAnalytics: vi.fn(),
   },
 }));
 
@@ -94,6 +95,7 @@ beforeEach(() => {
     apiKey: '',
     baseUrl: 'https://api.example.com',
     businessBaseUrl: 'https://business.example.com',
+    analyticsBaseUrl: '',
     model: 'gpt-5-mini',
     apiFormat: 'openai-compatible',
     ssoUrl: '',
@@ -112,6 +114,7 @@ beforeEach(() => {
   });
   mockedBridge.saveSessions.mockImplementation(async (state) => state);
   mockedBridge.saveSettings.mockImplementation(async (settings) => settings);
+  mockedBridge.trackAnalytics.mockResolvedValue({ tracked: true });
   mockedBridge.executeExcelCommand.mockResolvedValue({
     commandType: 'excel.readSelectionTable',
     requiresConfirmation: false,
@@ -463,6 +466,21 @@ describe('App shell', () => {
     }));
   });
 
+  it('saves the analytics base URL setting', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
+    await user.clear(screen.getByRole('textbox', { name: /^(analytics base url|埋点 base url)$/i }));
+    await user.type(screen.getByRole('textbox', { name: /^(analytics base url|埋点 base url)$/i }), 'http://localhost:3200');
+    await user.click(screen.getByRole('button', { name: /保存|save/i }));
+
+    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      analyticsBaseUrl: 'http://localhost:3200',
+    }));
+  });
+
   it('saves the selected llm api format', async () => {
     const user = userEvent.setup();
 
@@ -590,6 +608,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
+      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -608,6 +627,7 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
+      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',
@@ -665,6 +685,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
+      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -681,6 +702,7 @@ describe('App shell', () => {
       apiKey: 'loaded-key',
       baseUrl: 'https://loaded.example.com',
       businessBaseUrl: 'https://business-loaded.example.com',
+      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',
@@ -711,6 +733,7 @@ describe('App shell', () => {
       apiKey: string;
       baseUrl: string;
       businessBaseUrl: string;
+      analyticsBaseUrl: string;
       model: string;
       apiFormat: 'openai-compatible' | 'anthropic-messages';
       ssoUrl: string;
@@ -735,6 +758,7 @@ describe('App shell', () => {
       apiKey: '',
       baseUrl: 'https://api.example.com',
       businessBaseUrl: 'https://business.example.com',
+      analyticsBaseUrl: '',
       model: 'gpt-5-mini',
       apiFormat: 'openai-compatible',
       ssoUrl: '',
@@ -853,6 +877,23 @@ describe('App shell', () => {
     expect(
       await screen.findByText(/i can help with the current selection/i),
     ).toBeInTheDocument();
+  });
+
+  it('tracks composer send events without sending prompt text', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.type(screen.getByRole('textbox', { name: /消息输入框|message composer/i }), 'Create a summary sheet');
+    await user.click(screen.getByRole('button', { name: /发送|send/i }));
+
+    expect(mockedBridge.trackAnalytics).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'panel.composer.send.clicked',
+      properties: expect.objectContaining({
+        inputLength: 22,
+      }),
+    }));
+    expect(JSON.stringify(mockedBridge.trackAnalytics.mock.calls)).not.toContain('Create a summary sheet');
   });
 
   it('renders a plan preview and confirms the frozen plan through the agent bridge', async () => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { nativeBridge } from './bridge/nativeBridge';
+import { trackPanelEvent } from './analytics/panelAnalytics';
 import { ConfirmationCard } from './components/ConfirmationCard';
 import { getUiStrings, UNTITLED_SESSION_STORAGE_TITLE } from './i18n/uiStrings';
 import type {
@@ -26,6 +27,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
+  analyticsBaseUrl: '',
   model: 'gpt-5-mini',
   apiFormat: 'openai-compatible',
   ssoUrl: '',
@@ -295,6 +297,18 @@ export function App() {
   const isCommandPending = activeSession ? pendingCommandSessions[activeSession.id] === true : false;
   const isComposerDisabled = isCommandPending || activePendingConfirmation !== null;
 
+  function track(
+    eventName: string,
+    properties: Record<string, unknown> = {},
+    businessContext: Record<string, unknown> = {},
+  ) {
+    trackPanelEvent(eventName, {
+      sessionId: activeSession?.id,
+      uiLocale,
+      selectionContext,
+    }, properties, businessContext);
+  }
+
   useEffect(() => {
     if (isSettingsOpen) {
       apiKeyInputRef.current?.focus();
@@ -329,6 +343,7 @@ export function App() {
     resetDraftSettings();
     isSettingsOpenRef.current = true;
     setIsSettingsOpen(true);
+    track('panel.settings.opened');
   }
 
   async function handleLogin() {
@@ -572,6 +587,12 @@ export function App() {
       isSettingsOpenRef.current = false;
       shouldRestoreSettingsButtonFocusRef.current = true;
       setIsSettingsOpen(false);
+      track('panel.settings.saved', {
+        apiFormat: savedSettings.apiFormat,
+        hasBaseUrl: Boolean(savedSettings.baseUrl.trim()),
+        hasBusinessBaseUrl: Boolean(savedSettings.businessBaseUrl.trim()),
+        hasAnalyticsBaseUrl: Boolean(savedSettings.analyticsBaseUrl.trim()),
+      });
       void nativeBridge.getHostContext()
         .then((hostContext) => {
           setUiLocale(hostContext.resolvedUiLocale);
@@ -580,6 +601,7 @@ export function App() {
           // best-effort refresh
         });
     } catch (error) {
+      track('panel.settings.save_failed', { errorCode: 'save_failed' });
       setSettingsSaveError(error instanceof Error ? error.message : strings.settingsSaveFailed);
     } finally {
       setIsSettingsSaving(false);
@@ -601,6 +623,10 @@ export function App() {
     setComposerValue('');
 
     const command = parseExcelCommand(trimmedValue);
+    track('panel.composer.send.clicked', {
+      inputLength: trimmedValue.length,
+      commandType: command?.commandType ?? (matchesDirectSkillInput(trimmedValue) ? 'skill.upload_data' : 'agent'),
+    });
     if (command) {
       await dispatchExcelCommand(command, sessionId);
       return;
@@ -694,6 +720,11 @@ export function App() {
       return;
     }
 
+    track('panel.confirmation.confirmed', {
+      confirmationKind: activePendingConfirmation.kind,
+      commandType: activePendingConfirmation.command?.commandType ?? '',
+    });
+
     if (activePendingConfirmation.kind === 'excel' && activePendingConfirmation.command) {
       await dispatchExcelCommand({
         ...activePendingConfirmation.command,
@@ -724,6 +755,11 @@ export function App() {
       return;
     }
 
+    track('panel.confirmation.canceled', {
+      confirmationKind: activePendingConfirmation.kind,
+      commandType: activePendingConfirmation.command?.commandType ?? '',
+    });
+
     setSessionPendingConfirmation(activeSession.id, null);
     appendThreadMessage(activeSession.id, {
       id: createMessageId(),
@@ -746,6 +782,9 @@ export function App() {
       }
 
       if (result.requiresConfirmation && result.preview) {
+        track('panel.excel_command.previewed', {
+          commandType: command.commandType,
+        });
         setSessionPendingConfirmation(sessionId, {
           kind: 'excel',
           command,
@@ -778,6 +817,10 @@ export function App() {
     try {
       const result = await nativeBridge.runSkill(request);
       if (result.requiresConfirmation && result.preview) {
+        track('panel.skill.upload_previewed', {
+          recordCount: result.uploadPreview?.records.length ?? 0,
+          projectName: result.uploadPreview?.projectName ?? '',
+        });
         setSessionPendingConfirmation(sessionId, {
           kind: 'skill',
           skillRequest: {
@@ -817,6 +860,9 @@ export function App() {
       });
 
       if (result.requiresConfirmation && result.planner?.mode === 'plan' && result.planner.plan) {
+        track('panel.agent.plan_previewed', {
+          stepCount: result.planner.plan.steps.length,
+        });
         setSessionPendingConfirmation(sessionId, {
           kind: 'agent',
           agentRequest: {
@@ -1147,6 +1193,17 @@ export function App() {
                 value={draftSettings.businessBaseUrl}
                 disabled={isSettingsSaving}
                 onChange={(event) => updateDraftSettings({ businessBaseUrl: event.target.value })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>{strings.analyticsBaseUrlFieldLabel}</span>
+              <input
+                aria-label={strings.analyticsBaseUrlFieldLabel}
+                type="text"
+                value={draftSettings.analyticsBaseUrl}
+                disabled={isSettingsSaving}
+                onChange={(event) => updateDraftSettings({ analyticsBaseUrl: event.target.value })}
               />
             </label>
 
