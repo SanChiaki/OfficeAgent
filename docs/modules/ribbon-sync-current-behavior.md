@@ -1,6 +1,6 @@
 # Ribbon Sync Current Behavior
 
-日期：2026-05-08
+日期：2026-05-12
 
 状态：已实现并可联调。当前只注册了 `current-business-system`，但内部已经落地 `ISystemConnectorRegistry + systemKey` 路由，可继续扩展到多个业务系统。
 
@@ -65,6 +65,8 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 如果后续要把 Office 内置图标替换为项目自带图片，按 [Ribbon Button Custom Icons Guide](../ribbon-button-custom-icons-guide.md) 操作。
 
 `xISDP AI` 组中的任务窗格按钮只显示图标，不显示 `Open` 文案。`文档` 会用默认浏览器打开 `https://github.com/SanChiaki/OfficeAgent`；`关于` 会显示当前插件版本号、程序集版本、构建配置和构建时间。
+
+Ribbon Sync 会记录运营埋点事件，用于统计项目选择、初始化、AI 映射列、下载、上传、配置按钮和结果状态。事件包含 `systemKey`、`projectId`、`projectName`、`sheetName`、操作类型、确认/取消/成功/失败状态等低敏维度；不会上报单元格原始业务值、API key、cookie 或业务接口请求/响应正文。
 
 主入口代码：
 

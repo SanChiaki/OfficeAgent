@@ -37,8 +37,9 @@
 
 ## Session And Settings
 
-- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
+- Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Analytics Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
 - Confirm `Base URL` stays reserved for the LLM endpoint and `Business Base URL` points to the business API or mock server.
+- Confirm `Analytics Base URL` points to the analytics `/insertLog` endpoint or stays empty when analytics is disabled.
 - Confirm `API Format = OpenAI Compatible` keeps existing OpenAI-compatible planner behavior, then switch to `API Format = Anthropic Messages` with an Anthropic Messages-compatible endpoint and confirm ordinary planner chat still returns a valid response.
 - Restart Excel and confirm settings reload correctly.
 - Create or switch sessions and confirm existing thread history is preserved per session.
@@ -132,3 +133,11 @@
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
 - Clear the worksheet header area, keep the grouped-single metadata in `xISDP_Setting`, then run the hidden full-download path and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
 - Verify the task pane button and login button still work after the Ribbon Sync controls are added.
+
+## Analytics
+
+- Start `tests/mock-server` and set `Analytics Base URL = http://localhost:3200`.
+- Clear existing events with `DELETE http://localhost:3200/analytics/logs`.
+- Click Ribbon initialize, download, and upload; confirm `/analytics/logs` contains `ribbon.initialize.*`, `ribbon.download.*`, and `ribbon.upload.*` events with `projectId` and `projectName`.
+- In the task pane, send a prompt, save settings, and confirm/cancel a preview card; confirm `/analytics/logs` contains `panel.*` events.
+- Confirm logged analytics entries do not contain API keys, cookies, raw prompt text, cell values, or business API request/response bodies.
