@@ -66,8 +66,10 @@ namespace OfficeAgent.ExcelAddIn
             SettingsStore = new FileSettingsStore(
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
-            AnalyticsService = new OfficeAgent.Core.Analytics.AnalyticsService(
-                new InsertLogAnalyticsSink(() => SettingsStore.Load()));
+            var initialSettings = SettingsStore.Load();
+            AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsBaseUrl)
+                ? NoopAnalyticsService.Instance
+                : new OfficeAgent.Core.Analytics.AnalyticsService(new InsertLogAnalyticsSink(() => SettingsStore.Load()));
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
@@ -78,7 +80,6 @@ namespace OfficeAgent.ExcelAddIn
             CookieStore.Load(SharedCookies.Container);
 
             // Set SSO domain from settings for login status checks.
-            var initialSettings = SettingsStore.Load();
             if (!string.IsNullOrWhiteSpace(initialSettings.SsoUrl))
             {
                 try

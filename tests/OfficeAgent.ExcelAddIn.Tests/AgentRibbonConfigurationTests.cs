@@ -959,6 +959,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("WorksheetPendingEditTracker.MarkChanged(sheetName, ReadWorksheetCellAddresses(target));", addInCodeText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void ThisAddInComposesAnalyticsServiceFromSettings()
+        {
+            var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
+
+            Assert.Contains("internal IAnalyticsService AnalyticsService { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("new InsertLogAnalyticsSink(() => SettingsStore.Load())", addInText, StringComparison.Ordinal);
+            Assert.Contains("AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsBaseUrl)", addInText, StringComparison.Ordinal);
+            Assert.Contains("NoopAnalyticsService.Instance", addInText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ExcelAddInProjectIncludesRibbonAnalyticsHelper()
+        {
+            var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
+
+            Assert.Contains("<Compile Include=\"Analytics\\RibbonAnalyticsHelper.cs\" />", projectText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]
