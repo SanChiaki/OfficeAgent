@@ -1,5 +1,7 @@
 ﻿import type {
   AppSettings,
+  AnalyticsPayload,
+  AnalyticsResult,
   BridgeErrorPayload,
   BridgeEventEnvelope,
   BridgeRequestEnvelope,
@@ -39,6 +41,7 @@ const BRIDGE_TYPES = {
   login: 'bridge.login',
   logout: 'bridge.logout',
   getLoginStatus: 'bridge.getLoginStatus',
+  trackAnalytics: 'bridge.trackAnalytics',
 } as const;
 
 const BROWSER_PREVIEW_PING: PingPayload = {
@@ -50,6 +53,7 @@ const BROWSER_PREVIEW_SETTINGS: AppSettings = {
   apiKey: '',
   baseUrl: 'https://api.example.com',
   businessBaseUrl: '',
+  analyticsBaseUrl: '',
   model: 'gpt-5-mini',
   apiFormat: 'openai-compatible',
   ssoUrl: '',
@@ -201,6 +205,10 @@ export class NativeBridge {
     return this.invoke<void, LoginStatus>(BRIDGE_TYPES.getLoginStatus);
   }
 
+  trackAnalytics(payload: AnalyticsPayload) {
+    return this.invoke<AnalyticsPayload, AnalyticsResult>(BRIDGE_TYPES.trackAnalytics, payload);
+  }
+
   onSelectionContextChanged(listener: SelectionContextListener) {
     this.selectionContextListeners.add(listener);
     return () => {
@@ -249,6 +257,9 @@ export class NativeBridge {
           businessBaseUrl: typeof (payload as AppSettings | undefined)?.businessBaseUrl === 'string'
             ? (payload as AppSettings).businessBaseUrl
             : BROWSER_PREVIEW_SETTINGS.businessBaseUrl,
+          analyticsBaseUrl: typeof (payload as AppSettings | undefined)?.analyticsBaseUrl === 'string'
+            ? (payload as AppSettings).analyticsBaseUrl
+            : BROWSER_PREVIEW_SETTINGS.analyticsBaseUrl,
           model: typeof (payload as AppSettings | undefined)?.model === 'string'
             ? (payload as AppSettings).model
             : BROWSER_PREVIEW_SETTINGS.model,
@@ -318,6 +329,10 @@ export class NativeBridge {
 
       if (type === BRIDGE_TYPES.logout) {
         return Promise.resolve({ success: true } as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.trackAnalytics) {
+        return Promise.resolve({ tracked: false } as TResult);
       }
 
       return Promise.reject(

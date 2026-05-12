@@ -17,6 +17,7 @@ export interface AppSettings {
   apiKey: string;
   baseUrl: string;
   businessBaseUrl: string;
+  analyticsBaseUrl: string;
   model: string;
   apiFormat: ApiFormat;
   ssoUrl: string;
@@ -37,6 +38,17 @@ export interface LoginResult {
 export interface LoginStatus {
   isLoggedIn: boolean;
   ssoUrl: string;
+}
+
+export interface AnalyticsPayload {
+  eventName: string;
+  source?: 'panel' | 'bridge' | 'ribbon' | 'connector' | 'business' | 'host';
+  properties?: Record<string, unknown>;
+  businessContext?: Record<string, unknown>;
+}
+
+export interface AnalyticsResult {
+  tracked: boolean;
 }
 
 export interface ChatMessage {
