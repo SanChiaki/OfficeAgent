@@ -35,6 +35,7 @@ node server.js
 
 - `Base URL = 你的大模型服务地址`
 - `Business Base URL = http://localhost:3200`
+- `Analytics Base URL = http://localhost:3200`
 - `SSO URL = http://localhost:3100/login`
 - `登录成功路径 = /rest/login`
 - `API Key = 留空`
@@ -44,6 +45,7 @@ node server.js
 - `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
 - `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
 - `Business Base URL` 也是 `/projects` 项目列表接口的基地址
+- `Analytics Base URL` 是 `/insertLog` 埋点接口的基地址
 - 当前 mock 服务通过 SSO cookie 鉴权，不走 API Key
 - 业务接口在未登录时会返回 `401`
 
@@ -71,6 +73,20 @@ node server.js
   - 原有上传演示接口
 - `GET /api/download/:projectName`
   - 原有下载演示接口
+
+### Analytics / 埋点接口
+
+#### `POST /insertLog`
+
+模拟内网埋点接口。请求体固定字段为 `frontEndIntent = excelAi`、`clientSource = Excel`、`questionType = 1`，`answer` 必须是可解析 JSON 字符串。
+
+#### `GET /analytics/logs`
+
+返回当前进程内最近 500 条埋点记录，包含原始外层 payload 和解析后的 `answer`。
+
+#### `DELETE /analytics/logs`
+
+清空当前进程内埋点记录。
 
 ### Ribbon Sync 相关接口
 

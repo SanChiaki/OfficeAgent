@@ -22,6 +22,8 @@ const performances = [
 ];
 
 const uploadedProjects = {};
+const analyticsLogs = [];
+const maxAnalyticsLogs = 500;
 
 const connectorProjectData = {
   performance: createConnectorProject(
@@ -251,6 +253,47 @@ const apiApp = express();
 apiApp.use(express.json({ limit: "20mb" }));
 apiApp.use(cookieParser());
 
+apiApp.post("/insertLog", function (req, res) {
+  var payload = req.body || {};
+  if (payload.frontEndIntent !== "excelAi" || payload.clientSource !== "Excel" || payload.questionType !== 1) {
+    return res.status(400).json({ code: "bad_request", message: "insertLog 固定字段不正确。" });
+  }
+
+  if (typeof payload.askId !== "string" || !payload.askId.trim() ||
+      typeof payload.talkId !== "string" || !payload.talkId.trim() ||
+      typeof payload.answer !== "string" || !payload.answer.trim()) {
+    return res.status(400).json({ code: "bad_request", message: "askId、talkId、answer 字段必填。" });
+  }
+
+  var parsedAnswer;
+  try {
+    parsedAnswer = JSON.parse(payload.answer);
+  } catch (_error) {
+    return res.status(400).json({ code: "bad_request", message: "answer 必须是 JSON 字符串。" });
+  }
+
+  analyticsLogs.push({
+    receivedAtUtc: new Date().toISOString(),
+    payload: payload,
+    answer: parsedAnswer,
+  });
+
+  while (analyticsLogs.length > maxAnalyticsLogs) {
+    analyticsLogs.shift();
+  }
+
+  res.json({ ok: true, count: analyticsLogs.length });
+});
+
+apiApp.get("/analytics/logs", function (_req, res) {
+  res.json({ count: analyticsLogs.length, logs: analyticsLogs });
+});
+
+apiApp.delete("/analytics/logs", function (_req, res) {
+  analyticsLogs.length = 0;
+  res.json({ ok: true, count: 0 });
+});
+
 function requireAuth(req, res, next) {
   if (!req.cookies || !req.cookies.session_token) {
     return res.status(401).json({ code: "unauthorized", message: "未登录，请先通过 SSO 登录。" });
@@ -435,6 +478,7 @@ apiApp.listen(3200, function () {
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
+  console.log("  Analytics Base URL    = http://localhost:3200");
   console.log("  SSO URL               = http://localhost:3100/login");
   console.log("  登录成功路径           = /rest/login");
   console.log("  API Key               = (留空，使用 SSO cookies)");
