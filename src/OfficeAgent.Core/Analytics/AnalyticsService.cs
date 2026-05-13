@@ -60,7 +60,7 @@ namespace OfficeAgent.Core.Analytics
             });
         }
 
-        private static AnalyticsEvent Normalize(AnalyticsEvent analyticsEvent)
+        private AnalyticsEvent Normalize(AnalyticsEvent analyticsEvent)
         {
             return new AnalyticsEvent
             {

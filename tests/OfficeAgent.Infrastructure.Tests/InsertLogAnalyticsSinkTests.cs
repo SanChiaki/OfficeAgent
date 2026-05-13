@@ -26,6 +26,7 @@ namespace OfficeAgent.Infrastructure.Tests
                 new HttpClient(handler));
             var analyticsEvent = new AnalyticsEvent
             {
+                Version = "1.0.175",
                 EventName = "ribbon.download.clicked",
                 Source = "ribbon",
                 Properties = new Dictionary<string, object>(StringComparer.Ordinal)
