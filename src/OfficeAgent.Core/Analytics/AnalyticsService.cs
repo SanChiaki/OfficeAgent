@@ -9,10 +9,12 @@ namespace OfficeAgent.Core.Analytics
     public sealed class AnalyticsService : IAnalyticsService
     {
         private readonly IAnalyticsSink sink;
+        private readonly string defaultVersion;
 
-        public AnalyticsService(IAnalyticsSink sink)
+        public AnalyticsService(IAnalyticsSink sink, string defaultVersion = null)
         {
             this.sink = sink ?? throw new ArgumentNullException(nameof(sink));
+            this.defaultVersion = defaultVersion ?? string.Empty;
         }
 
         public void Track(AnalyticsEvent analyticsEvent)
@@ -63,6 +65,7 @@ namespace OfficeAgent.Core.Analytics
             return new AnalyticsEvent
             {
                 SchemaVersion = analyticsEvent.SchemaVersion <= 0 ? 1 : analyticsEvent.SchemaVersion,
+                Version = NormalizeVersion(analyticsEvent.Version, defaultVersion),
                 EventName = analyticsEvent.EventName,
                 Source = analyticsEvent.Source ?? string.Empty,
                 OccurredAtUtc = NormalizeTimestamp(analyticsEvent.OccurredAtUtc),
@@ -82,6 +85,16 @@ namespace OfficeAgent.Core.Analytics
             return occurredAtUtc.Kind == DateTimeKind.Local
                 ? occurredAtUtc.ToUniversalTime()
                 : occurredAtUtc;
+        }
+
+        private static string NormalizeVersion(string eventVersion, string defaultVersion)
+        {
+            if (!string.IsNullOrWhiteSpace(eventVersion))
+            {
+                return eventVersion.Trim();
+            }
+
+            return string.IsNullOrWhiteSpace(defaultVersion) ? string.Empty : defaultVersion.Trim();
         }
 
         private static IDictionary<string, object> CopyDictionary(IDictionary<string, object> values)

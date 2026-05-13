@@ -47,6 +47,7 @@ namespace OfficeAgent.Infrastructure.Tests
 
             var answer = Assert.IsType<string>(envelope["answer"]?.ToObject<object>());
             var answerJson = JObject.Parse(answer);
+            Assert.Equal("1.0.175", (string)answerJson["version"]);
             Assert.Equal("ribbon.download.clicked", (string)answerJson["eventName"]);
             Assert.Equal("\u7EE9\u6548\u9879\u76EE", (string)answerJson["properties"]?["projectName"]);
         }
