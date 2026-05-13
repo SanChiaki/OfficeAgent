@@ -7,6 +7,8 @@ namespace OfficeAgent.Core.Analytics
     {
         public int SchemaVersion { get; set; } = 1;
 
+        public string Version { get; set; } = string.Empty;
+
         public string EventName { get; set; } = string.Empty;
 
         public string Source { get; set; } = string.Empty;

@@ -738,8 +738,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var preview = new SyncOperationPreview
             {
-                Summary = "部分上传将上传 0 个单元格，跳过 1 个单元格。",
-                Details = new[] { "row-1 / status: 已跳过，单据已归档，禁止上传" },
+                Summary = "Upload will submit 0 cell(s) and skip 1 cell(s).",
+                Details = new[] { "row-1 / status: Skipped, 单据已归档，禁止上传" },
                 Changes = Array.Empty<CellChange>(),
                 SkippedChanges = new[]
                 {
@@ -751,10 +751,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 },
             };
 
-            var message = InvokeBuildUploadPreviewInfoMessage("部分上传", preview);
+            var message = InvokeBuildUploadPreviewInfoMessage("Upload", preview);
 
-            Assert.Contains("部分上传将上传 0 个单元格，跳过 1 个单元格。", message);
-            Assert.Contains("row-1 / status: 已跳过，单据已归档，禁止上传", message);
+            Assert.Contains("Upload will submit 0 cell(s) and skip 1 cell(s).", message);
+            Assert.Contains("row-1 / status: Skipped, 单据已归档，禁止上传", message);
         }
 
         [Fact]

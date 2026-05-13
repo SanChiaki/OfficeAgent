@@ -75,7 +75,9 @@ namespace OfficeAgent.ExcelAddIn
             CookieStore.Load(SharedCookies.Container);
             AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
                 ? NoopAnalyticsService.Instance
-                : new OfficeAgent.Core.Analytics.AnalyticsService(new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container));
+                : new OfficeAgent.Core.Analytics.AnalyticsService(
+                    new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container),
+                    VersionInfo.AppVersion);
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 

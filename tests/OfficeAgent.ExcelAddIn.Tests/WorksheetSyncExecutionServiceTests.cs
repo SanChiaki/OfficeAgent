@@ -198,7 +198,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var entry = Assert.Single(logStore.Entries);
             Assert.Equal("row-1", entry.Key);
             Assert.Equal("测试活动111/开始时间", entry.HeaderText);
-            Assert.Equal("下载", entry.ChangeMode);
+            Assert.Equal("Download", entry.ChangeMode);
             Assert.Equal("2026-02-01", entry.NewValue);
             Assert.Equal("旧开始时间", entry.OldValue);
         }
@@ -1063,7 +1063,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var exception = Assert.Throws<TargetInvocationException>(() => InvokePrepare(service, "PrepareFullDownload", "Sheet1"));
             var inner = Assert.IsType<InvalidOperationException>(exception.InnerException);
-            Assert.Contains("当前 sheet 未初始化，请先执行初始化当前表。", inner.Message);
+            Assert.Contains("The current sheet is not initialized. Initialize the current sheet first.", inner.Message);
             Assert.Null(metadataStore.LastSavedBinding);
             Assert.Empty(metadataStore.LastSavedFieldMappings);
         }
@@ -1088,7 +1088,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             var exception = Assert.Throws<TargetInvocationException>(() => InvokePrepare(service, "PrepareFullDownload", "Sheet1"));
             var inner = Assert.IsType<InvalidOperationException>(exception.InnerException);
-            Assert.Contains("当前 sheet 未初始化，请先执行初始化当前表。", inner.Message);
+            Assert.Contains("The current sheet is not initialized. Initialize the current sheet first.", inner.Message);
         }
 
         [Fact]
@@ -1176,13 +1176,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var preview = ReadPreview(plan);
 
             Assert.Equal("performance", connector.LastFilterProjectId);
-            Assert.Equal("部分上传将上传 1 个单元格，跳过 1 个单元格。", preview.Summary);
+            Assert.Equal("Upload will submit 1 cell(s) and skip 1 cell(s).", preview.Summary);
             var included = Assert.Single(preview.Changes);
             Assert.Equal("owner_name", included.ApiFieldKey);
             var skipped = Assert.Single(preview.SkippedChanges);
             Assert.Equal("end_12345678", skipped.Change.ApiFieldKey);
             Assert.Equal("单据已归档，禁止上传", skipped.Reason);
-            Assert.Contains("row-1 / end_12345678: 已跳过，单据已归档，禁止上传", preview.Details);
+            Assert.Contains("row-1 / end_12345678: Skipped, 单据已归档，禁止上传", preview.Details);
 
             InvokeExecute(service, "ExecuteUpload", plan);
 
@@ -1227,7 +1227,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var entry = Assert.Single(logStore.Entries);
             Assert.Equal("row-1", entry.Key);
             Assert.Equal("测试活动111/结束时间", entry.HeaderText);
-            Assert.Equal("上传", entry.ChangeMode);
+            Assert.Equal("Upload", entry.ChangeMode);
             Assert.Equal("2026-01-10", entry.NewValue);
             Assert.Equal("2026-01-05", entry.OldValue);
             Assert.False(TryGetPendingOriginalValue(pendingEditTracker, "Sheet1", 6, 4, out _));

@@ -171,6 +171,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "部分上传", "上传将提交 1 个单元格，跳过 2 个单元格。", "上传将提交 1 个单元格。", "row-1 / status: 已跳过，禁止上传")]
+        [InlineData("en", "部分上传", "Upload will submit 1 cell(s) and skip 2 cell(s).", "Upload will submit 1 cell(s).", "row-1 / status: Skipped, forbidden to upload")]
+        public void ForLocaleFormatsWorksheetSyncExecutionMessages(
+            string locale,
+            string operationName,
+            string expectedPreviewSummary,
+            string expectedPreviewSummaryWithoutSkipped,
+            string expectedSkippedDetail)
+        {
+            var strings = CreateStrings(locale);
+            var previewSummaryMethod = strings.GetType().GetMethod("FormatUploadPreviewSummary", BindingFlags.Instance | BindingFlags.Public);
+            var previewSummaryWithoutSkippedMethod = strings.GetType().GetMethod("FormatUploadPreviewSummaryWithoutSkipped", BindingFlags.Instance | BindingFlags.Public);
+            var skippedDetailMethod = strings.GetType().GetMethod("FormatSkippedUploadDetail", BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.NotNull(previewSummaryMethod);
+            Assert.NotNull(previewSummaryWithoutSkippedMethod);
+            Assert.NotNull(skippedDetailMethod);
+
+            Assert.Equal(expectedPreviewSummary, (string)previewSummaryMethod.Invoke(strings, new object[] { operationName, 1, 2 }));
+            Assert.Equal(expectedPreviewSummaryWithoutSkipped, (string)previewSummaryWithoutSkippedMethod.Invoke(strings, new object[] { operationName, 1 }));
+            Assert.Equal(expectedSkippedDetail, (string)skippedDetailMethod.Invoke(strings, new object[] { "row-1", "status", locale == "zh" ? "禁止上传" : "forbidden to upload" }));
+        }
+
+        [Theory]
         [InlineData("zh", "部分下载", "下载")]
         [InlineData("zh", "部分上传", "上传")]
         [InlineData("en", "部分下载", "Download")]

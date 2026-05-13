@@ -14,7 +14,7 @@ namespace OfficeAgent.Core.Tests
         public void TrackAddsSchemaVersionAndTimestampBeforeWritingToSink()
         {
             var sink = new RecordingAnalyticsSink();
-            var service = new AnalyticsService(sink);
+            var service = new AnalyticsService(sink, "1.0.175");
             var beforeTrack = DateTime.UtcNow.AddSeconds(-10);
 
             service.Track(
@@ -29,6 +29,7 @@ namespace OfficeAgent.Core.Tests
             Assert.True(sink.Written.Wait(TimeSpan.FromSeconds(2)));
             Assert.NotNull(sink.Event);
             Assert.Equal(1, sink.Event.SchemaVersion);
+            Assert.Equal("1.0.175", sink.Event.Version);
             Assert.Equal("ribbon.download.clicked", sink.Event.EventName);
             Assert.Equal("ribbon", sink.Event.Source);
             Assert.True(sink.Event.OccurredAtUtc >= beforeTrack);
@@ -79,10 +80,11 @@ namespace OfficeAgent.Core.Tests
         public void TrackSnapshotsCallerOwnedAnalyticsEventBeforeAsynchronousWrite()
         {
             var sink = new BlockingAnalyticsSink();
-            var service = new AnalyticsService(sink);
+            var service = new AnalyticsService(sink, "1.0.175");
             var occurredAtUtc = new DateTime(2026, 5, 12, 9, 30, 0, DateTimeKind.Unspecified);
             var analyticsEvent = new AnalyticsEvent
             {
+                Version = "1.0.174",
                 EventName = "panel.opened",
                 Source = "panel",
                 OccurredAtUtc = occurredAtUtc,
@@ -121,6 +123,7 @@ namespace OfficeAgent.Core.Tests
             Assert.True(sink.Written.Wait(TimeSpan.FromSeconds(2)));
             Assert.NotNull(sink.Event);
             Assert.NotSame(analyticsEvent, sink.Event);
+            Assert.Equal("1.0.174", sink.Event.Version);
             Assert.Equal("panel.opened", sink.Event.EventName);
             Assert.Equal("panel", sink.Event.Source);
             Assert.Equal(occurredAtUtc, sink.Event.OccurredAtUtc);
@@ -132,6 +135,23 @@ namespace OfficeAgent.Core.Tests
             Assert.Equal("original-code", sink.Event.Error.Code);
             Assert.Equal("Original message.", sink.Event.Error.Message);
             Assert.Equal("OriginalException", sink.Event.Error.ExceptionType);
+        }
+
+        [Fact]
+        public void TrackUsesDefaultVersionWhenEventDoesNotProvideOne()
+        {
+            var sink = new RecordingAnalyticsSink();
+            var service = new AnalyticsService(sink, "1.0.175");
+
+            service.Track(new AnalyticsEvent
+            {
+                EventName = "panel.settings.saved",
+                Source = "panel",
+            });
+
+            Assert.True(sink.Written.Wait(TimeSpan.FromSeconds(2)));
+            Assert.NotNull(sink.Event);
+            Assert.Equal("1.0.175", sink.Event.Version);
         }
 
         [Fact]

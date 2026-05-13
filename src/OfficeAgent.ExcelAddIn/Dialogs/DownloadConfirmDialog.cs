@@ -34,12 +34,12 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 }
             }
 
-            var result = MessageBox.Show(
-                builder.ToString(),
+            var result = TemplatePromptDialog.ShowPrompt(
                 strings.HostWindowTitle,
-                MessageBoxButtons.YesNo,
+                builder.ToString(),
                 dirtyCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
-                dirtyCount > 0 ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1);
+                new TemplatePromptDialog.DialogButtonSpec(strings.NoButtonText, DialogResult.No, isCancel: true),
+                new TemplatePromptDialog.DialogButtonSpec(strings.YesButtonText, DialogResult.Yes, isAccept: true));
             return result == DialogResult.Yes;
         }
     }

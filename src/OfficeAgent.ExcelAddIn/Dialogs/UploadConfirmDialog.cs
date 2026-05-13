@@ -20,12 +20,12 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 builder.AppendLine(detail);
             }
 
-            var result = MessageBox.Show(
-                builder.ToString(),
+            var result = TemplatePromptDialog.ShowPrompt(
                 strings.HostWindowTitle,
-                MessageBoxButtons.YesNo,
+                builder.ToString(),
                 MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2);
+                new TemplatePromptDialog.DialogButtonSpec(strings.NoButtonText, DialogResult.No, isCancel: true),
+                new TemplatePromptDialog.DialogButtonSpec(strings.YesButtonText, DialogResult.Yes, isAccept: true));
             return result == DialogResult.Yes;
         }
     }
