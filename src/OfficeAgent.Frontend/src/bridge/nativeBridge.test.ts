@@ -697,6 +697,49 @@ describe('NativeBridge', () => {
     });
   });
 
+  it('posts trackAnalytics requests to the native bridge', async () => {
+    const webView = createMockWebView();
+    const bridge = new NativeBridge(webView);
+    const pending = bridge.trackAnalytics({
+      eventName: 'panel.composer.send.clicked',
+      source: 'panel',
+      properties: { inputLength: 12 },
+      businessContext: { module: 'demo' },
+    });
+    const [request] = webView.postedMessages as Array<{
+      type: string;
+      requestId: string;
+      payload: {
+        eventName: string;
+        source: string;
+        properties: Record<string, unknown>;
+        businessContext: Record<string, unknown>;
+      };
+    }>;
+
+    expect(request.type).toBe('bridge.trackAnalytics');
+    expect(request.payload.eventName).toBe('panel.composer.send.clicked');
+    expect(request.payload.properties.inputLength).toBe(12);
+
+    webView.dispatch({
+      type: request.type,
+      requestId: request.requestId,
+      ok: true,
+      payload: { tracked: true },
+    });
+
+    await expect(pending).resolves.toEqual({ tracked: true });
+  });
+
+  it('resolves trackAnalytics in browser preview without a native bridge', async () => {
+    const bridge = new NativeBridge(undefined);
+
+    await expect(bridge.trackAnalytics({
+      eventName: 'panel.opened',
+      source: 'panel',
+    })).resolves.toEqual({ tracked: false });
+  });
+
   it('notifies selection context subscribers when native events arrive', async () => {
     const webView = createMockWebView();
     const bridge = new NativeBridge(webView);

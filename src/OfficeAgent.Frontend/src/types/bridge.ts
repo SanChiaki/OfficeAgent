@@ -39,6 +39,17 @@ export interface LoginStatus {
   ssoUrl: string;
 }
 
+export interface AnalyticsPayload {
+  eventName: string;
+  source?: 'panel' | 'bridge' | 'ribbon' | 'connector' | 'business' | 'host';
+  properties?: Record<string, unknown>;
+  businessContext?: Record<string, unknown>;
+}
+
+export interface AnalyticsResult {
+  tracked: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: string;

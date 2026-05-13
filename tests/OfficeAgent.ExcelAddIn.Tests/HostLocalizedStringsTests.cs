@@ -139,29 +139,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
-        [InlineData("zh", "全量下载", "全量下载", "全量下载完成。\r\n记录数：3\r\n字段数：4", "全量上传没有可提交的单元格。", "全量上传完成。\r\n提交单元格数：2")]
-        [InlineData("en", "全量下载", "Full download", "Full download completed.\r\nRows: 3\r\nFields: 4", "Full upload has no cells to submit.", "Full upload completed.\r\nSubmitted cells: 2")]
+        [InlineData("zh", "全量下载", "全量下载", "全量下载完成。\r\n记录数：3\r\n字段数：4", "查询结果为空，请确认列名是否正确匹配。", "全量上传没有可提交的单元格。", "全量上传完成。\r\n提交单元格数：2")]
+        [InlineData("en", "全量下载", "Full download", "Full download completed.\r\nRows: 3\r\nFields: 4", "The query result is empty. Check whether the column names are mapped correctly.", "Full upload has no cells to submit.", "Full upload completed.\r\nSubmitted cells: 2")]
         public void ForLocaleFormatsSyncOperationMessages(
             string locale,
             string operationName,
             string expectedLocalizedOperationName,
             string expectedDownloadCompletedMessage,
+            string expectedDownloadNoMatchingRowsMessage,
             string expectedUploadNoChangesMessage,
             string expectedUploadCompletedMessage)
         {
             var strings = CreateStrings(locale);
             var localizeMethod = strings.GetType().GetMethod("LocalizeSyncOperationName", BindingFlags.Instance | BindingFlags.Public);
             var downloadCompletedMethod = strings.GetType().GetMethod("FormatDownloadCompletedMessage", BindingFlags.Instance | BindingFlags.Public);
+            var downloadNoMatchingRowsMethod = strings.GetType().GetMethod("FormatDownloadNoMatchingRowsMessage", BindingFlags.Instance | BindingFlags.Public);
             var uploadNoChangesMethod = strings.GetType().GetMethod("FormatUploadNoChangesMessage", BindingFlags.Instance | BindingFlags.Public);
             var uploadCompletedMethod = strings.GetType().GetMethod("FormatUploadCompletedMessage", BindingFlags.Instance | BindingFlags.Public);
 
             Assert.NotNull(localizeMethod);
             Assert.NotNull(downloadCompletedMethod);
+            Assert.NotNull(downloadNoMatchingRowsMethod);
             Assert.NotNull(uploadNoChangesMethod);
             Assert.NotNull(uploadCompletedMethod);
 
             Assert.Equal(expectedLocalizedOperationName, (string)localizeMethod.Invoke(strings, new object[] { operationName }));
             Assert.Equal(expectedDownloadCompletedMessage, (string)downloadCompletedMethod.Invoke(strings, new object[] { operationName, 3, 4 }));
+            Assert.Equal(expectedDownloadNoMatchingRowsMessage, (string)downloadNoMatchingRowsMethod.Invoke(strings, new object[] { operationName }));
             Assert.Equal(expectedUploadNoChangesMessage, (string)uploadNoChangesMethod.Invoke(strings, new object[] { "全量上传" }));
             Assert.Equal(expectedUploadCompletedMessage, (string)uploadCompletedMethod.Invoke(strings, new object[] { "全量上传", 2 }));
         }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -19,6 +20,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         public const string Login = "bridge.login";
         public const string Logout = "bridge.logout";
         public const string GetLoginStatus = "bridge.getLoginStatus";
+        public const string TrackAnalytics = "bridge.trackAnalytics";
     }
 
     internal sealed class WebMessageRequest
@@ -76,6 +78,21 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
         [JsonProperty("uiLanguageOverride")]
         public string UiLanguageOverride { get; set; } = "system";
+    }
+
+    internal sealed class AnalyticsPayload
+    {
+        [JsonProperty("eventName")]
+        public string EventName { get; set; } = string.Empty;
+
+        [JsonProperty("source")]
+        public string Source { get; set; } = "panel";
+
+        [JsonProperty("properties")]
+        public IDictionary<string, object> Properties { get; set; }
+
+        [JsonProperty("businessContext")]
+        public IDictionary<string, object> BusinessContext { get; set; }
     }
 
     internal sealed class WebMessageEvent

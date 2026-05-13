@@ -38,6 +38,7 @@ namespace OfficeAgent.Infrastructure.Storage
                     ApiKey = string.Empty,
                     BaseUrl = AppSettings.NormalizeBaseUrl(persisted.BaseUrl),
                     BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(persisted.BusinessBaseUrl),
+                    AnalyticsUrl = NormalizePersistedAnalyticsUrl(persisted),
                     Model = string.IsNullOrWhiteSpace(persisted.Model) ? "gpt-5-mini" : persisted.Model,
                     ApiFormat = AppSettings.NormalizeApiFormat(persisted.ApiFormat),
                     UiLanguageOverride = AppSettings.NormalizeUiLanguageOverride(persisted.UiLanguageOverride),
@@ -73,6 +74,7 @@ namespace OfficeAgent.Infrastructure.Storage
                 EncryptedApiKey = secretProtector.Protect(settings?.ApiKey ?? string.Empty),
                 BaseUrl = AppSettings.NormalizeBaseUrl(settings?.BaseUrl),
                 BusinessBaseUrl = AppSettings.NormalizeOptionalUrl(settings?.BusinessBaseUrl),
+                AnalyticsUrl = AppSettings.NormalizeOptionalEndpointUrl(settings?.AnalyticsUrl),
                 Model = string.IsNullOrWhiteSpace(settings?.Model) ? "gpt-5-mini" : settings.Model,
                 ApiFormat = AppSettings.NormalizeApiFormat(settings?.ApiFormat),
                 UiLanguageOverride = AppSettings.NormalizeUiLanguageOverride(settings?.UiLanguageOverride),
@@ -97,6 +99,11 @@ namespace OfficeAgent.Infrastructure.Storage
 
             public string BusinessBaseUrl { get; set; } = string.Empty;
 
+            public string AnalyticsUrl { get; set; } = string.Empty;
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public string AnalyticsBaseUrl { get; set; }
+
             public string Model { get; set; } = string.Empty;
 
             public string ApiFormat { get; set; } = string.Empty;
@@ -106,6 +113,28 @@ namespace OfficeAgent.Infrastructure.Storage
             public string SsoUrl { get; set; } = string.Empty;
 
             public string SsoLoginSuccessPath { get; set; } = string.Empty;
+        }
+
+        private static string NormalizePersistedAnalyticsUrl(PersistedSettings persisted)
+        {
+            var analyticsUrl = AppSettings.NormalizeOptionalEndpointUrl(persisted.AnalyticsUrl);
+            if (!string.IsNullOrWhiteSpace(analyticsUrl))
+            {
+                return analyticsUrl;
+            }
+
+            var legacyBaseUrl = AppSettings.NormalizeOptionalUrl(persisted.AnalyticsBaseUrl);
+            if (string.IsNullOrWhiteSpace(legacyBaseUrl))
+            {
+                return string.Empty;
+            }
+
+            if (legacyBaseUrl.EndsWith("/insertLog", StringComparison.OrdinalIgnoreCase))
+            {
+                return legacyBaseUrl;
+            }
+
+            return $"{legacyBaseUrl}/insertLog";
         }
     }
 }

@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Analytics;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Infrastructure.Http;
 using Xunit;
@@ -157,6 +159,33 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void BuildFieldMappingSeedLogsRequestTimeoutWithEndpointAndProject()
+        {
+            var handler = new TimeoutOnPathHandler("/find");
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+
+            var capture = CaptureLogEntriesAllowingFailure(() => connector.BuildFieldMappingSeed("Sheet1", "performance"));
+
+            var error = Assert.IsType<TaskCanceledException>(capture.Failure);
+            Assert.Equal("A task was canceled.", error.Message);
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "info" &&
+                entry.Component == "business_api" &&
+                entry.EventName == "request.begin" &&
+                entry.Details.Contains("Method=POST") &&
+                entry.Details.Contains("Path=/find") &&
+                entry.Details.Contains("ProjectId=performance"));
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "error" &&
+                entry.Component == "business_api" &&
+                entry.EventName == "request.timeout" &&
+                entry.Details.Contains("Method=POST") &&
+                entry.Details.Contains("Path=/find") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Exception.Contains("TaskCanceledException"));
+        }
+
+        [Fact]
         public void FindUsesBusinessBaseUrlInsteadOfTheLlmBaseUrl()
         {
             var handler = new RecordingHandler();
@@ -221,6 +250,30 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void FindTracksBusinessContextWithoutRawPayload()
+        {
+            var handler = new RecordingHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[{\"row_id\":\"row-1\",\"owner_name\":\"张三\"}]")
+            });
+            var analytics = new RecordingAnalyticsService();
+            var connector = CurrentBusinessSystemConnector.ForTests(
+                "https://api.internal.example",
+                handler,
+                analytics);
+
+            connector.Find("performance", new[] { "row-1" }, new[] { "owner_name" });
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "business.current.find.completed" &&
+                Equals(analyticsEvent.BusinessContext["endpoint"], "/find") &&
+                Equals(analyticsEvent.Properties["projectId"], "performance"));
+            Assert.DoesNotContain(analytics.Events, analyticsEvent =>
+                analyticsEvent.BusinessContext.ContainsKey("requestBody") ||
+                analyticsEvent.BusinessContext.ContainsKey("responseBody"));
+        }
+
+        [Fact]
         public void BatchSaveRetriesWithLegacyItemsWrapperWhenArrayPayloadIsRejected()
         {
             var handler = new LegacyBatchSaveHandler();
@@ -251,8 +304,62 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(string.Empty, handler.LastBody);
         }
 
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                Events.Add(analyticsEvent);
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Events.Add(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    BusinessContext = businessContext ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                    Error = error,
+                });
+            }
+        }
+
+        private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
+        {
+            var entries = new List<OfficeAgentLogEntry>();
+            OfficeAgentLog.Configure(entries.Add);
+
+            try
+            {
+                action();
+                return new LogCaptureResult(entries, null);
+            }
+            catch (Exception ex)
+            {
+                return new LogCaptureResult(entries, ex);
+            }
+            finally
+            {
+                OfficeAgentLog.Reset();
+            }
+        }
+
         private sealed class RecordingHandler : HttpMessageHandler
         {
+            private readonly Func<HttpRequestMessage, HttpResponseMessage> createResponse;
+
+            public RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> createResponse = null)
+            {
+                this.createResponse = createResponse;
+            }
+
             public string LastPath { get; private set; } = string.Empty;
             public string LastUri { get; private set; } = string.Empty;
             public string LastBody { get; private set; } = string.Empty;
@@ -278,7 +385,7 @@ namespace OfficeAgent.Infrastructure.Tests
                     _ => "[]",
                 };
 
-                var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                var response = createResponse?.Invoke(request) ?? new HttpResponseMessage(System.Net.HttpStatusCode.OK)
                 {
                     Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 };
@@ -354,6 +461,48 @@ namespace OfficeAgent.Infrastructure.Tests
                     Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 });
             }
+        }
+
+        private sealed class TimeoutOnPathHandler : HttpMessageHandler
+        {
+            private readonly string timeoutPath;
+
+            public TimeoutOnPathHandler(string timeoutPath)
+            {
+                this.timeoutPath = timeoutPath;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (string.Equals(request.RequestUri?.AbsolutePath, timeoutPath, StringComparison.Ordinal))
+                {
+                    throw new TaskCanceledException("A task was canceled.");
+                }
+
+                var responseBody = request.RequestUri?.AbsolutePath switch
+                {
+                    "/head" => @"{""headList"":[{""fieldKey"":""row_id"",""headerText"":""ID"",""headType"":""single"",""isId"":true}]}",
+                    _ => "[]",
+                };
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
+                });
+            }
+        }
+
+        private sealed class LogCaptureResult
+        {
+            public LogCaptureResult(List<OfficeAgentLogEntry> entries, Exception failure)
+            {
+                Entries = entries;
+                Failure = failure;
+            }
+
+            public List<OfficeAgentLogEntry> Entries { get; }
+
+            public Exception Failure { get; }
         }
     }
 }

@@ -14,6 +14,8 @@ namespace OfficeAgent.Core.Models
 
         public string BusinessBaseUrl { get; set; } = string.Empty;
 
+        public string AnalyticsUrl { get; set; } = string.Empty;
+
         public string Model { get; set; } = "gpt-5-mini";
 
         public string ApiFormat { get; set; } = DefaultApiFormat;
@@ -43,6 +45,11 @@ namespace OfficeAgent.Core.Models
             }
 
             return value.Trim().TrimEnd('/');
+        }
+
+        public static string NormalizeOptionalEndpointUrl(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
         }
 
         public static string NormalizeUiLanguageOverride(string value)

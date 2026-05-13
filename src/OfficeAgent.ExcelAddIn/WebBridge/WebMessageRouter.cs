@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -25,6 +26,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly IExcelContextService excelContextService;
         private readonly IExcelCommandExecutor excelCommandExecutor;
         private readonly IAgentOrchestrator agentOrchestrator;
+        private readonly IAnalyticsService analyticsService;
         private readonly ConfirmationService confirmationService = new ConfirmationService();
         private readonly HashSet<string> allowedTypes = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -41,6 +43,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             BridgeMessageTypes.Login,
             BridgeMessageTypes.Logout,
             BridgeMessageTypes.GetLoginStatus,
+            BridgeMessageTypes.TrackAnalytics,
         };
         private readonly FileSessionStore sessionStore;
         private readonly FileSettingsStore settingsStore;
@@ -56,7 +59,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
-            Func<AppSettings, string> getResolvedUiLocale)
+            Func<AppSettings, string> getResolvedUiLocale,
+            IAnalyticsService analyticsService = null)
         {
             this.sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
             this.settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -66,6 +70,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
             this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
             this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
+            this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
         }
 
         public string Route(string rawRequestJson)
@@ -213,7 +218,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                                 message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.GetSettings));
                         }
 
-                        return Success(request.Type, request.RequestId, settingsStore.Load());
+                        return Success(request.Type, request.RequestId, ToUserVisibleSettings(settingsStore.Load()));
                     case BridgeMessageTypes.GetSessions:
                         if (HasUnexpectedPayload(request.Payload))
                         {
@@ -250,6 +255,8 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                         return GetLoginStatus(request);
                     case BridgeMessageTypes.Logout:
                         return Logout(request);
+                    case BridgeMessageTypes.TrackAnalytics:
+                        return TrackAnalytics(request);
                     case BridgeMessageTypes.Login:
                         return Error(
                             request.Type,
@@ -273,6 +280,50 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     code: "internal_error",
                     message: GetStrings().BridgeUnexpectedErrorMessage);
             }
+        }
+
+        private WebMessageResponse TrackAnalytics(WebMessageRequest request)
+        {
+            if (request.Payload == null || request.Payload.Type != JTokenType.Object || !request.Payload.HasValues)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: GetStrings().BridgePayloadRequiredMessage(BridgeMessageTypes.TrackAnalytics, "an analytics payload"));
+            }
+
+            AnalyticsPayload payload;
+            try
+            {
+                payload = request.Payload.ToObject<AnalyticsPayload>() ?? new AnalyticsPayload();
+            }
+            catch (JsonException)
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.TrackAnalytics, "an analytics payload"));
+            }
+
+            if (string.IsNullOrWhiteSpace(payload.EventName))
+            {
+                return Error(
+                    request.Type,
+                    request.RequestId,
+                    code: "malformed_payload",
+                    message: GetStrings().BridgeValidPayloadRequiredMessage(BridgeMessageTypes.TrackAnalytics, "an analytics payload"));
+            }
+
+            var properties = CopyDictionary(payload.Properties);
+            properties["uiLocale"] = GetStrings().Locale;
+            var businessContext = CopyDictionary(payload.BusinessContext);
+            var source = string.IsNullOrWhiteSpace(payload.Source) ? "panel" : payload.Source;
+
+            analyticsService.Track(payload.EventName, source, properties, businessContext);
+
+            return Success(request.Type, request.RequestId, new { tracked = true });
         }
 
         private WebMessageResponse RunSkill(WebMessageRequest request)
@@ -613,8 +664,9 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             try
             {
                 var settings = request.Payload.ToObject<AppSettings>() ?? new AppSettings();
+                settings.AnalyticsUrl = (settingsStore.Load() ?? new AppSettings()).AnalyticsUrl;
                 settingsStore.Save(settings);
-                return Success(request.Type, request.RequestId, settingsStore.Load());
+                return Success(request.Type, request.RequestId, ToUserVisibleSettings(settingsStore.Load()));
             }
             catch (JsonException)
             {
@@ -672,6 +724,39 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private static bool IsOptionalStringToken(JToken token)
         {
             return token == null || token.Type == JTokenType.String || token.Type == JTokenType.Null;
+        }
+
+        private static AppSettings ToUserVisibleSettings(AppSettings settings)
+        {
+            var source = settings ?? new AppSettings();
+            return new AppSettings
+            {
+                ApiKey = source.ApiKey,
+                BaseUrl = source.BaseUrl,
+                BusinessBaseUrl = source.BusinessBaseUrl,
+                AnalyticsUrl = null,
+                Model = source.Model,
+                ApiFormat = source.ApiFormat,
+                UiLanguageOverride = source.UiLanguageOverride,
+                SsoUrl = source.SsoUrl,
+                SsoLoginSuccessPath = source.SsoLoginSuccessPath,
+            };
+        }
+
+        private static IDictionary<string, object> CopyDictionary(IDictionary<string, object> values)
+        {
+            var copy = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (values == null)
+            {
+                return copy;
+            }
+
+            foreach (var value in values)
+            {
+                copy[value.Key ?? string.Empty] = value.Value;
+            }
+
+            return copy;
         }
 
         private HostLocalizedStrings GetStrings(AppSettings settings = null)

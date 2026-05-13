@@ -1,5 +1,7 @@
 ﻿import type {
   AppSettings,
+  AnalyticsPayload,
+  AnalyticsResult,
   BridgeErrorPayload,
   BridgeEventEnvelope,
   BridgeRequestEnvelope,
@@ -39,6 +41,7 @@ const BRIDGE_TYPES = {
   login: 'bridge.login',
   logout: 'bridge.logout',
   getLoginStatus: 'bridge.getLoginStatus',
+  trackAnalytics: 'bridge.trackAnalytics',
 } as const;
 
 const BROWSER_PREVIEW_PING: PingPayload = {
@@ -201,6 +204,10 @@ export class NativeBridge {
     return this.invoke<void, LoginStatus>(BRIDGE_TYPES.getLoginStatus);
   }
 
+  trackAnalytics(payload: AnalyticsPayload) {
+    return this.invoke<AnalyticsPayload, AnalyticsResult>(BRIDGE_TYPES.trackAnalytics, payload);
+  }
+
   onSelectionContextChanged(listener: SelectionContextListener) {
     this.selectionContextListeners.add(listener);
     return () => {
@@ -318,6 +325,10 @@ export class NativeBridge {
 
       if (type === BRIDGE_TYPES.logout) {
         return Promise.resolve({ success: true } as TResult);
+      }
+
+      if (type === BRIDGE_TYPES.trackAnalytics) {
+        return Promise.resolve({ tracked: false } as TResult);
       }
 
       return Promise.reject(

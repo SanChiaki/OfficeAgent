@@ -39,6 +39,7 @@
 
 - Open Settings and save `API Key`, `Base URL`, `Business Base URL`, `Model`, `API Format`, `SSO URL`, and `登录成功路径` / `Login success path`.
 - Confirm `Base URL` stays reserved for the LLM endpoint and `Business Base URL` points to the business API or mock server.
+- Confirm the analytics URL is not shown in Settings; it is an internal hidden configuration.
 - Confirm `API Format = OpenAI Compatible` keeps existing OpenAI-compatible planner behavior, then switch to `API Format = Anthropic Messages` with an Anthropic Messages-compatible endpoint and confirm ordinary planner chat still returns a valid response.
 - Restart Excel and confirm settings reload correctly.
 - Create or switch sessions and confirm existing thread history is preserved per session.
@@ -105,6 +106,10 @@
 - Prepare headers outside the current selection but inside the configured header rows, select an unrelated cell, run `AI映射列` / `AI map columns`, and confirm the preview still includes the full configured header area rather than only the selected cell.
 - Include one low-confidence or unmatched actual header in the model response or test fixture and confirm it is not shown as an applicable mapping and is skipped after confirmation.
 - Click `下载` / `Download` and `上传` / `Upload` and confirm each action uses a native Office/WinForms confirmation dialog instead of the task pane.
+- Configure `下载` / `Download` to return no matching rows and confirm it shows a no-matching-records info message instead of a confirmation dialog with field count, and that no worksheet cells are written or cleared.
+- Select one or more full worksheet columns that include managed non-ID fields, click `下载` / `Download`, and confirm Excel stays responsive, only rows with `row_id` from `DataStartRow` through the last used row are requested, and only selected managed columns are refreshed.
+- Select the whole worksheet, click `下载` / `Download`, and confirm Excel stays responsive, the ID column is not overwritten, and all recognized non-ID managed fields are refreshed only for rows with `row_id`.
+- Select two non-contiguous areas in different rows and columns, click `下载` / `Download`, and confirm only the exact selected cells are refreshed; cells at the unselected row/column intersections must remain unchanged.
 - Before `下载` / `Download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
 - Edit one managed non-ID cell, run `上传` / `Upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
 - Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
@@ -128,3 +133,13 @@
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
 - Clear the worksheet header area, keep the grouped-single metadata in `xISDP_Setting`, then run the hidden full-download path and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
 - Verify the task pane button and login button still work after the Ribbon Sync controls are added.
+
+## Analytics
+
+- Start `tests/mock-server` and set hidden `AnalyticsUrl = http://localhost:3200/insertLog`.
+- Confirm hidden `AnalyticsUrl` is stored in `%LocalAppData%\OfficeAgent\settings.json`, not in the task-pane Settings UI.
+- Clear existing events with `DELETE http://localhost:3200/analytics/logs`.
+- Click Ribbon initialize, download, and upload; confirm `/analytics/logs` contains `ribbon.initialize.*`, `ribbon.download.*`, and `ribbon.upload.*` events with `projectId` and `projectName`.
+- In the task pane, send a prompt, save settings, and confirm/cancel a preview card; confirm `/analytics/logs` contains `panel.*` events.
+- After SSO login, confirm each mock analytics log entry includes the login cookie under `cookies`.
+- Confirm the analytics `payload.answer` content does not contain API keys, cookies, raw prompt text, cell values, or business API request/response bodies.

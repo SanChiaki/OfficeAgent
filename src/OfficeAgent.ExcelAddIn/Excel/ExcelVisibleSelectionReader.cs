@@ -81,5 +81,61 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             return results;
         }
+
+        public WorksheetSelectionSnapshot ReadSelectionSnapshot()
+        {
+            var selection = application.Selection as ExcelInterop.Range;
+            if (selection == null)
+            {
+                return new WorksheetSelectionSnapshot();
+            }
+
+            ExcelInterop.Range visibleSelection;
+            try
+            {
+                visibleSelection = selection.SpecialCells(ExcelInterop.XlCellType.xlCellTypeVisible) as ExcelInterop.Range;
+            }
+            catch
+            {
+                visibleSelection = selection;
+            }
+
+            var areas = new List<WorksheetSelectionArea>();
+            var areaSource = visibleSelection ?? selection;
+            var areaCount = areaSource.Areas == null ? 1 : areaSource.Areas.Count;
+
+            for (var areaIndex = 1; areaIndex <= areaCount; areaIndex++)
+            {
+                var area = areaSource.Areas == null
+                    ? areaSource
+                    : areaSource.Areas[areaIndex] as ExcelInterop.Range;
+                if (area == null)
+                {
+                    continue;
+                }
+
+                var startRow = Convert.ToInt32(area.Row);
+                var startColumn = Convert.ToInt32(area.Column);
+                var rowCount = Convert.ToInt32(area.Rows.Count);
+                var columnCount = Convert.ToInt32(area.Columns.Count);
+                if (rowCount <= 0 || columnCount <= 0)
+                {
+                    continue;
+                }
+
+                areas.Add(new WorksheetSelectionArea
+                {
+                    StartRow = startRow,
+                    EndRow = startRow + rowCount - 1,
+                    StartColumn = startColumn,
+                    EndColumn = startColumn + columnCount - 1,
+                });
+            }
+
+            return new WorksheetSelectionSnapshot
+            {
+                Areas = areas.ToArray(),
+            };
+        }
     }
 }

@@ -213,7 +213,7 @@ namespace OfficeAgent.Infrastructure.Http
             using (cancellationToken.Register(stream.Dispose))
             using (var reader = new StreamReader(stream, Encoding.UTF8))
             {
-                while (!reader.EndOfStream)
+                while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     string line;
@@ -222,7 +222,7 @@ namespace OfficeAgent.Infrastructure.Http
                         line = await reader.ReadLineAsync().ConfigureAwait(false);
                     }
                     catch (Exception ex) when (cancellationToken.IsCancellationRequested &&
-                                               (ex is ObjectDisposedException || ex is IOException))
+                                               IsCanceledStreamReadException(ex))
                     {
                         throw new OperationCanceledException(cancellationToken);
                     }
@@ -275,6 +275,13 @@ namespace OfficeAgent.Infrastructure.Http
             }
 
             return builder.ToString();
+        }
+
+        private static bool IsCanceledStreamReadException(Exception error)
+        {
+            return error is ObjectDisposedException ||
+                   error is IOException ||
+                   error is InvalidOperationException;
         }
 
         private static bool AppendStreamingDeltaContent(StringBuilder builder, string data)

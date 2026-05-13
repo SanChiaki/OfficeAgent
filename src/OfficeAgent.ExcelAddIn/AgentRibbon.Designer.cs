@@ -51,9 +51,9 @@ namespace OfficeAgent.ExcelAddIn
             this.group2.SuspendLayout();
             this.groupHelp.SuspendLayout();
             this.SuspendLayout();
-            // 
+            //
             // tab1
-            // 
+            //
             this.tab1.Groups.Add(this.group1);
             this.tab1.Groups.Add(this.groupProject);
             this.tab1.Groups.Add(this.groupTemplate);
@@ -86,9 +86,9 @@ namespace OfficeAgent.ExcelAddIn
             this.groupProject.Items.Add(this.aiMapColumnsButton);
             this.groupProject.Label = "Project";
             this.groupProject.Name = "groupProject";
-            // 
+            //
             // projectDropDown
-            // 
+            //
             this.projectDropDown.Label = "Select project";
             this.projectDropDown.Name = "projectDropDown";
             this.projectDropDown.SizeString = "WWWWWWWWWWWWWWWWWWWW";

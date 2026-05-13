@@ -21,6 +21,7 @@ vi.mock('./bridge/nativeBridge', () => ({
     login: vi.fn(),
     logout: vi.fn(),
     getLoginStatus: vi.fn(),
+    trackAnalytics: vi.fn(),
   },
 }));
 
@@ -112,6 +113,7 @@ beforeEach(() => {
   });
   mockedBridge.saveSessions.mockImplementation(async (state) => state);
   mockedBridge.saveSettings.mockImplementation(async (settings) => settings);
+  mockedBridge.trackAnalytics.mockResolvedValue({ tracked: true });
   mockedBridge.executeExcelCommand.mockResolvedValue({
     commandType: 'excel.readSelectionTable',
     requiresConfirmation: false,
@@ -163,7 +165,7 @@ describe('App shell', () => {
     render(<App />);
 
     expect(mockedBridge.getHostContext).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/欢迎使用\s*ISDP/)).toBeInTheDocument();
+    expect(await screen.findByText(/欢迎使用\s*xISDP/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /打开设置/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /发送/i })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('zh');
@@ -174,7 +176,7 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(await screen.findByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
@@ -190,7 +192,7 @@ describe('App shell', () => {
       screen.getByRole('region', { name: /消息线程/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/欢迎使用\s*ISDP/),
+      screen.getByText(/欢迎使用\s*xISDP/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('status', { name: /选区胶囊/i }),
@@ -205,8 +207,8 @@ describe('App shell', () => {
       screen.getByRole('button', { name: /打开设置/i }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(/未命名会话/i, { selector: 'h1' }),
-    ).toBeInTheDocument();
+      await screen.findByRole('heading', { name: '' }),
+    ).toHaveClass('title');
     expect(
       await screen.findByText(/sheet1 · a1:c4/i),
     ).toBeInTheDocument();
@@ -249,6 +251,9 @@ describe('App shell', () => {
       within(settingsDialog).getByRole('textbox', { name: /^业务基础 url$/i }),
     ).toHaveValue('https://business.example.com');
     expect(
+      within(settingsDialog).queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i }),
+    ).not.toBeInTheDocument();
+    expect(
       within(settingsDialog).getByText(/已连接 browser-preview \(dev\)/i),
     ).toBeInTheDocument();
     expect(
@@ -268,10 +273,10 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(await screen.findByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
-    expect(await screen.findByText(/untitled/i, { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '' })).toHaveClass('title');
     expect(await screen.findByText(/^sheet1 · a1:c4$/i)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
 
@@ -284,6 +289,7 @@ describe('App shell', () => {
     expect(within(settingsDialog).getAllByLabelText(/^(api key|api 密钥)$/i)[0]).toHaveValue('');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(base url|基础 url)$/i })).toHaveValue('https://api.example.com');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(business base url|业务基础 url)$/i })).toHaveValue('https://business.example.com');
+    expect(within(settingsDialog).queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i })).not.toBeInTheDocument();
     expect(within(settingsDialog).getByRole('combobox', { name: /^(api format|api 格式)$/i })).toHaveValue('openai-compatible');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(model|模型)$/i })).toHaveValue('gpt-5-mini');
     expect(within(settingsDialog).getByRole('textbox', { name: /^(sso url|sso 地址)$/i })).toHaveValue('');
@@ -389,7 +395,7 @@ describe('App shell', () => {
       sessions: expect.arrayContaining([
         expect.objectContaining({
           id: expect.any(String),
-          title: 'New chat',
+          title: '',
         }),
       ]),
     }));
@@ -403,8 +409,7 @@ describe('App shell', () => {
     await user.click(await screen.findByRole('button', { name: /打开会话列表/i }));
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉/i });
     await user.click(within(sidebar).getAllByRole('button', { name: /重命名会话/i })[0]);
-    const renameInput = within(sidebar).getByDisplayValue('未命名会话');
-    await user.clear(renameInput);
+    const renameInput = within(sidebar).getByRole('textbox');
     await user.type(renameInput, '未命名会话');
     await user.click(screen.getByRole('button', { name: /确认重命名/i }));
     await user.click(within(sidebar).getByRole('button', { name: /关闭会话列表/i }));
@@ -464,6 +469,20 @@ describe('App shell', () => {
     }));
   });
 
+  it('does not expose the analytics URL in user settings', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /打开设置|open settings/i }));
+    expect(screen.queryByRole('textbox', { name: /^(analytics url|analytics base url|埋点 url|埋点 base url)$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /保存|save/i }));
+
+    expect(mockedBridge.saveSettings).toHaveBeenCalledWith(expect.not.objectContaining({
+      analyticsUrl: expect.any(String),
+    }));
+  });
+
   it('saves the selected llm api format', async () => {
     const user = userEvent.setup();
 
@@ -489,8 +508,8 @@ describe('App shell', () => {
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉|sessions drawer/i });
 
     expect(
-      await screen.findByRole('heading', { name: /未命名会话|untitled/i }),
-    ).toBeInTheDocument();
+      await screen.findByRole('heading', { name: '' }),
+    ).toHaveClass('title');
 
     await user.click(within(sidebar).getByRole('button', { name: /review notes/i }));
 
@@ -552,7 +571,7 @@ describe('App shell', () => {
 
     await vi.advanceTimersByTimeAsync(1500);
 
-    expect(screen.getByText(/welcome to isdp/i)).toBeInTheDocument();
+    expect(screen.getByText(/welcome to xisdp/i)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en');
 
     await act(async () => {
@@ -563,7 +582,7 @@ describe('App shell', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText(/欢迎使用\s*ISDP/)).toBeInTheDocument();
+    expect(screen.getByText(/欢迎使用\s*xISDP/)).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('zh');
   });
 
@@ -856,6 +875,23 @@ describe('App shell', () => {
     ).toBeInTheDocument();
   });
 
+  it('tracks composer send events without sending prompt text', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.type(screen.getByRole('textbox', { name: /消息输入框|message composer/i }), 'Create a summary sheet');
+    await user.click(screen.getByRole('button', { name: /发送|send/i }));
+
+    expect(mockedBridge.trackAnalytics).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'panel.composer.send.clicked',
+      properties: expect.objectContaining({
+        inputLength: 22,
+      }),
+    }));
+    expect(JSON.stringify(mockedBridge.trackAnalytics.mock.calls)).not.toContain('Create a summary sheet');
+  });
+
   it('renders a plan preview and confirms the frozen plan through the agent bridge', async () => {
     const user = userEvent.setup();
     const frozenPlan = {
@@ -1086,7 +1122,7 @@ describe('App shell', () => {
 
     await user.click(await screen.findByRole('button', { name: /打开会话列表|open sessions drawer/i }));
     const sidebar = await screen.findByRole('complementary', { name: /会话抽屉|sessions drawer/i });
-    await screen.findByRole('heading', { name: /未命名会话|untitled/i });
+    await expect.poll(() => document.querySelector('h1.title')?.textContent).toBe('');
 
     await user.type(screen.getByRole('textbox', { name: /消息输入框|message composer/i }), 'read selection');
     await user.click(screen.getByRole('button', { name: /发送|send/i }));

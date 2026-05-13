@@ -8,6 +8,8 @@ using System.Runtime.Remoting.Proxies;
 using System.Threading;
 using System.Threading.Tasks;
 using OfficeAgent.Core;
+using OfficeAgent.Core.Analytics;
+using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
@@ -15,6 +17,13 @@ using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
 {
+    [CollectionDefinition(Name)]
+    public sealed class OfficeAgentLogCollection
+    {
+        public const string Name = "OfficeAgentLog";
+    }
+
+    [Collection(OfficeAgentLogCollection.Name)]
     public sealed class RibbonSyncControllerTests
     {
         [Fact]
@@ -186,6 +195,140 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void SelectProjectCancelWritesProjectLayoutDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = null,
+            };
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "old-project",
+                ProjectName = "旧项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 7,
+            };
+
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+            InvokeRefresh(controller);
+
+            var logs = CaptureLogEntries(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "new-project",
+                DisplayName = "新项目",
+            }));
+
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.select.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=new-project") &&
+                entry.Details.Contains("ExistingProjectId=old-project"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.layout_dialog.show" &&
+                entry.Details.Contains("HeaderStartRow=5") &&
+                entry.Details.Contains("DataStartRow=7"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "warn" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.layout_dialog.cancelled" &&
+                entry.Details.Contains("RestoredProjectId=old-project"));
+        }
+
+        [Fact]
+        public void SelectProjectConfirmedWritesBindingSaveDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "performance",
+                    ProjectName = "绩效项目",
+                    HeaderStartRow = 4,
+                    HeaderRowCount = 1,
+                    DataStartRow = 5,
+                },
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+
+            var logs = CaptureLogEntries(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            }));
+
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Details.Contains("HeaderStartRow=4"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.completed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Details.Contains("DataStartRow=5"));
+        }
+
+        [Fact]
+        public void SelectProjectSaveBindingFailureWritesErrorDiagnostics()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore
+            {
+                SaveBindingException = new InvalidOperationException("metadata write failed"),
+            };
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "Sheet1",
+                    SystemKey = "current-business-system",
+                    ProjectId = "performance",
+                    ProjectName = "绩效项目",
+                    HeaderStartRow = 4,
+                    HeaderRowCount = 1,
+                    DataStartRow = 5,
+                },
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+
+            var capture = CaptureLogEntriesAllowingFailure(() => InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            }));
+
+            var failure = Assert.IsType<TargetInvocationException>(capture.Failure);
+            Assert.IsType<InvalidOperationException>(failure.InnerException);
+            Assert.Contains(capture.Entries, entry =>
+                entry.Level == "error" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "project.binding.save.failed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("TargetProjectId=performance") &&
+                entry.Exception.Contains("metadata write failed"));
+        }
+
+        [Fact]
         public void SelectProjectClearsFieldMappingsWhenSwitchingToDifferentProject()
         {
             var connector = new FakeSystemConnector();
@@ -267,6 +410,77 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(2, metadataStore.LastSavedBinding.HeaderRowCount);
             Assert.Equal(9, metadataStore.LastSavedBinding.DataStartRow);
             Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Initialize sheet completed.", StringComparison.Ordinal) >= 0);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTracksCompletedEventWithProjectName()
+        {
+            var connector = new FakeSystemConnector();
+            var analytics = new RecordingAnalyticsService();
+            var controller = CreateController(
+                connector,
+                activeSheetName: "Sheet1",
+                analyticsService: analytics);
+
+            InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            });
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "ribbon.initialize.completed" &&
+                Equals(analyticsEvent.Properties["projectId"], "performance") &&
+                Equals(analyticsEvent.Properties["projectName"], "绩效项目") &&
+                Equals(analyticsEvent.Properties["sheetName"], "Sheet1"));
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetFailureWritesDiagnostics()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BuildFieldMappingSeedException = new TaskCanceledException("A task was canceled."),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 9,
+            };
+
+            var controller = CreateController(connector, metadataStore, dialogService, () => "Sheet1");
+            InvokeRefresh(controller);
+
+            var logs = CaptureLogEntries(() => InvokeExecuteInitializeCurrentSheet(controller));
+
+            Assert.Single(dialogService.ErrorMessages);
+            Assert.Equal("A task was canceled.", dialogService.ErrorMessages[0]);
+            Assert.Contains(logs, entry =>
+                entry.Level == "info" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "initialize_sheet.begin" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("SystemKey=current-business-system") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Details.Contains("ProjectName=绩效项目"));
+            Assert.Contains(logs, entry =>
+                entry.Level == "error" &&
+                entry.Component == "ribbon_sync" &&
+                entry.EventName == "initialize_sheet.failed" &&
+                entry.Details.Contains("SheetName=Sheet1") &&
+                entry.Details.Contains("ProjectId=performance") &&
+                entry.Exception.Contains("TaskCanceledException") &&
+                entry.Exception.Contains("A task was canceled."));
         }
 
         [Fact]
@@ -827,13 +1041,92 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Empty(dialogService.ErrorMessages);
         }
 
+        [Fact]
+        public void ExecuteFullDownloadSkipsConfirmationAndWriteWhenNoRowsMatch()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+                FindResult = Array.Empty<IDictionary<string, object>>(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null);
+            grid.SetCell("Sheet1", 1, 1, "existing header");
+
+            InvokeRefresh(controller);
+            InvokeExecuteFullDownload(controller);
+
+            Assert.Equal(0, dialogService.ConfirmDownloadCallCount);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("query result is empty", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Equal("existing header", grid.GetCell("Sheet1", 1, 1));
+            Assert.Equal(0, grid.SetCellTextCallCount);
+            Assert.Equal(0, grid.ClearRangeCallCount);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadSkipsConfirmationAndWriteWhenNoRowsMatch()
+        {
+            var connector = new FakeSystemConnector
+            {
+                FieldMappingDefinition = BuildAiMappingDefinition(),
+                FindResult = Array.Empty<IDictionary<string, object>>(),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                Cells = new[]
+                {
+                    new SelectedVisibleCell { Row = 4, Column = 2 },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateAiMappingBinding();
+            metadataStore.FieldMappings["Sheet1"] = BuildAiMappings("Sheet1");
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null,
+                selectionReader);
+            grid.SetCell("Sheet1", 3, 1, "ID");
+            grid.SetCell("Sheet1", 3, 2, "负责人");
+            grid.SetCell("Sheet1", 4, 1, "row-1");
+            grid.SetCell("Sheet1", 4, 2, "old owner");
+
+            InvokeRefresh(controller);
+            InvokeExecutePartialDownload(controller);
+
+            Assert.Equal(0, dialogService.ConfirmDownloadCallCount);
+            Assert.Equal("performance", connector.LastFindProjectId);
+            Assert.Equal(new[] { "row-1" }, connector.LastFindRowIds);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("query result is empty", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Equal("old owner", grid.GetCell("Sheet1", 4, 2));
+            Assert.Equal(0, grid.WriteRangeValuesCallCount);
+            Assert.Empty(dialogService.ErrorMessages);
+        }
+
         private static object CreateController(
             FakeSystemConnector connector,
-            FakeWorksheetMetadataStore metadataStore,
-            FakeDialogService dialogService,
-            Func<string> sheetNameProvider)
+            string activeSheetName,
+            IAnalyticsService analyticsService = null)
         {
-            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null);
+            return CreateController(
+                connector,
+                new FakeWorksheetMetadataStore(),
+                new FakeDialogService { ConfirmProjectLayoutWithSuggestedBinding = true },
+                () => activeSheetName,
+                authenticationLoginAction: null,
+                analyticsService: analyticsService);
         }
 
         private static object CreateController(
@@ -841,7 +1134,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeWorksheetMetadataStore metadataStore,
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
-            Action authenticationLoginAction)
+            IAnalyticsService analyticsService = null)
+        {
+            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null, analyticsService);
+        }
+
+        private static object CreateController(
+            FakeSystemConnector connector,
+            FakeWorksheetMetadataStore metadataStore,
+            FakeDialogService dialogService,
+            Func<string> sheetNameProvider,
+            Action authenticationLoginAction,
+            IAnalyticsService analyticsService = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
@@ -853,7 +1157,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
 
-            var ctorTypes = authenticationLoginAction == null
+            var ctorTypes = analyticsService != null
                 ? new[]
                 {
                     typeof(IWorksheetMetadataStore),
@@ -861,16 +1165,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     typeof(Func<string>),
                     executionService.GetType(),
                     dialogInterface,
-                }
-                : new[]
-                {
-                    typeof(IWorksheetMetadataStore),
-                    typeof(WorksheetSyncService),
-                    typeof(Func<string>),
-                    executionService.GetType(),
-                    dialogInterface,
                     typeof(Action),
-                };
+                    typeof(IAnalyticsService),
+                }
+                : authenticationLoginAction == null
+                    ? new[]
+                    {
+                        typeof(IWorksheetMetadataStore),
+                        typeof(WorksheetSyncService),
+                        typeof(Func<string>),
+                        executionService.GetType(),
+                        dialogInterface,
+                    }
+                    : new[]
+                    {
+                        typeof(IWorksheetMetadataStore),
+                        typeof(WorksheetSyncService),
+                        typeof(Func<string>),
+                        executionService.GetType(),
+                        dialogInterface,
+                        typeof(Action),
+                    };
 
             var ctor = controllerType.GetConstructor(
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
@@ -883,6 +1198,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
             }
 
+            if (analyticsService != null)
+            {
+                return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction, analyticsService });
+            }
+
             return authenticationLoginAction == null
                 ? ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() })
                 : ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction });
@@ -893,11 +1213,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeWorksheetMetadataStore metadataStore,
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
-            IAiColumnMappingClient aiClient)
+            IAiColumnMappingClient aiClient,
+            FakeWorksheetSelectionReader selectionReader = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
-            var (executionService, grid) = CreateExecutionService(addInAssembly, connector, metadataStore, aiClient);
+            var (executionService, grid) = CreateExecutionService(addInAssembly, connector, metadataStore, aiClient, selectionReader);
             var dialogInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Dialogs.IRibbonSyncDialogService", throwOnError: true);
             var syncService = new WorksheetSyncService(
                 new SystemConnectorRegistry(new ISystemConnector[] { connector }),
@@ -929,7 +1250,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assembly addInAssembly,
             FakeSystemConnector connector,
             FakeWorksheetMetadataStore metadataStore,
-            IAiColumnMappingClient aiClient = null)
+            IAiColumnMappingClient aiClient = null,
+            FakeWorksheetSelectionReader selectionReader = null)
         {
             var serviceType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.WorksheetSyncExecutionService", throwOnError: true);
             var gridInterface = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
@@ -974,7 +1296,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     syncService,
                     metadataStore,
-                    new FakeWorksheetSelectionReader(),
+                    selectionReader ?? new FakeWorksheetSelectionReader(),
                     grid.GetTransparentProxy(),
                     new SyncOperationPreviewFactory(),
                 }
@@ -982,7 +1304,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     syncService,
                     metadataStore,
-                    new FakeWorksheetSelectionReader(),
+                    selectionReader ?? new FakeWorksheetSelectionReader(),
                     grid.GetTransparentProxy(),
                     new SyncOperationPreviewFactory(),
                     aiClient,
@@ -1006,6 +1328,37 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
 
             method.Invoke(controller, new object[] { option });
+        }
+
+        private static List<OfficeAgentLogEntry> CaptureLogEntries(Action action)
+        {
+            var capture = CaptureLogEntriesAllowingFailure(action);
+            if (capture.Failure != null)
+            {
+                throw capture.Failure;
+            }
+
+            return capture.Entries;
+        }
+
+        private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
+        {
+            var entries = new List<OfficeAgentLogEntry>();
+            OfficeAgentLog.Configure(entries.Add);
+
+            try
+            {
+                action();
+                return new LogCaptureResult(entries, null);
+            }
+            catch (Exception ex)
+            {
+                return new LogCaptureResult(entries, ex);
+            }
+            finally
+            {
+                OfficeAgentLog.Reset();
+            }
         }
 
         private static void InvokeRefresh(object controller)
@@ -1062,6 +1415,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
             if (method == null)
             {
                 throw new InvalidOperationException("RibbonSyncController.ExecuteInitializeCurrentSheet() was not found.");
+            }
+
+            method.Invoke(controller, null);
+        }
+
+        private static void InvokeExecuteFullDownload(object controller)
+        {
+            var method = controller.GetType().GetMethod(
+                "ExecuteFullDownload",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.ExecuteFullDownload() was not found.");
+            }
+
+            method.Invoke(controller, null);
+        }
+
+        private static void InvokeExecutePartialDownload(object controller)
+        {
+            var method = controller.GetType().GetMethod(
+                "ExecutePartialDownload",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (method == null)
+            {
+                throw new InvalidOperationException("RibbonSyncController.ExecutePartialDownload() was not found.");
             }
 
             method.Invoke(controller, null);
@@ -1269,7 +1650,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public IReadOnlyList<SheetFieldMappingRow> FieldMappingSeedRows { get; set; }
 
+            public IReadOnlyList<IDictionary<string, object>> FindResult { get; set; } = Array.Empty<IDictionary<string, object>>();
+
             public string LastBuildFieldMappingSeedProjectId { get; private set; }
+
+            public string LastFindProjectId { get; private set; }
+
+            public IReadOnlyList<string> LastFindRowIds { get; private set; } = Array.Empty<string>();
+
+            public IReadOnlyList<string> LastFindFieldKeys { get; private set; } = Array.Empty<string>();
 
             public Exception BuildFieldMappingSeedException { get; set; }
 
@@ -1313,9 +1702,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 throw new NotSupportedException();
             }
 
-            public IReadOnlyList<IDictionary<string, object>> Find(string projectId, IReadOnlyList<string> rowIds, IReadOnlyList<string> fieldKeys)
+            public IReadOnlyList<IDictionary<string, object>> Find(
+                string projectId,
+                IReadOnlyList<string> rowIds,
+                IReadOnlyList<string> fieldKeys)
             {
-                throw new NotSupportedException();
+                LastFindProjectId = projectId;
+                LastFindRowIds = rowIds?.ToArray() ?? Array.Empty<string>();
+                LastFindFieldKeys = fieldKeys?.ToArray() ?? Array.Empty<string>();
+                return FindResult;
             }
 
             public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
@@ -1352,6 +1747,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        private sealed class RecordingAnalyticsService : IAnalyticsService
+        {
+            public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
+
+            public void Track(AnalyticsEvent analyticsEvent)
+            {
+                Events.Add(analyticsEvent);
+            }
+
+            public void Track(
+                string eventName,
+                string source,
+                IDictionary<string, object> properties = null,
+                IDictionary<string, object> businessContext = null,
+                AnalyticsError error = null)
+            {
+                Track(new AnalyticsEvent
+                {
+                    EventName = eventName,
+                    Source = source,
+                    Properties = properties,
+                    BusinessContext = businessContext,
+                    Error = error,
+                });
+            }
+        }
+
         private sealed class FakeWorksheetMetadataStore : IWorksheetMetadataStore
         {
             public Dictionary<string, SheetBinding> Bindings { get; } = new Dictionary<string, SheetBinding>(StringComparer.OrdinalIgnoreCase);
@@ -1364,8 +1786,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public SheetFieldMappingRow[] LastSavedFieldMappings { get; private set; } = Array.Empty<SheetFieldMappingRow>();
 
+            public Exception SaveBindingException { get; set; }
+
             public void SaveBinding(SheetBinding binding)
             {
+                if (SaveBindingException != null)
+                {
+                    throw SaveBindingException;
+                }
+
                 LastSavedBinding = binding;
                 Bindings[binding.SheetName] = binding;
             }
@@ -1428,11 +1857,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<AiColumnMappingPreview> AiColumnMappingPreviews { get; } = new List<AiColumnMappingPreview>();
 
+            public int ConfirmDownloadCallCount { get; private set; }
+
             public int AiColumnMappingProgressRunCount { get; private set; }
 
             public CancellationToken LastProgressCancellationToken { get; private set; }
 
             public SheetBinding NextProjectLayoutBinding { get; set; }
+
+            public bool ConfirmProjectLayoutWithSuggestedBinding { get; set; }
 
             public bool AuthenticationRequiredResult { get; set; }
 
@@ -1448,6 +1881,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 switch (call.MethodName)
                 {
                     case "ConfirmDownload":
+                        ConfirmDownloadCallCount++;
+                        return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
                     case "ConfirmUpload":
                         return new ReturnMessage(true, null, 0, call.LogicalCallContext, call);
                     case "ConfirmAiColumnMapping":
@@ -1477,7 +1912,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         }
                     case "ShowProjectLayoutDialog":
                         ProjectLayoutPrompts.Add(CloneBinding((SheetBinding)call.InArgs[0]));
-                        return new ReturnMessage(CloneBinding(NextProjectLayoutBinding), null, 0, call.LogicalCallContext, call);
+                        var layoutBinding = ConfirmProjectLayoutWithSuggestedBinding
+                            ? (SheetBinding)call.InArgs[0]
+                            : NextProjectLayoutBinding;
+                        return new ReturnMessage(CloneBinding(layoutBinding), null, 0, call.LogicalCallContext, call);
                     case "ShowInfo":
                         InfoMessages.Add((string)call.InArgs[0]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
@@ -1526,11 +1964,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        private sealed class LogCaptureResult
+        {
+            public LogCaptureResult(List<OfficeAgentLogEntry> entries, Exception failure)
+            {
+                Entries = entries;
+                Failure = failure;
+            }
+
+            public List<OfficeAgentLogEntry> Entries { get; }
+
+            public Exception Failure { get; }
+        }
+
         private sealed class FakeWorksheetSelectionReader : IWorksheetSelectionReader
         {
+            public IReadOnlyList<SelectedVisibleCell> Cells { get; set; } = Array.Empty<SelectedVisibleCell>();
+
+            public WorksheetSelectionSnapshot SelectionSnapshot { get; set; } = new WorksheetSelectionSnapshot();
+
             public IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection()
             {
-                return Array.Empty<SelectedVisibleCell>();
+                return Cells;
+            }
+
+            public WorksheetSelectionSnapshot ReadSelectionSnapshot()
+            {
+                return SelectionSnapshot;
             }
         }
 
@@ -1549,6 +2009,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 cells[(sheetName, row, column)] = value ?? string.Empty;
             }
 
+            public int SetCellTextCallCount { get; private set; }
+
+            public int ClearRangeCallCount { get; private set; }
+
+            public int WriteRangeValuesCallCount { get; private set; }
+
+            public string GetCell(string sheetName, int row, int column)
+            {
+                cells.TryGetValue((sheetName, row, column), out var value);
+                return value ?? string.Empty;
+            }
+
             public override IMessage Invoke(IMessage msg)
             {
                 var call = (IMethodCallMessage)msg;
@@ -1561,7 +2033,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "GetLastUsedRow":
                         return HandleGetLastUsedRow(call);
                     case "SetCellText":
+                        SetCellTextCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "ClearRange":
+                        ClearRangeCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "WriteRangeValues":
+                        WriteRangeValuesCallCount++;
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "ClearWorksheet":
                     case "MergeCells":
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);

@@ -80,6 +80,64 @@ namespace OfficeAgent.Infrastructure.Tests
         }
 
         [Fact]
+        public void SaveRoundTripsAnalyticsUrl()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            store.Save(new OfficeAgent.Core.Models.AppSettings
+            {
+                AnalyticsUrl = " https://analytics.internal.example/custom/insertLog ",
+            });
+
+            var loaded = store.Load();
+            var persistedJson = File.ReadAllText(settingsPath);
+
+            Assert.Equal("https://analytics.internal.example/custom/insertLog", loaded.AnalyticsUrl);
+            Assert.Contains("\"AnalyticsUrl\": \"https://analytics.internal.example/custom/insertLog\"", persistedJson);
+        }
+
+        [Fact]
+        public void LoadMigratesLegacyAnalyticsBaseUrlToAnalyticsUrl()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(
+                settingsPath,
+                "{\n  \"encryptedApiKey\": \"\",\n  \"analyticsBaseUrl\": \" https://analytics.internal.example \"\n}");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            var settings = store.Load();
+
+            Assert.Equal("https://analytics.internal.example/insertLog", settings.AnalyticsUrl);
+        }
+
+        [Fact]
+        public void LoadMigratesLegacyAnalyticsBaseUrlEndpointWithoutDuplicatingInsertLog()
+        {
+            var settingsPath = Path.Combine(tempDirectory, "settings.json");
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(
+                settingsPath,
+                "{\n  \"encryptedApiKey\": \"\",\n  \"analyticsBaseUrl\": \" https://analytics.internal.example/custom/insertLog/ \"\n}");
+            var store = new FileSettingsStore(settingsPath, new DpapiSecretProtector());
+
+            var settings = store.Load();
+
+            Assert.Equal("https://analytics.internal.example/custom/insertLog", settings.AnalyticsUrl);
+        }
+
+        [Fact]
+        public void LoadDefaultsAnalyticsUrlToEmptyString()
+        {
+            var store = new FileSettingsStore(Path.Combine(tempDirectory, "missing-settings.json"), new DpapiSecretProtector());
+
+            var settings = store.Load();
+
+            Assert.Equal(string.Empty, settings.AnalyticsUrl);
+        }
+
+        [Fact]
         public void LoadNormalizesInvalidUiLanguageOverrideToSystem()
         {
             var settingsPath = Path.Combine(tempDirectory, "settings.json");

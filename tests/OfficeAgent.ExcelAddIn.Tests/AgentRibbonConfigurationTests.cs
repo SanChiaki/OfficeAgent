@@ -959,6 +959,41 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("WorksheetPendingEditTracker.MarkChanged(sheetName, ReadWorksheetCellAddresses(target));", addInCodeText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void ThisAddInComposesAnalyticsServiceFromSettings()
+        {
+            var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
+
+            Assert.Contains("internal IAnalyticsService AnalyticsService { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container)", addInText, StringComparison.Ordinal);
+            Assert.Contains("AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)", addInText, StringComparison.Ordinal);
+            Assert.Contains("NoopAnalyticsService.Instance", addInText, StringComparison.Ordinal);
+            Assert.Contains("CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);", addInText, StringComparison.Ordinal);
+            Assert.Contains("new SyncOperationPreviewFactory(), AnalyticsService);", addInText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AgentRibbonTracksPrimaryButtonClicks()
+        {
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+
+            Assert.Contains("TrackRibbonClick(\"ribbon.taskpane.toggle.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.login.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.initialize.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.download.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.upload.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.documentation.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.about.clicked\"", ribbonText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ExcelAddInProjectIncludesRibbonAnalyticsHelper()
+        {
+            var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
+
+            Assert.Contains("<Compile Include=\"Analytics\\RibbonAnalyticsHelper.cs\" />", projectText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]
