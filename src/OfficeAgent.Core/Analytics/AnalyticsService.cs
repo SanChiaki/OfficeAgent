@@ -10,11 +10,16 @@ namespace OfficeAgent.Core.Analytics
     {
         private readonly IAnalyticsSink sink;
         private readonly string defaultVersion;
+        private readonly IAnalyticsProjectContextProvider projectContextProvider;
 
-        public AnalyticsService(IAnalyticsSink sink, string defaultVersion = null)
+        public AnalyticsService(
+            IAnalyticsSink sink,
+            string defaultVersion = null,
+            IAnalyticsProjectContextProvider projectContextProvider = null)
         {
             this.sink = sink ?? throw new ArgumentNullException(nameof(sink));
             this.defaultVersion = defaultVersion ?? string.Empty;
+            this.projectContextProvider = projectContextProvider;
         }
 
         public void Track(AnalyticsEvent analyticsEvent)
@@ -72,6 +77,7 @@ namespace OfficeAgent.Core.Analytics
                 Properties = CopyDictionary(analyticsEvent.Properties),
                 BusinessContext = CopyDictionary(analyticsEvent.BusinessContext),
                 Error = CopyError(analyticsEvent.Error),
+                EnvelopeProjectId = ResolveEnvelopeProjectId(analyticsEvent),
             };
         }
 
@@ -126,6 +132,31 @@ namespace OfficeAgent.Core.Analytics
                 Message = error.Message ?? string.Empty,
                 ExceptionType = error.ExceptionType ?? string.Empty,
             };
+        }
+
+        private string ResolveEnvelopeProjectId(AnalyticsEvent analyticsEvent)
+        {
+            var eventProjectId = ExtractProjectId(analyticsEvent?.Properties);
+            if (!string.IsNullOrWhiteSpace(eventProjectId))
+            {
+                projectContextProvider?.RememberProjectId(eventProjectId);
+                return eventProjectId;
+            }
+
+            var fallbackProjectId = projectContextProvider?.GetCurrentProjectId() ?? string.Empty;
+            return string.IsNullOrWhiteSpace(fallbackProjectId) ? string.Empty : fallbackProjectId.Trim();
+        }
+
+        private static string ExtractProjectId(IDictionary<string, object> properties)
+        {
+            if (properties == null ||
+                !properties.TryGetValue("projectId", out var projectIdValue) ||
+                projectIdValue == null)
+            {
+                return string.Empty;
+            }
+
+            return projectIdValue.ToString()?.Trim() ?? string.Empty;
         }
     }
 }

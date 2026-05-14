@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace OfficeAgent.Core.Analytics
 {
@@ -20,5 +21,8 @@ namespace OfficeAgent.Core.Analytics
         public IDictionary<string, object> BusinessContext { get; set; } = new Dictionary<string, object>(StringComparer.Ordinal);
 
         public AnalyticsError Error { get; set; }
+
+        [JsonIgnore]
+        public string EnvelopeProjectId { get; set; } = string.Empty;
     }
 }

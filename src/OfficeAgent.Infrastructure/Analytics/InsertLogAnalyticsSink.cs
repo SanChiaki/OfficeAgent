@@ -22,16 +22,13 @@ namespace OfficeAgent.Infrastructure.Analytics
 
         private readonly Func<AppSettings> loadSettings;
         private readonly HttpClient httpClient;
-        private readonly IAnalyticsProjectContextProvider projectContextProvider;
 
         public InsertLogAnalyticsSink(
             Func<AppSettings> loadSettings,
             HttpClient httpClient = null,
-            CookieContainer cookieContainer = null,
-            IAnalyticsProjectContextProvider projectContextProvider = null)
+            CookieContainer cookieContainer = null)
         {
             this.loadSettings = loadSettings ?? throw new ArgumentNullException(nameof(loadSettings));
-            this.projectContextProvider = projectContextProvider;
             if (httpClient != null)
             {
                 this.httpClient = httpClient;
@@ -78,7 +75,9 @@ namespace OfficeAgent.Infrastructure.Analytics
                 questionType = 1,
                 askId = CreateRandomId(),
                 talkId = CreateRandomId(),
-                projectId = ResolveEnvelopeProjectId(analyticsEvent),
+                projectId = string.IsNullOrWhiteSpace(analyticsEvent.EnvelopeProjectId)
+                    ? string.Empty
+                    : analyticsEvent.EnvelopeProjectId.Trim(),
                 answer = JsonConvert.SerializeObject(analyticsEvent, AnalyticsJsonSettings),
             });
 
@@ -110,31 +109,6 @@ namespace OfficeAgent.Infrastructure.Analytics
                 .TrimEnd('=')
                 .Replace('+', '-')
                 .Replace('/', '_');
-        }
-
-        private string ResolveEnvelopeProjectId(AnalyticsEvent analyticsEvent)
-        {
-            var eventProjectId = ExtractProjectId(analyticsEvent?.Properties);
-            if (!string.IsNullOrWhiteSpace(eventProjectId))
-            {
-                projectContextProvider?.RememberProjectId(eventProjectId);
-                return eventProjectId;
-            }
-
-            var fallbackProjectId = projectContextProvider?.GetCurrentProjectId() ?? string.Empty;
-            return string.IsNullOrWhiteSpace(fallbackProjectId) ? string.Empty : fallbackProjectId.Trim();
-        }
-
-        private static string ExtractProjectId(System.Collections.Generic.IDictionary<string, object> properties)
-        {
-            if (properties == null ||
-                !properties.TryGetValue("projectId", out var projectIdValue) ||
-                projectIdValue == null)
-            {
-                return string.Empty;
-            }
-
-            return projectIdValue.ToString()?.Trim() ?? string.Empty;
         }
     }
 }
