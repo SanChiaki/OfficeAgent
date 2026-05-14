@@ -45,12 +45,41 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(1, (int)envelope["questionType"]);
             Assert.False(string.IsNullOrWhiteSpace((string)envelope["askId"]));
             Assert.False(string.IsNullOrWhiteSpace((string)envelope["talkId"]));
+            Assert.Equal("performance", (string)envelope["projectId"]);
 
             var answer = Assert.IsType<string>(envelope["answer"]?.ToObject<object>());
             var answerJson = JObject.Parse(answer);
             Assert.Equal("1.0.175", (string)answerJson["version"]);
             Assert.Equal("ribbon.download.clicked", (string)answerJson["eventName"]);
             Assert.Equal("\u7EE9\u6548\u9879\u76EE", (string)answerJson["properties"]?["projectName"]);
+        }
+
+        [Fact]
+        public async Task WriteAsyncFallsBackToProjectContextProviderForEnvelopeProjectId()
+        {
+            var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+            var provider = new RecordingProjectContextProvider("fallback-project-001");
+            var sink = new InsertLogAnalyticsSink(
+                () => new AppSettings { AnalyticsUrl = "https://analytics.internal.example/v1/insertLog" },
+                new HttpClient(handler),
+                projectContextProvider: provider);
+            var analyticsEvent = new AnalyticsEvent
+            {
+                Version = "1.0.175",
+                EventName = "panel.settings.saved",
+                Source = "panel",
+                Properties = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["sessionId"] = "session-123",
+                },
+            };
+
+            await sink.WriteAsync(analyticsEvent, CancellationToken.None);
+
+            var envelope = JObject.Parse(handler.LastRequestBody);
+            Assert.Equal("fallback-project-001", (string)envelope["projectId"]);
+            Assert.Equal(1, provider.GetCurrentProjectIdCallCount);
+            Assert.Equal(0, provider.RememberProjectIdCallCount);
         }
 
         [Fact]
@@ -158,6 +187,31 @@ namespace OfficeAgent.Infrastructure.Tests
                 LastRequest = request;
                 LastRequestBody = await (request.Content?.ReadAsStringAsync() ?? Task.FromResult(string.Empty));
                 return responder(request);
+            }
+        }
+
+        private sealed class RecordingProjectContextProvider : IAnalyticsProjectContextProvider
+        {
+            private readonly string currentProjectId;
+
+            public RecordingProjectContextProvider(string currentProjectId)
+            {
+                this.currentProjectId = currentProjectId;
+            }
+
+            public int GetCurrentProjectIdCallCount { get; private set; }
+
+            public int RememberProjectIdCallCount { get; private set; }
+
+            public string GetCurrentProjectId()
+            {
+                GetCurrentProjectIdCallCount++;
+                return currentProjectId;
+            }
+
+            public void RememberProjectId(string projectId)
+            {
+                RememberProjectIdCallCount++;
             }
         }
     }

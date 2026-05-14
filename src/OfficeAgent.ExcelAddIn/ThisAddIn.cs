@@ -47,6 +47,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
+        internal IAnalyticsProjectContextProvider AnalyticsProjectContextProvider { get; private set; }
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
         internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
 
@@ -73,10 +74,15 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "cookies.json"),
                 new DpapiSecretProtector());
             CookieStore.Load(SharedCookies.Container);
+            WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
+            AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider(GetActiveWorksheetName, WorksheetMetadataStore);
             AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
                 ? NoopAnalyticsService.Instance
                 : new OfficeAgent.Core.Analytics.AnalyticsService(
-                    new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container),
+                    new InsertLogAnalyticsSink(
+                        () => SettingsStore.Load(),
+                        cookieContainer: SharedCookies.Container,
+                        projectContextProvider: AnalyticsProjectContextProvider),
                     VersionInfo.AppVersion);
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
@@ -110,7 +116,6 @@ namespace OfficeAgent.ExcelAddIn
                 () => SettingsStore.Load());
             CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
             SystemConnectorRegistry = new SystemConnectorRegistry(new[] { CurrentBusinessConnector });
-            WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
             WorksheetSyncService = new WorksheetSyncService(
                 SystemConnectorRegistry,
                 WorksheetMetadataStore,
