@@ -36,6 +36,7 @@ namespace OfficeAgent.Core.Tests
             Assert.True(sink.Event.OccurredAtUtc <= DateTime.UtcNow);
             Assert.Equal("project-123", sink.Event.Properties["projectId"]);
             Assert.Equal("Project Alpha", sink.Event.Properties["projectName"]);
+            Assert.Equal("project-123", sink.Event.EnvelopeProjectId);
         }
 
         [Fact]
@@ -155,6 +156,30 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void TrackSnapshotsFallbackEnvelopeProjectIdFromProvider()
+        {
+            var sink = new RecordingAnalyticsSink();
+            var provider = new RecordingProjectContextProvider("fallback-project-001");
+            var service = new AnalyticsService(sink, "1.0.175", provider);
+
+            service.Track(new AnalyticsEvent
+            {
+                EventName = "panel.settings.saved",
+                Source = "panel",
+                Properties = new Dictionary<string, object>
+                {
+                    { "sessionId", "session-123" },
+                },
+            });
+
+            Assert.True(sink.Written.Wait(TimeSpan.FromSeconds(2)));
+            Assert.NotNull(sink.Event);
+            Assert.Equal("fallback-project-001", sink.Event.EnvelopeProjectId);
+            Assert.Equal(1, provider.GetCurrentProjectIdCallCount);
+            Assert.Equal(0, provider.RememberProjectIdCallCount);
+        }
+
+        [Fact]
         public void NoopAnalyticsServiceAcceptsEventsWithoutWriting()
         {
             NoopAnalyticsService.Instance.Track("panel.opened", "panel");
@@ -204,6 +229,31 @@ namespace OfficeAgent.Core.Tests
             public Task WriteAsync(AnalyticsEvent analyticsEvent, CancellationToken cancellationToken)
             {
                 throw new InvalidOperationException("Sink failed.");
+            }
+        }
+
+        private sealed class RecordingProjectContextProvider : IAnalyticsProjectContextProvider
+        {
+            private readonly string currentProjectId;
+
+            public RecordingProjectContextProvider(string currentProjectId)
+            {
+                this.currentProjectId = currentProjectId;
+            }
+
+            public int GetCurrentProjectIdCallCount { get; private set; }
+
+            public int RememberProjectIdCallCount { get; private set; }
+
+            public string GetCurrentProjectId()
+            {
+                GetCurrentProjectIdCallCount++;
+                return currentProjectId;
+            }
+
+            public void RememberProjectId(string projectId)
+            {
+                RememberProjectIdCallCount++;
             }
         }
     }

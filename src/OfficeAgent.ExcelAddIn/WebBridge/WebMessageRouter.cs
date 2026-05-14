@@ -318,6 +318,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             var properties = CopyDictionary(payload.Properties);
             properties["uiLocale"] = GetStrings().Locale;
+            RememberAnalyticsProjectContext(properties);
             var businessContext = CopyDictionary(payload.BusinessContext);
             var source = string.IsNullOrWhiteSpace(payload.Source) ? "panel" : payload.Source;
 
@@ -836,6 +837,39 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     Message = message,
                 },
             };
+        }
+
+        private static void RememberAnalyticsProjectContext(IDictionary<string, object> properties)
+        {
+            var projectId = TryGetPropertyValue(properties, "projectId");
+            if (!string.IsNullOrWhiteSpace(projectId))
+            {
+                Globals.ThisAddIn?.RememberAnalyticsProjectId(projectId);
+                return;
+            }
+
+            try
+            {
+                var worksheet = Globals.ThisAddIn?.Application?.ActiveSheet as Microsoft.Office.Interop.Excel.Worksheet;
+                Globals.ThisAddIn?.RememberAnalyticsProjectIdForSheet(worksheet?.Name ?? string.Empty);
+            }
+            catch
+            {
+                // Best-effort only. Analytics context must not affect add-in behavior.
+            }
+        }
+
+        private static string TryGetPropertyValue(IDictionary<string, object> properties, string key)
+        {
+            if (properties == null ||
+                string.IsNullOrWhiteSpace(key) ||
+                !properties.TryGetValue(key, out var value) ||
+                value == null)
+            {
+                return string.Empty;
+            }
+
+            return value.ToString()?.Trim() ?? string.Empty;
         }
     }
 }

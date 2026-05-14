@@ -75,15 +75,15 @@ namespace OfficeAgent.ExcelAddIn
                 new DpapiSecretProtector());
             CookieStore.Load(SharedCookies.Container);
             WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
-            AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider(GetActiveWorksheetName, WorksheetMetadataStore);
+            AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider();
             AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
                 ? NoopAnalyticsService.Instance
                 : new OfficeAgent.Core.Analytics.AnalyticsService(
                     new InsertLogAnalyticsSink(
                         () => SettingsStore.Load(),
-                        cookieContainer: SharedCookies.Container,
-                        projectContextProvider: AnalyticsProjectContextProvider),
-                    VersionInfo.AppVersion);
+                        cookieContainer: SharedCookies.Container),
+                    VersionInfo.AppVersion,
+                    AnalyticsProjectContextProvider);
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
@@ -213,6 +213,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonSyncController?.RefreshProjectFromSheetMetadata(sheetName);
             RibbonTemplateController?.RefreshTemplateState(sheetName);
             lastProjectRefreshSheetName = sheetName;
+            RememberAnalyticsProjectIdForSheet(sheetName);
         }
 
         private void Application_WorkbookActivate(ExcelInterop.Workbook wb)
@@ -222,6 +223,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
             RibbonTemplateController?.RefreshActiveTemplateStateFromSheetMetadata();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
+            RememberAnalyticsProjectIdForSheet(lastProjectRefreshSheetName);
         }
 
         private void Application_SheetChange(object sh, ExcelInterop.Range target)
@@ -265,6 +267,29 @@ namespace OfficeAgent.ExcelAddIn
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        internal void RememberAnalyticsProjectId(string projectId)
+        {
+            AnalyticsProjectContextProvider?.RememberProjectId(projectId);
+        }
+
+        internal void RememberAnalyticsProjectIdForSheet(string sheetName)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                return;
+            }
+
+            try
+            {
+                var binding = WorksheetMetadataStore?.LoadBinding(sheetName);
+                RememberAnalyticsProjectId(binding?.ProjectId);
+            }
+            catch
+            {
+                // Best-effort only. Analytics context must not affect add-in behavior.
             }
         }
 
