@@ -472,6 +472,12 @@ namespace OfficeAgent.ExcelAddIn
                 var isSingleHeader = string.IsNullOrWhiteSpace(headerType) ||
                                      string.Equals(headerType, "single", StringComparison.OrdinalIgnoreCase);
                 var isGroupedSingle = isSingleHeader && !isActivityProperty && !string.IsNullOrWhiteSpace(childText);
+                var activityDisplayText = binding.HeaderRowCount > 1
+                    ? childText
+                    : FirstNonEmpty(parentText, childText);
+                var activityChildText = binding.HeaderRowCount > 1
+                    ? childText
+                    : activityDisplayText;
 
                 result.Add(new WorksheetRuntimeColumn
                 {
@@ -479,10 +485,10 @@ namespace OfficeAgent.ExcelAddIn
                     ApiFieldKey = apiFieldKey,
                     HeaderType = NormalizeHeaderType(headerType),
                     DisplayText = isActivityProperty
-                        ? childText
+                        ? activityDisplayText
                         : (isGroupedSingle ? childText : singleText),
                     ParentDisplayText = isActivityProperty && binding.HeaderRowCount > 1 ? parentText : string.Empty,
-                    ChildDisplayText = isActivityProperty ? childText : string.Empty,
+                    ChildDisplayText = isActivityProperty ? activityChildText : string.Empty,
                     IsIdColumn = valueAccessor.GetBoolean(definition, mapping, FieldMappingSemanticRole.IsIdColumn),
                 });
             }
@@ -1782,6 +1788,19 @@ namespace OfficeAgent.ExcelAddIn
         private static bool IsActivityProperty(string headerType)
         {
             return string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            foreach (var value in values ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return string.Empty;
         }
 
         private static HostLocalizedStrings GetStrings()

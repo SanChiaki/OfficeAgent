@@ -372,7 +372,7 @@ grouped single 当前支持的运行场景：
 当 `HeaderRowCount = 1` 时：
 
 - 所有列都只写一行表头
-- 活动属性列只显示当前子表头名
+- 活动属性列只显示一个当前 Excel 表头名，优先取 `Excel L1`；如果旧配置只维护了 `Excel L2`，则回退使用 `Excel L2`
 - `single + Excel L2` 不合法；如果 metadata 把单层字段配成 grouped single，则应视为 `xISDP_Setting` 配置错误
 
 ### 5.2 HeaderRowCount = 2

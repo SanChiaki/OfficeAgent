@@ -119,6 +119,80 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteFullDownloadUsesActivityExcelL1WhenSingleRowSheetHeadersAreEmpty()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 1,
+                DataStartRow = 2,
+            };
+            metadataStore.FieldMappings["Sheet1"] = BuildSingleRowActivityL1Mappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-01-02", "2026-01-05") };
+
+            var (service, grid) = CreateService(connector, metadataStore, new FakeWorksheetSelectionReader());
+
+            var plan = InvokePrepare(service, "PrepareFullDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal("ID", grid.GetCell("Sheet1", 1, 1));
+            Assert.Equal("项目负责人", grid.GetCell("Sheet1", 1, 2));
+            Assert.Equal("计划开始", grid.GetCell("Sheet1", 1, 3));
+            Assert.Equal("计划结束", grid.GetCell("Sheet1", 1, 4));
+            Assert.Equal("2026-01-02", grid.GetCell("Sheet1", 2, 3));
+            Assert.Equal("2026-01-05", grid.GetCell("Sheet1", 2, 4));
+            Assert.DoesNotContain(grid.Merges, merge => merge.RowSpan > 1 || merge.ColumnSpan > 1);
+        }
+
+        [Fact]
+        public void ExecutePartialDownloadMatchesActivityExcelL1ForSingleRowHeaders()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 1,
+                DataStartRow = 2,
+            };
+            metadataStore.Bindings["Sheet1"] = binding;
+            metadataStore.FieldMappings["Sheet1"] = BuildSingleRowActivityL1Mappings("Sheet1");
+            connector.FindResult = new[] { CreateRow("row-1", "张三", "2026-02-01", "2026-02-09") };
+
+            var selectionReader = new FakeWorksheetSelectionReader
+            {
+                VisibleCells = new[]
+                {
+                    new SelectedVisibleCell { Row = 2, Column = 3, Value = "旧开始时间" },
+                },
+            };
+            var (service, grid) = CreateService(connector, metadataStore, selectionReader);
+            grid.SetCell("Sheet1", 1, 1, "ID");
+            grid.SetCell("Sheet1", 1, 2, "项目负责人");
+            grid.SetCell("Sheet1", 1, 3, "计划开始");
+            grid.SetCell("Sheet1", 1, 4, "计划结束");
+            grid.SetCell("Sheet1", 2, 1, "row-1");
+            grid.SetCell("Sheet1", 2, 3, "旧开始时间");
+
+            var plan = InvokePrepare(service, "PreparePartialDownload", "Sheet1");
+            InvokeExecute(service, "ExecuteDownload", plan);
+
+            Assert.Equal(new[] { "row-1" }, connector.LastFindRowIds);
+            Assert.Equal(new[] { "start_12345678" }, connector.LastFindFieldKeys);
+            Assert.Equal("2026-02-01", grid.GetCell("Sheet1", 2, 3));
+        }
+
+        [Fact]
         public void ExecutePartialDownloadUsesRecognizedHeadersAndIdLookupOutsideSelection()
         {
             var connector = new FakeSystemConnector();
@@ -2126,6 +2200,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     currentParent: "测试活动111",
                     defaultChild: "结束时间",
                     currentChild: "结束时间",
+                    activityId: "12345678",
+                    propertyId: "end"),
+            };
+        }
+
+        private static SheetFieldMappingRow[] BuildSingleRowActivityL1Mappings(string sheetName)
+        {
+            return new[]
+            {
+                CreateMappingRow(sheetName, "row_id", "single", true, currentSingle: "ID"),
+                CreateMappingRow(sheetName, "owner_name", "single", false, defaultSingle: "负责人", currentSingle: "项目负责人"),
+                CreateMappingRow(
+                    sheetName,
+                    "start_12345678",
+                    "activityProperty",
+                    false,
+                    defaultParent: "测试活动111",
+                    currentParent: "计划开始",
+                    defaultChild: "开始时间",
+                    activityId: "12345678",
+                    propertyId: "start"),
+                CreateMappingRow(
+                    sheetName,
+                    "end_12345678",
+                    "activityProperty",
+                    false,
+                    defaultParent: "测试活动111",
+                    currentParent: "计划结束",
+                    defaultChild: "结束时间",
                     activityId: "12345678",
                     propertyId: "end"),
             };

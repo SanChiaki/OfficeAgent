@@ -128,6 +128,7 @@
 - Edit `xISDP_Setting` so `HeaderStartRow = 3`, `HeaderRowCount = 2`, and `DataStartRow = 6`, then run the hidden full-download path and confirm headers/data are written at the configured rows.
 - On a sheet that already has recognizable headers, run the hidden full-download path and confirm the plugin refreshes data cells without rewriting those existing headers.
 - Modify `Excel L1` or `Excel L2` in `SheetFieldMappings`, update the matching Excel header text manually, then run `下载` / `Download` or `上传` / `Upload` and confirm the column still resolves by current header text.
+- Set `HeaderRowCount = 1`, keep an `activityProperty` row's visible single-row name in `Excel L1` with `Excel L2` empty, then run `下载` / `Download` or `上传` / `Upload` and confirm the activity property column resolves.
 - Set one `single` mapping row to use both `Excel L1` and `Excel L2`, keep `HeaderRowCount = 2`, prepare matching grouped headers on the sheet, then run `下载` / `Download` and confirm the grouped-single column resolves and only the selected child cells are refreshed.
 - Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `上传` / `Upload`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.

@@ -77,6 +77,58 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void MatchUsesActivityExcelL1ForSingleRowHeaders()
+        {
+            var grid = new FakeGrid();
+            grid.SetCell("Sheet1", 5, 1, "ID");
+            grid.SetCell("Sheet1", 5, 2, "计划开始");
+            grid.SetCell("Sheet1", 5, 3, "计划结束");
+
+            var matcher = CreateMatcher();
+            var binding = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                HeaderStartRow = 5,
+                HeaderRowCount = 1,
+            };
+            var definition = BuildDefinition();
+            var mappings = new[]
+            {
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "row_id",
+                    headerType: "single",
+                    isIdColumn: true,
+                    currentSingle: "ID"),
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "start_12345678",
+                    headerType: "activityProperty",
+                    isIdColumn: false,
+                    currentParent: "计划开始"),
+                CreateMappingRow(
+                    "Sheet1",
+                    apiFieldKey: "end_12345678",
+                    headerType: "activityProperty",
+                    isIdColumn: false,
+                    currentParent: "计划结束"),
+            };
+
+            var columns = InvokeMatch(matcher, "Sheet1", binding, definition, mappings, grid);
+
+            Assert.Contains(columns, column =>
+                column.ColumnIndex == 2 &&
+                column.ApiFieldKey == "start_12345678" &&
+                column.HeaderType == "activityProperty" &&
+                column.DisplayText == "计划开始");
+            Assert.Contains(columns, column =>
+                column.ColumnIndex == 3 &&
+                column.ApiFieldKey == "end_12345678" &&
+                column.DisplayText == "计划结束");
+            Assert.Equal(3, columns.Length);
+        }
+
+        [Fact]
         public void MatchUsesGroupedSingleDisplayNamesForTwoRowHeaders()
         {
             var grid = new FakeGrid();

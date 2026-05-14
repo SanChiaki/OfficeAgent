@@ -201,6 +201,7 @@
     <Compile Include="Excel\WorksheetColumnSegmentBuilder.cs" />
     <Compile Include="Localization\HostLocalizedStrings.cs" />
     <Compile Include="Localization\UiLocaleResolver.cs" />
+    <Compile Include="Analytics\WorkbookAnalyticsProjectContextProvider.cs" />
     <Compile Include="Analytics\RibbonAnalyticsHelper.cs" />
     <Compile Include="SsoLoginPopup.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />

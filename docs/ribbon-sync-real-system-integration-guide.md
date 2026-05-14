@@ -533,7 +533,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 
 - `HeaderRowCount = 1`
   - 所有列只显示一行表头
-  - 活动属性列只显示子属性名
+  - 活动属性列只显示一个当前 Excel 表头名，优先取 `Excel L1`；如果旧配置只维护了 `Excel L2`，则回退使用 `Excel L2`
 - `HeaderRowCount = 2`
   - 单层列上下合并
   - 活动列第一行显示活动名，第二行显示属性名

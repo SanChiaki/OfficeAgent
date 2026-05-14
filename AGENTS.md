@@ -112,6 +112,8 @@ C# uses 4-space indentation, PascalCase for public members, `I`-prefixed interfa
 ## Testing Guidelines
 Use xUnit for .NET and Vitest plus Testing Library for the frontend. Name .NET tests with descriptive PascalCase behavior names such as `ExecuteReturnsChatFallbackForUnknownUserInput`; frontend tests should live beside the code as `*.test.ts` or `*.test.tsx`. Use `vi.mock()` and `userEvent.setup()` where appropriate. For Excel write flows, SSO, or installer work, run `docs/vsto-manual-test-checklist.md`.
 
+After changing code, do not report testing as successful until the relevant build validation also passes. Choose the build command that matches the touched area, such as frontend `npm run build`, Debug VSTO add-in build / `eng/Dev-RefreshExcelAddIn.ps1`, or installer build. If a build cannot be run, state that clearly and do not mark verification as fully successful.
+
 ## Commit & Pull Request Guidelines
 Follow the existing Conventional Commit style: `feat:`, `fix:`, `docs:`, `build:`, and `test:`. Keep each commit scoped to one logical change. PRs should summarize user-visible impact, list verification commands, link the related issue when available, and include screenshots for task-pane or installer UI changes.
 

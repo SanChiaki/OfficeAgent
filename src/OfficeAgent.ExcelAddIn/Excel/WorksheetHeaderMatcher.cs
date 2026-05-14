@@ -87,6 +87,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             var singleHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
             var groupedSingleHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
+            var singleRowActivityHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
             var activityHeaders = new Dictionary<string, WorksheetRuntimeColumn>(StringComparer.Ordinal);
             var hasGroupedSingleMetadata = false;
 
@@ -138,6 +139,11 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 if (string.Equals(headerType, "activityProperty", StringComparison.OrdinalIgnoreCase))
                 {
+                    AddHeader(
+                        singleRowActivityHeaders,
+                        ResolveSingleRowActivityDisplayText(template),
+                        template);
+
                     var activityKey = BuildTwoLevelKey(currentParentText, currentChildText);
                     if (!string.IsNullOrWhiteSpace(activityKey))
                     {
@@ -154,7 +160,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 }
             }
 
-            return new HeaderLookup(singleHeaders, groupedSingleHeaders, activityHeaders, hasGroupedSingleMetadata);
+            return new HeaderLookup(singleHeaders, groupedSingleHeaders, singleRowActivityHeaders, activityHeaders, hasGroupedSingleMetadata);
         }
 
         private WorksheetRuntimeColumn FindMatch(
@@ -169,6 +175,11 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 if (lookup.SingleHeaders.TryGetValue(topText, out var singleHeader))
                 {
                     return CloneSingleHeader(singleHeader);
+                }
+
+                if (lookup.SingleRowActivityHeaders.TryGetValue(topText, out var singleRowActivityHeader))
+                {
+                    return CloneSingleRowActivityHeader(singleRowActivityHeader, topText);
                 }
 
                 return null;
@@ -220,6 +231,23 @@ namespace OfficeAgent.ExcelAddIn.Excel
             };
         }
 
+        private static WorksheetRuntimeColumn CloneSingleRowActivityHeader(WorksheetRuntimeColumn template, string displayText)
+        {
+            var resolvedDisplayText = string.IsNullOrWhiteSpace(displayText)
+                ? ResolveSingleRowActivityDisplayText(template)
+                : displayText;
+
+            return new WorksheetRuntimeColumn
+            {
+                ApiFieldKey = template.ApiFieldKey,
+                HeaderType = template.HeaderType,
+                DisplayText = resolvedDisplayText,
+                ParentDisplayText = string.Empty,
+                ChildDisplayText = resolvedDisplayText,
+                IsIdColumn = template.IsIdColumn,
+            };
+        }
+
         private static WorksheetRuntimeColumn CloneGroupedSingleHeader(WorksheetRuntimeColumn template)
         {
             return new WorksheetRuntimeColumn
@@ -231,6 +259,31 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 ChildDisplayText = template.ChildDisplayText,
                 IsIdColumn = template.IsIdColumn,
             };
+        }
+
+        private static void AddHeader(
+            IDictionary<string, WorksheetRuntimeColumn> headers,
+            string headerText,
+            WorksheetRuntimeColumn template)
+        {
+            if (string.IsNullOrWhiteSpace(headerText) || headers.ContainsKey(headerText))
+            {
+                return;
+            }
+
+            headers[headerText] = template;
+        }
+
+        private static string ResolveSingleRowActivityDisplayText(WorksheetRuntimeColumn template)
+        {
+            if (template == null)
+            {
+                return string.Empty;
+            }
+
+            return !string.IsNullOrWhiteSpace(template.ParentDisplayText)
+                ? template.ParentDisplayText
+                : template.ChildDisplayText ?? string.Empty;
         }
 
         private static string BuildTwoLevelKey(string parentText, string childText)
@@ -248,11 +301,13 @@ namespace OfficeAgent.ExcelAddIn.Excel
             public HeaderLookup(
                 IReadOnlyDictionary<string, WorksheetRuntimeColumn> singleHeaders,
                 IReadOnlyDictionary<string, WorksheetRuntimeColumn> groupedSingleHeaders,
+                IReadOnlyDictionary<string, WorksheetRuntimeColumn> singleRowActivityHeaders,
                 IReadOnlyDictionary<string, WorksheetRuntimeColumn> activityHeaders,
                 bool hasGroupedSingleMetadata)
             {
                 SingleHeaders = singleHeaders ?? throw new ArgumentNullException(nameof(singleHeaders));
                 GroupedSingleHeaders = groupedSingleHeaders ?? throw new ArgumentNullException(nameof(groupedSingleHeaders));
+                SingleRowActivityHeaders = singleRowActivityHeaders ?? throw new ArgumentNullException(nameof(singleRowActivityHeaders));
                 ActivityHeaders = activityHeaders ?? throw new ArgumentNullException(nameof(activityHeaders));
                 HasGroupedSingleMetadata = hasGroupedSingleMetadata;
             }
@@ -260,6 +315,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
             public IReadOnlyDictionary<string, WorksheetRuntimeColumn> SingleHeaders { get; }
 
             public IReadOnlyDictionary<string, WorksheetRuntimeColumn> GroupedSingleHeaders { get; }
+
+            public IReadOnlyDictionary<string, WorksheetRuntimeColumn> SingleRowActivityHeaders { get; }
 
             public IReadOnlyDictionary<string, WorksheetRuntimeColumn> ActivityHeaders { get; }
 

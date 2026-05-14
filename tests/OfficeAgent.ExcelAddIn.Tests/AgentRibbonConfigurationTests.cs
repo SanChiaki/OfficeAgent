@@ -965,7 +965,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
 
             Assert.Contains("internal IAnalyticsService AnalyticsService { get; private set; }", addInText, StringComparison.Ordinal);
-            Assert.Contains("new InsertLogAnalyticsSink(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container)", addInText, StringComparison.Ordinal);
+            Assert.Contains("internal IAnalyticsProjectContextProvider AnalyticsProjectContextProvider { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider(GetActiveWorksheetName, WorksheetMetadataStore);", addInText, StringComparison.Ordinal);
+            Assert.Contains("projectContextProvider: AnalyticsProjectContextProvider", addInText, StringComparison.Ordinal);
             Assert.Contains("AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)", addInText, StringComparison.Ordinal);
             Assert.Contains("NoopAnalyticsService.Instance", addInText, StringComparison.Ordinal);
             Assert.Contains("CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);", addInText, StringComparison.Ordinal);
