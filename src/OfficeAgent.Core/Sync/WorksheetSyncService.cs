@@ -40,10 +40,7 @@ namespace OfficeAgent.Core.Sync
             var properties = BuildConnectorProperties(string.Empty, string.Empty);
             try
             {
-                var projects = connectorRegistry.GetProjects() ?? Array.Empty<ProjectOption>();
-                properties["projectCount"] = projects.Count;
-                TrackConnectorEvent("connector.projects.completed", properties, stopwatch);
-                return projects;
+                return connectorRegistry.GetProjects() ?? Array.Empty<ProjectOption>();
             }
             catch (Exception ex)
             {
