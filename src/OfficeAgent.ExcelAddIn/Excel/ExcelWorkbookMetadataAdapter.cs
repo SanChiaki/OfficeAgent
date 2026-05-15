@@ -10,6 +10,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
     internal sealed class ExcelWorkbookMetadataAdapter : IWorksheetMetadataAdapter
     {
         private const string MetadataSheetName = MetadataWorksheetNames.Current;
+        private const int SheetNamePresentationScanLimit = 50;
 
         private readonly ExcelInterop.Application application;
         private readonly MetadataSheetLayoutSerializer serializer = new MetadataSheetLayoutSerializer();
@@ -206,16 +207,25 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             var usedRange = worksheet.UsedRange;
             var rowCount = usedRange?.Rows?.Count ?? 0;
-            var maxRow = Math.Min(50, Math.Max(rowCount, 50));
+            var maxRow = Math.Min(SheetNamePresentationScanLimit, Math.Max(rowCount, SheetNamePresentationScanLimit));
+            ClearSheetNameRowFormatting(worksheet, maxRow);
             for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
             {
                 var value = Convert.ToString((worksheet.Cells[rowIndex, 1] as ExcelInterop.Range)?.Value2) ?? string.Empty;
-                if (!string.Equals(value, "sheetName", StringComparison.Ordinal))
+                if (!string.Equals(value, "SheetName", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
                 FormatWorksheetRow(worksheet, rowIndex, hidden: false);
+            }
+        }
+
+        private static void ClearSheetNameRowFormatting(ExcelInterop.Worksheet worksheet, int maxRow)
+        {
+            for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
+            {
+                ResetWorksheetRowFormatting(worksheet, rowIndex);
             }
         }
 
@@ -275,6 +285,25 @@ namespace OfficeAgent.ExcelAddIn.Excel
             catch
             {
                 // Preserve metadata writes even if formatting is not supported by the host.
+            }
+        }
+
+        private static void ResetWorksheetRowFormatting(ExcelInterop.Worksheet worksheet, int rowIndex)
+        {
+            var rowRange = worksheet.Rows[rowIndex] as ExcelInterop.Range;
+            if (rowRange == null)
+            {
+                return;
+            }
+
+            try
+            {
+                rowRange.Font.Bold = false;
+                rowRange.Font.ColorIndex = ExcelInterop.XlColorIndex.xlColorIndexAutomatic;
+            }
+            catch
+            {
+                // Preserve metadata writes even if formatting reset is not supported by the host.
             }
         }
 

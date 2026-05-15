@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -358,6 +359,66 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("BusinessSheet", application.ActiveSheet.Name);
         }
 
+        [Fact]
+        public void ApplyMetadataPresentationFormatsEachSheetNameHeaderRowWithinFirstFiftyRows()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("xISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "TemplateBindings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(3, 1, "SalesSheet");
+            application.MetadataSheet.SetCell(4, 1, "sheetname");
+            application.MetadataSheet.SetCell(5, 1, "ProjectSheet");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            adapterType.GetMethod("ApplyMetadataPresentation").Invoke(adapter, new object[] { "xISDP_Setting", false });
+
+            Assert.True(application.MetadataSheet.GetRowBold(2));
+            Assert.True(application.MetadataSheet.GetRowBold(4));
+            Assert.False(application.MetadataSheet.GetRowBold(3));
+            Assert.False(application.MetadataSheet.GetRowBold(5));
+        }
+
+        [Fact]
+        public void ApplyMetadataPresentationClearsPreviousBlueBoldRowsBeforeFormattingCurrentSheetNameHeaders()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("xISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "SheetBindings");
+            application.MetadataSheet.SetCell(2, 1, "OtherHeader");
+            application.MetadataSheet.SetCell(3, 1, "SheetName");
+            application.MetadataSheet.GetOrCreateRowState(2).Bold = true;
+            application.MetadataSheet.GetOrCreateRowState(2).Color = ColorTranslator.ToOle(Color.Blue);
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            adapterType.GetMethod("ApplyMetadataPresentation").Invoke(adapter, new object[] { "xISDP_Setting", false });
+
+            Assert.False(application.MetadataSheet.GetRowBold(2));
+            Assert.Null(application.MetadataSheet.GetRowColor(2));
+            Assert.Contains("Automatic", Convert.ToString(application.MetadataSheet.GetRowColorIndex(2)) ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.True(application.MetadataSheet.GetRowBold(3));
+        }
+
         private static Assembly LoadExcelInteropAssembly()
         {
             try
@@ -576,12 +637,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
             private readonly LayoutAwareFakeExcelApplication application;
             private readonly Type worksheetType;
             private readonly Type rangeType;
+            private readonly Type fontType;
 
             public LayoutAwareFakeExcelWorksheet(Type worksheetType, Type rangeType, LayoutAwareFakeExcelApplication application, string name)
                 : base(worksheetType)
             {
                 this.worksheetType = worksheetType;
                 this.rangeType = rangeType;
+                fontType = rangeType.Assembly.GetType("Microsoft.Office.Interop.Excel.Font", throwOnError: false) ?? typeof(object);
                 this.application = application;
                 Name = name;
             }
@@ -597,6 +660,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public int UsedRangeValue2ReadCount { get; private set; }
 
             public int RangeValue2WriteCount { get; private set; }
+
+            public Dictionary<int, LayoutAwareFakeExcelRowState> Rows { get; } =
+                new Dictionary<int, LayoutAwareFakeExcelRowState>();
+
+            public const int AutomaticColorIndex = -4105;
+
+            public Type FontType => fontType;
 
             public void SetCell(int row, int column, string value)
             {
@@ -700,6 +770,32 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 return (firstRow, lastRow - firstRow + 1, lastColumn);
             }
 
+            public LayoutAwareFakeExcelRowState GetOrCreateRowState(int rowIndex)
+            {
+                if (!Rows.TryGetValue(rowIndex, out var state))
+                {
+                    state = new LayoutAwareFakeExcelRowState();
+                    Rows[rowIndex] = state;
+                }
+
+                return state;
+            }
+
+            public bool GetRowBold(int rowIndex)
+            {
+                return Rows.TryGetValue(rowIndex, out var state) && state.Bold;
+            }
+
+            public object GetRowColorIndex(int rowIndex)
+            {
+                return Rows.TryGetValue(rowIndex, out var state) ? state.ColorIndex : null;
+            }
+
+            public object GetRowColor(int rowIndex)
+            {
+                return Rows.TryGetValue(rowIndex, out var state) ? state.Color : null;
+            }
+
             public override IMessage Invoke(IMessage msg)
             {
                 var call = (IMethodCallMessage)msg;
@@ -713,6 +809,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     "Activate" => Activate(call),
                     "get_Cells" => new ReturnMessage(
                         new LayoutAwareFakeExcelRange(rangeType, this, LayoutAwareFakeExcelRangeKind.CellCollection).GetTransparentProxy(),
+                        null,
+                        0,
+                        call.LogicalCallContext,
+                        call),
+                    "get_Rows" => new ReturnMessage(
+                        new LayoutAwareFakeExcelRange(rangeType, this, LayoutAwareFakeExcelRangeKind.RowCollection).GetTransparentProxy(),
                         null,
                         0,
                         call.LogicalCallContext,
@@ -765,6 +867,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Cell,
             Block,
             UsedRange,
+            RowCollection,
+            Row,
             Rows,
             Columns,
         }
@@ -813,6 +917,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     "get_Value2" => HandleGetValue2(call),
                     "set_Value2" => HandleSetValue(call),
                     "ClearContents" => HandleClearContents(call),
+                    "get_Font" => HandleGetFont(call),
+                    "set_Hidden" => HandleSetHidden(call),
+                    "get_Hidden" => HandleGetHidden(call),
                     "get_Row" => new ReturnMessage(row, null, 0, call.LogicalCallContext, call),
                     "get_Rows" => new ReturnMessage(
                         new LayoutAwareFakeExcelRange(rangeType, worksheet, LayoutAwareFakeExcelRangeKind.Rows, count: count).GetTransparentProxy(),
@@ -833,6 +940,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             private IMessage HandleGetItem(IMethodCallMessage call)
             {
+                if (kind == LayoutAwareFakeExcelRangeKind.RowCollection)
+                {
+                    var rowIndex = Convert.ToInt32(call.InArgs[0]);
+                    var rowRange = new LayoutAwareFakeExcelRange(
+                        rangeType,
+                        worksheet,
+                        LayoutAwareFakeExcelRangeKind.Row,
+                        row: rowIndex);
+                    return new ReturnMessage(rowRange.GetTransparentProxy(), null, 0, call.LogicalCallContext, call);
+                }
+
                 if (kind != LayoutAwareFakeExcelRangeKind.CellCollection)
                 {
                     throw new NotSupportedException(call.MethodName + ":" + kind);
@@ -889,6 +1007,42 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 return new ReturnMessage(value, null, 0, call.LogicalCallContext, call);
             }
 
+            private IMessage HandleGetFont(IMethodCallMessage call)
+            {
+                if (kind != LayoutAwareFakeExcelRangeKind.Row)
+                {
+                    throw new NotSupportedException(call.MethodName + ":" + kind);
+                }
+
+                return new ReturnMessage(
+                    new LayoutAwareFakeExcelFontProxy(worksheet.FontType, worksheet.GetOrCreateRowState(row)).GetTransparentProxy(),
+                    null,
+                    0,
+                    call.LogicalCallContext,
+                    call);
+            }
+
+            private IMessage HandleSetHidden(IMethodCallMessage call)
+            {
+                if (kind != LayoutAwareFakeExcelRangeKind.Row)
+                {
+                    throw new NotSupportedException(call.MethodName + ":" + kind);
+                }
+
+                worksheet.GetOrCreateRowState(row).Hidden = Convert.ToBoolean(call.InArgs[0]);
+                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            private IMessage HandleGetHidden(IMethodCallMessage call)
+            {
+                if (kind != LayoutAwareFakeExcelRangeKind.Row)
+                {
+                    throw new NotSupportedException(call.MethodName + ":" + kind);
+                }
+
+                return new ReturnMessage(worksheet.GetOrCreateRowState(row).Hidden, null, 0, call.LogicalCallContext, call);
+            }
+
             private IMessage HandleSetValue(IMethodCallMessage call)
             {
                 if (kind == LayoutAwareFakeExcelRangeKind.Block)
@@ -922,6 +1076,91 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 }
 
                 return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            public new object GetTransparentProxy()
+            {
+                return base.GetTransparentProxy();
+            }
+        }
+
+        private sealed class LayoutAwareFakeExcelRowState
+        {
+            public bool Bold { get; set; }
+
+            public object Color { get; set; }
+
+            public object ColorIndex { get; set; }
+
+            public bool Hidden { get; set; }
+        }
+
+        private sealed class LayoutAwareFakeExcelFontProxy : RealProxy
+        {
+            private readonly Type fontType;
+            private readonly LayoutAwareFakeExcelRowState state;
+
+            public LayoutAwareFakeExcelFontProxy(Type fontType, LayoutAwareFakeExcelRowState state)
+                : base(fontType)
+            {
+                this.fontType = fontType;
+                this.state = state;
+            }
+
+            public override IMessage Invoke(IMessage msg)
+            {
+                var call = (IMethodCallMessage)msg;
+
+                return call.MethodName switch
+                {
+                    "GetType" => new ReturnMessage(fontType, null, 0, call.LogicalCallContext, call),
+                    "set_Bold" => SetBold(call),
+                    "get_Bold" => new ReturnMessage(state.Bold, null, 0, call.LogicalCallContext, call),
+                    "set_Color" => SetColor(call),
+                    "get_Color" => new ReturnMessage(state.Color, null, 0, call.LogicalCallContext, call),
+                    "set_ColorIndex" => SetColorIndex(call),
+                    "get_ColorIndex" => new ReturnMessage(state.ColorIndex, null, 0, call.LogicalCallContext, call),
+                    _ => throw new NotSupportedException(call.MethodName),
+                };
+            }
+
+            private IMessage SetBold(IMethodCallMessage call)
+            {
+                state.Bold = Convert.ToBoolean(call.InArgs[0]);
+                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            private IMessage SetColor(IMethodCallMessage call)
+            {
+                state.Color = call.InArgs[0];
+                state.ColorIndex = null;
+                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            private IMessage SetColorIndex(IMethodCallMessage call)
+            {
+                state.ColorIndex = call.InArgs[0];
+                if (IsAutomaticColorIndex(call.InArgs[0]))
+                {
+                    state.Color = null;
+                }
+
+                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            private static bool IsAutomaticColorIndex(object value)
+            {
+                try
+                {
+                    return Convert.ToInt32(value) == LayoutAwareFakeExcelWorksheet.AutomaticColorIndex;
+                }
+                catch
+                {
+                    return string.Equals(
+                        Convert.ToString(value),
+                        "xlColorIndexAutomatic",
+                        StringComparison.OrdinalIgnoreCase);
+                }
             }
 
             public new object GetTransparentProxy()
