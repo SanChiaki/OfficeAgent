@@ -205,27 +205,30 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 return;
             }
 
-            var usedRange = worksheet.UsedRange;
-            var rowCount = usedRange?.Rows?.Count ?? 0;
-            var maxRow = Math.Min(SheetNamePresentationScanLimit, Math.Max(rowCount, SheetNamePresentationScanLimit));
-            ClearSheetNameRowFormatting(worksheet, maxRow);
+            var rows = ReadUsedRows(worksheet);
+            var maxRow = Math.Min(SheetNamePresentationScanLimit, Math.Max(rows.Length, SheetNamePresentationScanLimit));
+            var presentationColumnCount = GetPresentationColumnCount(rows, maxRow);
+            ClearSheetNameRowFormatting(worksheet, maxRow, presentationColumnCount);
             for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
             {
-                var value = Convert.ToString((worksheet.Cells[rowIndex, 1] as ExcelInterop.Range)?.Value2) ?? string.Empty;
+                var row = rowIndex <= rows.Length
+                    ? rows[rowIndex - 1] ?? Array.Empty<string>()
+                    : Array.Empty<string>();
+                var value = row.Length > 0 ? row[0] : string.Empty;
                 if (!string.Equals(value, "SheetName", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                FormatWorksheetRow(worksheet, rowIndex, hidden: false);
+                FormatWorksheetRow(worksheet, rowIndex, presentationColumnCount, hidden: false);
             }
         }
 
-        private static void ClearSheetNameRowFormatting(ExcelInterop.Worksheet worksheet, int maxRow)
+        private static void ClearSheetNameRowFormatting(ExcelInterop.Worksheet worksheet, int maxRow, int presentationColumnCount)
         {
             for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
             {
-                ResetWorksheetRowFormatting(worksheet, rowIndex);
+                ResetWorksheetRowFormatting(worksheet, rowIndex, presentationColumnCount);
             }
         }
 
@@ -252,7 +255,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     !string.IsNullOrWhiteSpace(candidate[0]) &&
                     string.Equals(candidate[0], sheetName, StringComparison.Ordinal))
                 {
-                    FormatWorksheetRow(worksheet, rowIndex + 1, hidden: true);
+                    FormatWorksheetRow(worksheet, rowIndex + 1, Math.Max(1, candidate.Length), hidden: true);
                     return;
                 }
 
@@ -265,20 +268,26 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
         }
 
-        private static void FormatWorksheetRow(ExcelInterop.Worksheet worksheet, int rowIndex, bool hidden)
+        private static void FormatWorksheetRow(ExcelInterop.Worksheet worksheet, int rowIndex, int presentationColumnCount, bool hidden)
         {
-            var rowRange = worksheet.Rows[rowIndex] as ExcelInterop.Range;
-            if (rowRange == null)
+            var formatRange = GetPresentationRange(worksheet, rowIndex, presentationColumnCount);
+            if (formatRange == null)
             {
                 return;
             }
 
             try
             {
-                rowRange.Font.Bold = true;
-                rowRange.Font.Color = ColorTranslator.ToOle(Color.Blue);
+                formatRange.Font.Bold = true;
+                formatRange.Font.Color = ColorTranslator.ToOle(Color.Blue);
                 if (hidden)
                 {
+                    var rowRange = worksheet.Rows[rowIndex] as ExcelInterop.Range;
+                    if (rowRange == null)
+                    {
+                        return;
+                    }
+
                     rowRange.Hidden = true;
                 }
             }
@@ -288,23 +297,53 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
         }
 
-        private static void ResetWorksheetRowFormatting(ExcelInterop.Worksheet worksheet, int rowIndex)
+        private static void ResetWorksheetRowFormatting(ExcelInterop.Worksheet worksheet, int rowIndex, int presentationColumnCount)
         {
-            var rowRange = worksheet.Rows[rowIndex] as ExcelInterop.Range;
-            if (rowRange == null)
+            var formatRange = GetPresentationRange(worksheet, rowIndex, presentationColumnCount);
+            if (formatRange == null)
             {
                 return;
             }
 
             try
             {
-                rowRange.Font.Bold = false;
-                rowRange.Font.ColorIndex = ExcelInterop.XlColorIndex.xlColorIndexAutomatic;
+                formatRange.Font.Bold = false;
+                formatRange.Font.ColorIndex = ExcelInterop.XlColorIndex.xlColorIndexAutomatic;
             }
             catch
             {
                 // Preserve metadata writes even if formatting reset is not supported by the host.
             }
+        }
+
+        private static int GetPresentationColumnCount(IReadOnlyList<string[]> rows, int maxRow)
+        {
+            var count = 1;
+            if (rows == null)
+            {
+                return count;
+            }
+
+            for (var rowIndex = 0; rowIndex < rows.Count && rowIndex < maxRow; rowIndex++)
+            {
+                count = Math.Max(count, rows[rowIndex]?.Length ?? 0);
+            }
+
+            return count;
+        }
+
+        private static ExcelInterop.Range GetPresentationRange(
+            ExcelInterop.Worksheet worksheet,
+            int rowIndex,
+            int presentationColumnCount)
+        {
+            if (worksheet == null || rowIndex <= 0 || presentationColumnCount <= 0)
+            {
+                return null;
+            }
+
+            var startCell = worksheet.Cells[rowIndex, 1] as ExcelInterop.Range;
+            return startCell?.Resize[1, presentationColumnCount] as ExcelInterop.Range;
         }
 
         private ExcelInterop.Worksheet FindWorksheet(string name)
@@ -404,15 +443,15 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         private static string[][] ReadUsedRows(ExcelInterop.Worksheet worksheet)
         {
-            var usedRange = worksheet.UsedRange;
-            if (usedRange == null || usedRange.Rows.Count == 0 || usedRange.Columns.Count == 0)
+            var readRange = GetActualUsedRange(worksheet) ?? worksheet.UsedRange;
+            if (readRange == null || readRange.Rows.Count == 0 || readRange.Columns.Count == 0)
             {
                 return Array.Empty<string[]>();
             }
 
-            var rowCount = usedRange.Rows.Count;
-            var columnCount = usedRange.Columns.Count;
-            var rawValues = usedRange.Value2;
+            var rowCount = readRange.Rows.Count;
+            var columnCount = readRange.Columns.Count;
+            var rawValues = readRange.Value2;
             var rows = new string[rowCount][];
 
             for (var rowOffset = 0; rowOffset < rowCount; rowOffset++)
@@ -436,6 +475,51 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return rows;
+        }
+
+        private static ExcelInterop.Range GetActualUsedRange(ExcelInterop.Worksheet worksheet)
+        {
+            try
+            {
+                var cells = worksheet?.Cells as ExcelInterop.Range;
+                if (cells == null)
+                {
+                    return null;
+                }
+
+                var anchor = cells[1, 1] as ExcelInterop.Range;
+                var lastRowCell = cells.Find(
+                    What: "*",
+                    After: anchor,
+                    LookIn: ExcelInterop.XlFindLookIn.xlFormulas,
+                    LookAt: ExcelInterop.XlLookAt.xlPart,
+                    SearchOrder: ExcelInterop.XlSearchOrder.xlByRows,
+                    SearchDirection: ExcelInterop.XlSearchDirection.xlPrevious,
+                    MatchCase: false,
+                    SearchFormat: false) as ExcelInterop.Range;
+                var lastColumnCell = cells.Find(
+                    What: "*",
+                    After: anchor,
+                    LookIn: ExcelInterop.XlFindLookIn.xlFormulas,
+                    LookAt: ExcelInterop.XlLookAt.xlPart,
+                    SearchOrder: ExcelInterop.XlSearchOrder.xlByColumns,
+                    SearchDirection: ExcelInterop.XlSearchDirection.xlPrevious,
+                    MatchCase: false,
+                    SearchFormat: false) as ExcelInterop.Range;
+                if (lastRowCell == null || lastColumnCell == null)
+                {
+                    return null;
+                }
+
+                var topLeft = worksheet.Cells[1, 1] as ExcelInterop.Range;
+                var bottomRight = worksheet.Cells[lastRowCell.Row, lastColumnCell.Column] as ExcelInterop.Range;
+                return worksheet.Range[topLeft, bottomRight] as ExcelInterop.Range;
+            }
+            catch
+            {
+                // Fall back to UsedRange when the host or tests do not support Find-based bounds.
+                return null;
+            }
         }
 
         private static object GetRangeValue(object rawValues, int rowOffset, int columnOffset, int rowCount, int columnCount)

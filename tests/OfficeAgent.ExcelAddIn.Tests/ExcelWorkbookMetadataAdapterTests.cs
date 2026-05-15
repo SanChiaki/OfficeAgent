@@ -419,6 +419,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.True(application.MetadataSheet.GetRowBold(3));
         }
 
+        [Fact]
+        public void ApplyMetadataPresentationFormatsOnlyUsedMetadataColumns()
+        {
+            var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var excelAssembly = LoadExcelInteropAssembly();
+            var worksheetType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Worksheet", throwOnError: true);
+            var sheetsType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Sheets", throwOnError: true);
+            var workbookType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Workbook", throwOnError: true);
+            var applicationType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Application", throwOnError: true);
+            var rangeType = excelAssembly.GetType("Microsoft.Office.Interop.Excel.Range", throwOnError: true);
+
+            var application = new LayoutAwareFakeExcelApplication(applicationType, workbookType, sheetsType, worksheetType, rangeType);
+            application.CreateWorksheet("xISDP_Setting");
+            application.MetadataSheet.SetCell(1, 1, "SheetBindings");
+            application.MetadataSheet.SetCell(2, 1, "SheetName");
+            application.MetadataSheet.SetCell(2, 2, "ProjectId");
+            application.MetadataSheet.SetCell(2, 3, "ProjectName");
+
+            var adapterType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.ExcelWorkbookMetadataAdapter", throwOnError: true);
+            var adapter = Activator.CreateInstance(adapterType, application.GetTransparentProxy());
+
+            adapterType.GetMethod("ApplyMetadataPresentation").Invoke(adapter, new object[] { "xISDP_Setting", false });
+
+            Assert.True(application.MetadataSheet.GetRowBold(2));
+            Assert.Equal(3, application.MetadataSheet.LastSingleRowResizeColumnCount);
+        }
+
         private static Assembly LoadExcelInteropAssembly()
         {
             try
@@ -661,6 +688,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public int RangeValue2WriteCount { get; private set; }
 
+            public int LastSingleRowResizeColumnCount { get; private set; }
+
             public Dictionary<int, LayoutAwareFakeExcelRowState> Rows { get; } =
                 new Dictionary<int, LayoutAwareFakeExcelRowState>();
 
@@ -794,6 +823,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public object GetRowColor(int rowIndex)
             {
                 return Rows.TryGetValue(rowIndex, out var state) ? state.Color : null;
+            }
+
+            public void RecordSingleRowResize(int columnCount)
+            {
+                LastSingleRowResizeColumnCount = columnCount;
             }
 
             public override IMessage Invoke(IMessage msg)
@@ -984,6 +1018,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     column: column,
                     count: rowCount,
                     otherCount: columnCount);
+                if (rowCount == 1)
+                {
+                    worksheet.RecordSingleRowResize(columnCount);
+                }
+
                 return new ReturnMessage(resized.GetTransparentProxy(), null, 0, call.LogicalCallContext, call);
             }
 
@@ -1009,6 +1048,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             private IMessage HandleGetFont(IMethodCallMessage call)
             {
+                if (kind == LayoutAwareFakeExcelRangeKind.Block && count == 1)
+                {
+                    return new ReturnMessage(
+                        new LayoutAwareFakeExcelFontProxy(worksheet.FontType, worksheet.GetOrCreateRowState(row)).GetTransparentProxy(),
+                        null,
+                        0,
+                        call.LogicalCallContext,
+                        call);
+                }
+
                 if (kind != LayoutAwareFakeExcelRangeKind.Row)
                 {
                     throw new NotSupportedException(call.MethodName + ":" + kind);
