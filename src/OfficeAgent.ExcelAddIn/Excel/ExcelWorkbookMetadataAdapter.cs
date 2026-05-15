@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Drawing;
 using ExcelInterop = Microsoft.Office.Interop.Excel;
 
 namespace OfficeAgent.ExcelAddIn.Excel
@@ -73,6 +74,30 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var sections = LoadSections(worksheet);
                 sections[tableName] = new MetadataSectionDocument(tableName, headers, rows);
                 RewriteSheet(worksheet, sections);
+            });
+        }
+
+        public void ApplyMetadataPresentation(string sheetName, bool hideTemplateBindingRows)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                return;
+            }
+
+            ExecutePreservingActiveWorksheet(() =>
+            {
+                var worksheet = FindMetadataWorksheet(GetWorkbook());
+                if (worksheet == null)
+                {
+                    return;
+                }
+
+                ApplySheetNameRowFormatting(worksheet, sheetName);
+
+                if (hideTemplateBindingRows)
+                {
+                    HideTemplateBindingRow(worksheet, sheetName);
+                }
             });
         }
 
@@ -170,6 +195,87 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var worksheet = workbook.Worksheets.Add(After: lastSheet) as ExcelInterop.Worksheet;
             worksheet.Name = name;
             return worksheet;
+        }
+
+        private static void ApplySheetNameRowFormatting(ExcelInterop.Worksheet worksheet, string sheetName)
+        {
+            if (worksheet == null || string.IsNullOrWhiteSpace(sheetName))
+            {
+                return;
+            }
+
+            var usedRange = worksheet.UsedRange;
+            var rowCount = usedRange?.Rows?.Count ?? 0;
+            var maxRow = Math.Min(50, Math.Max(rowCount, 50));
+            for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
+            {
+                var value = Convert.ToString((worksheet.Cells[rowIndex, 1] as ExcelInterop.Range)?.Value2) ?? string.Empty;
+                if (!string.Equals(value, sheetName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                FormatWorksheetRow(worksheet, rowIndex, hidden: false);
+            }
+        }
+
+        private static void HideTemplateBindingRow(ExcelInterop.Worksheet worksheet, string sheetName)
+        {
+            if (worksheet == null || string.IsNullOrWhiteSpace(sheetName))
+            {
+                return;
+            }
+
+            var rows = ReadUsedRows(worksheet);
+            var templateBindingsStart = Array.FindIndex(rows, row =>
+                row.Length > 0 &&
+                string.Equals(row[0], "TemplateBindings", StringComparison.OrdinalIgnoreCase));
+            if (templateBindingsStart < 0)
+            {
+                return;
+            }
+
+            for (var rowIndex = templateBindingsStart + 2; rowIndex < rows.Length; rowIndex++)
+            {
+                var candidate = rows[rowIndex] ?? Array.Empty<string>();
+                if (candidate.Length > 0 &&
+                    !string.IsNullOrWhiteSpace(candidate[0]) &&
+                    string.Equals(candidate[0], sheetName, StringComparison.Ordinal))
+                {
+                    FormatWorksheetRow(worksheet, rowIndex + 1, hidden: true);
+                    return;
+                }
+
+                if (candidate.Length > 0 &&
+                    !string.IsNullOrWhiteSpace(candidate[0]) &&
+                    Array.IndexOf(MetadataSheetLayoutSerializer.OrderedSectionNames.ToArray(), candidate[0]) >= 0)
+                {
+                    return;
+                }
+            }
+        }
+
+        private static void FormatWorksheetRow(ExcelInterop.Worksheet worksheet, int rowIndex, bool hidden)
+        {
+            var rowRange = worksheet.Rows[rowIndex] as ExcelInterop.Range;
+            if (rowRange == null)
+            {
+                return;
+            }
+
+            try
+            {
+                rowRange.Font.Bold = true;
+                rowRange.Font.Color = ColorTranslator.ToOle(Color.Blue);
+                if (hidden)
+                {
+                    rowRange.Hidden = true;
+                }
+            }
+            catch
+            {
+                // Preserve metadata writes even if formatting is not supported by the host.
+            }
         }
 
         private ExcelInterop.Worksheet FindWorksheet(string name)

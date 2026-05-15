@@ -97,6 +97,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             adapter.WriteTable(BindingsTableName, BindingHeaders, rows.ToArray());
+            ApplyMetadataPresentation(normalizedSheetName, hideTemplateBindingRows: false);
             bindingRowsCache = CloneRows(rows);
             bindingRowsCacheLoaded = true;
         }
@@ -144,6 +145,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             adapter.WriteTable(TemplateBindingsTableName, TemplateBindingHeaders, rows.ToArray());
+            ApplyMetadataPresentation(normalizedSheetName, hideTemplateBindingRows: existingRowIndex < 0);
             templateBindingRowsCache = CloneRows(rows);
             templateBindingRowsCacheLoaded = true;
         }
@@ -234,6 +236,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             adapter.WriteTable(FieldMappingsTableName, headers, existingRows.ToArray());
+            ApplyMetadataPresentation(sheetName, hideTemplateBindingRows: false);
             fieldMappingHeaders = headers.ToArray();
             fieldMappingPersistedHeadersCache = headers.ToArray();
             fieldMappingPersistedHeadersCacheLoaded = true;
@@ -304,6 +307,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             var headers = ResolveFieldMappingHeaders(rows);
             adapter.WriteTable(FieldMappingsTableName, headers, rows.ToArray());
+            ApplyMetadataPresentation(sheetName, hideTemplateBindingRows: false);
             fieldMappingHeaders = headers.ToArray();
             fieldMappingPersistedHeadersCache = headers.ToArray();
             fieldMappingPersistedHeadersCacheLoaded = true;
@@ -330,6 +334,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             adapter.WriteTable(TemplateBindingsTableName, TemplateBindingHeaders, rows.ToArray());
+            ApplyMetadataPresentation(sheetName, hideTemplateBindingRows: false);
             templateBindingRowsCache = CloneRows(rows);
             templateBindingRowsCacheLoaded = true;
         }
@@ -383,6 +388,16 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
             InvalidateCache();
             workbookScopeKey = currentWorkbookScopeKey;
+        }
+
+        private void ApplyMetadataPresentation(string sheetName, bool hideTemplateBindingRows)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                return;
+            }
+
+            adapter.ApplyMetadataPresentation(sheetName, hideTemplateBindingRows);
         }
 
         private static int ParseIntOrDefault(IReadOnlyList<string> row, int index, int defaultValue)
