@@ -92,7 +92,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     return;
                 }
 
-                ApplySheetNameRowFormatting(worksheet, sheetName);
+                ApplySheetNameRowFormatting(worksheet);
 
                 if (hideTemplateBindingRows)
                 {
@@ -197,9 +197,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
             return worksheet;
         }
 
-        private static void ApplySheetNameRowFormatting(ExcelInterop.Worksheet worksheet, string sheetName)
+        private static void ApplySheetNameRowFormatting(ExcelInterop.Worksheet worksheet)
         {
-            if (worksheet == null || string.IsNullOrWhiteSpace(sheetName))
+            if (worksheet == null)
             {
                 return;
             }
@@ -210,7 +210,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
             for (var rowIndex = 1; rowIndex <= maxRow; rowIndex++)
             {
                 var value = Convert.ToString((worksheet.Cells[rowIndex, 1] as ExcelInterop.Range)?.Value2) ?? string.Empty;
-                if (!string.Equals(value, sheetName, StringComparison.Ordinal))
+                if (!string.Equals(value, "sheetName", StringComparison.Ordinal))
                 {
                     continue;
                 }

@@ -3089,6 +3089,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         return new ReturnMessage(WorkbookScopeKey, null, 0, call.LogicalCallContext, call);
                     case "EnsureWorksheet":
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ApplyMetadataPresentation":
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "WriteTable":
                         {
                             var tables = GetCurrentWorkbookTables();

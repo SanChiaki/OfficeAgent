@@ -366,14 +366,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
             catch (FileNotFoundException)
             {
-                var fallbackPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                    "Microsoft Visual Studio",
-                    "Shared",
-                    "Visual Studio Tools for Office",
-                    "PIA",
-                    "Office15",
-                    "Microsoft.Office.Interop.Excel.dll");
+                var candidatePaths = new[]
+                {
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                        "Microsoft Visual Studio",
+                        "Shared",
+                        "Visual Studio Tools for Office",
+                        "PIA",
+                        "Office15",
+                        "Microsoft.Office.Interop.Excel.dll"),
+                    @"E:\VSgongxiang\Visual Studio Tools for Office\PIA\Office15\Microsoft.Office.Interop.Excel.dll",
+                };
+
+                var fallbackPath = candidatePaths.FirstOrDefault(File.Exists);
+                if (string.IsNullOrWhiteSpace(fallbackPath))
+                {
+                    throw;
+                }
+
                 return Assembly.LoadFrom(fallbackPath);
             }
         }
