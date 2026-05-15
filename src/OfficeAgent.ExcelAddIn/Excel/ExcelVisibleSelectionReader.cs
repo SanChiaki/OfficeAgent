@@ -17,12 +17,91 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         public IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection()
         {
-            var selection = application.Selection as ExcelInterop.Range;
+            return ReadVisibleSelection(application.Selection as ExcelInterop.Range);
+        }
+
+        public WorksheetSelectionSnapshot ReadSelectionSnapshot()
+        {
+            return ReadSelectionSnapshot(application.Selection as ExcelInterop.Range);
+        }
+
+        internal static IReadOnlyList<SelectedVisibleCell> ReadVisibleSelection(ExcelInterop.Range selection)
+        {
             if (selection == null)
             {
                 return Array.Empty<SelectedVisibleCell>();
             }
 
+            var visibleSelection = TryGetVisibleSelection(selection);
+            return visibleSelection != null
+                ? ReadAreaCells(visibleSelection)
+                : ReadManuallyFilteredCells(selection);
+        }
+
+        internal static WorksheetSelectionSnapshot ReadSelectionSnapshot(ExcelInterop.Range selection)
+        {
+            if (selection == null)
+            {
+                return new WorksheetSelectionSnapshot();
+            }
+
+            var visibleSelection = TryGetVisibleSelection(selection);
+            if (visibleSelection == null)
+            {
+                return new WorksheetSelectionSnapshot();
+            }
+
+            var areas = new List<WorksheetSelectionArea>();
+            var areaCount = visibleSelection.Areas == null ? 1 : visibleSelection.Areas.Count;
+
+            for (var areaIndex = 1; areaIndex <= areaCount; areaIndex++)
+            {
+                var area = visibleSelection.Areas == null
+                    ? visibleSelection
+                    : visibleSelection.Areas[areaIndex] as ExcelInterop.Range;
+                if (area == null)
+                {
+                    continue;
+                }
+
+                var startRow = Convert.ToInt32(area.Row);
+                var startColumn = Convert.ToInt32(area.Column);
+                var rowCount = Convert.ToInt32(area.Rows.Count);
+                var columnCount = Convert.ToInt32(area.Columns.Count);
+                if (rowCount <= 0 || columnCount <= 0)
+                {
+                    continue;
+                }
+
+                areas.Add(new WorksheetSelectionArea
+                {
+                    StartRow = startRow,
+                    EndRow = startRow + rowCount - 1,
+                    StartColumn = startColumn,
+                    EndColumn = startColumn + columnCount - 1,
+                });
+            }
+
+            return new WorksheetSelectionSnapshot
+            {
+                Areas = areas.ToArray(),
+            };
+        }
+
+        private static ExcelInterop.Range TryGetVisibleSelection(ExcelInterop.Range selection)
+        {
+            try
+            {
+                return selection.SpecialCells(ExcelInterop.XlCellType.xlCellTypeVisible) as ExcelInterop.Range;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static IReadOnlyList<SelectedVisibleCell> ReadAreaCells(ExcelInterop.Range selection)
+        {
             var results = new List<SelectedVisibleCell>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var areaCount = selection.Areas == null ? 1 : selection.Areas.Count;
@@ -32,7 +111,49 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var area = selection.Areas == null
                     ? selection
                     : selection.Areas[areaIndex] as ExcelInterop.Range;
+                if (area == null)
+                {
+                    continue;
+                }
 
+                foreach (ExcelInterop.Range cell in area.Cells)
+                {
+                    if (cell == null)
+                    {
+                        continue;
+                    }
+
+                    var row = Convert.ToInt32(cell.Row);
+                    var column = Convert.ToInt32(cell.Column);
+                    var key = $"{row}|{column}";
+                    if (!seen.Add(key))
+                    {
+                        continue;
+                    }
+
+                    results.Add(new SelectedVisibleCell
+                    {
+                        Row = row,
+                        Column = column,
+                        Value = Convert.ToString(cell.Text) ?? string.Empty,
+                    });
+                }
+            }
+
+            return results;
+        }
+
+        private static IReadOnlyList<SelectedVisibleCell> ReadManuallyFilteredCells(ExcelInterop.Range selection)
+        {
+            var results = new List<SelectedVisibleCell>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var areaCount = selection.Areas == null ? 1 : selection.Areas.Count;
+
+            for (var areaIndex = 1; areaIndex <= areaCount; areaIndex++)
+            {
+                var area = selection.Areas == null
+                    ? selection
+                    : selection.Areas[areaIndex] as ExcelInterop.Range;
                 if (area == null)
                 {
                     continue;
@@ -40,7 +161,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 var rowCount = Convert.ToInt32(area.Rows.Count);
                 var columnCount = Convert.ToInt32(area.Columns.Count);
-
                 for (var rowIndex = 1; rowIndex <= rowCount; rowIndex++)
                 {
                     for (var columnIndex = 1; columnIndex <= columnCount; columnIndex++)
@@ -80,62 +200,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return results;
-        }
-
-        public WorksheetSelectionSnapshot ReadSelectionSnapshot()
-        {
-            var selection = application.Selection as ExcelInterop.Range;
-            if (selection == null)
-            {
-                return new WorksheetSelectionSnapshot();
-            }
-
-            ExcelInterop.Range visibleSelection;
-            try
-            {
-                visibleSelection = selection.SpecialCells(ExcelInterop.XlCellType.xlCellTypeVisible) as ExcelInterop.Range;
-            }
-            catch
-            {
-                visibleSelection = selection;
-            }
-
-            var areas = new List<WorksheetSelectionArea>();
-            var areaSource = visibleSelection ?? selection;
-            var areaCount = areaSource.Areas == null ? 1 : areaSource.Areas.Count;
-
-            for (var areaIndex = 1; areaIndex <= areaCount; areaIndex++)
-            {
-                var area = areaSource.Areas == null
-                    ? areaSource
-                    : areaSource.Areas[areaIndex] as ExcelInterop.Range;
-                if (area == null)
-                {
-                    continue;
-                }
-
-                var startRow = Convert.ToInt32(area.Row);
-                var startColumn = Convert.ToInt32(area.Column);
-                var rowCount = Convert.ToInt32(area.Rows.Count);
-                var columnCount = Convert.ToInt32(area.Columns.Count);
-                if (rowCount <= 0 || columnCount <= 0)
-                {
-                    continue;
-                }
-
-                areas.Add(new WorksheetSelectionArea
-                {
-                    StartRow = startRow,
-                    EndRow = startRow + rowCount - 1,
-                    StartColumn = startColumn,
-                    EndColumn = startColumn + columnCount - 1,
-                });
-            }
-
-            return new WorksheetSelectionSnapshot
-            {
-                Areas = areas.ToArray(),
-            };
         }
     }
 }
