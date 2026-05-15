@@ -8,6 +8,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         void WriteTable(string tableName, string[] headers, string[][] rows);
 
+        void ApplyMetadataPresentation(string sheetName, bool hideTemplateBindingRows);
+
         string[] ReadHeaders(string tableName);
 
         string[][] ReadTable(string tableName);
