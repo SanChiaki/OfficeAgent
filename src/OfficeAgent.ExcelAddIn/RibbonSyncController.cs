@@ -9,6 +9,7 @@ using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
 using OfficeAgent.ExcelAddIn.Dialogs;
+using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn
@@ -202,6 +203,10 @@ namespace OfficeAgent.ExcelAddIn
             {
                 metadataStore.ClearFieldMappings(sheetName);
                 metadataStore.SaveBinding(confirmedBinding);
+                if (MetadataWorksheetNames.IsMetadataWorksheet(sheetName))
+                {
+                    metadataStore.RefreshMetadataPresentation(sheetName);
+                }
             }
             catch (Exception ex)
             {

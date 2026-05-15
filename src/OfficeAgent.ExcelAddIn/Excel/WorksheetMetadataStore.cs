@@ -102,6 +102,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
             bindingRowsCacheLoaded = true;
         }
 
+        public void RefreshMetadataPresentation(string sheetName, bool hideTemplateBindingRows = false)
+        {
+            EnsureWorkbookScope();
+            ApplyMetadataPresentation(sheetName, hideTemplateBindingRows);
+        }
+
         public void SaveTemplateBinding(SheetTemplateBinding binding)
         {
             if (binding == null)

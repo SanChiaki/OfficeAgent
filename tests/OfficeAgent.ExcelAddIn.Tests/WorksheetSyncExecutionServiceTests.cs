@@ -2618,6 +2618,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 Bindings[binding.SheetName] = binding;
             }
 
+            public void RefreshMetadataPresentation(string sheetName, bool hideTemplateBindingRows = false)
+            {
+            }
+
             public SheetBinding LoadBinding(string sheetName)
             {
                 if (!Bindings.TryGetValue(sheetName, out var binding))

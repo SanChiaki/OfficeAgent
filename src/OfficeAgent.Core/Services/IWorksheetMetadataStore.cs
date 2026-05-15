@@ -7,6 +7,8 @@ namespace OfficeAgent.Core.Services
     {
         void SaveBinding(SheetBinding binding);
 
+        void RefreshMetadataPresentation(string sheetName, bool hideTemplateBindingRows = false);
+
         SheetBinding LoadBinding(string sheetName);
 
         void SaveFieldMappings(string sheetName, FieldMappingTableDefinition definition, IReadOnlyList<SheetFieldMappingRow> rows);

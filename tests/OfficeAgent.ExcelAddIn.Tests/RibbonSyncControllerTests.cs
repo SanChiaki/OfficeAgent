@@ -697,6 +697,37 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void SelectProjectFromSettingsSheetRefreshesMetadataPresentationAfterSavingBinding()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextProjectLayoutBinding = new SheetBinding
+                {
+                    SheetName = "xISDP_Setting",
+                    SystemKey = "current-business-system",
+                    ProjectId = "settings-project",
+                    ProjectName = "设置页项目",
+                    HeaderStartRow = 4,
+                    HeaderRowCount = 1,
+                    DataStartRow = 5,
+                },
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => "xISDP_Setting");
+
+            InvokeSelectProject(controller, new ProjectOption
+            {
+                SystemKey = "current-business-system",
+                ProjectId = "settings-project",
+                DisplayName = "设置页项目",
+            });
+
+            Assert.Equal("xISDP_Setting", metadataStore.LastRefreshedPresentationSheetName);
+            Assert.False(metadataStore.LastRefreshedPresentationHideTemplateBindingRows);
+        }
+
+        [Fact]
         public void RefreshActiveProjectFromSheetMetadataWithBlankProjectNameFallsBackToProjectIdLabel()
         {
             var metadataStore = new FakeWorksheetMetadataStore();
@@ -1784,6 +1815,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public SheetBinding LastSavedBinding { get; private set; }
 
+            public string LastRefreshedPresentationSheetName { get; private set; }
+
+            public bool LastRefreshedPresentationHideTemplateBindingRows { get; private set; }
+
             public SheetFieldMappingRow[] LastSavedFieldMappings { get; private set; } = Array.Empty<SheetFieldMappingRow>();
 
             public Exception SaveBindingException { get; set; }
@@ -1797,6 +1832,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
                 LastSavedBinding = binding;
                 Bindings[binding.SheetName] = binding;
+            }
+
+            public void RefreshMetadataPresentation(string sheetName, bool hideTemplateBindingRows = false)
+            {
+                LastRefreshedPresentationSheetName = sheetName;
+                LastRefreshedPresentationHideTemplateBindingRows = hideTemplateBindingRows;
             }
 
             public SheetBinding LoadBinding(string sheetName)
