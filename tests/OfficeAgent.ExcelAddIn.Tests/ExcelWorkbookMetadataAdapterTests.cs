@@ -122,8 +122,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             });
 
             Assert.Equal("xISDP_Setting", application.MetadataSheet.Name);
-            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(1, 1));
-            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(6, 1));
+            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(1, 1));
+            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(6, 1));
         }
 
         [Fact]
@@ -237,10 +237,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 new[] { new[] { "Sheet1", "current-business-system" } },
             });
 
-            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(1, 1));
-            Assert.Equal("tpl-performance-a", application.MetadataSheet.GetCell(3, 2));
-            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(6, 1));
-            Assert.Equal("current-business-system", application.MetadataSheet.GetCell(8, 2));
+            Assert.Equal("SheetBindings", application.MetadataSheet.GetCell(1, 1));
+            Assert.Equal("current-business-system", application.MetadataSheet.GetCell(3, 2));
+            Assert.Equal("TemplateBindings", application.MetadataSheet.GetCell(6, 1));
+            Assert.Equal("tpl-performance-a", application.MetadataSheet.GetCell(8, 2));
         }
 
         [Fact]
