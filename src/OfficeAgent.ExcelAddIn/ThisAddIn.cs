@@ -51,6 +51,8 @@ namespace OfficeAgent.ExcelAddIn
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
         internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
 
+        private const int MaxTrackedRangeCellCount = 10000;
+
         private bool isRestoringWorksheetFocus;
         private string lastProjectRefreshSheetName = string.Empty;
 
@@ -325,13 +327,23 @@ namespace OfficeAgent.ExcelAddIn
         private static IReadOnlyList<WorksheetCellValue> ReadWorksheetCellValues(ExcelInterop.Range target)
         {
             var result = new List<WorksheetCellValue>();
-            foreach (var cell in ExcelVisibleSelectionReader.ReadVisibleSelection(target))
+            if (target == null || IsRangeTooLarge(target))
             {
+                return result;
+            }
+
+            foreach (ExcelInterop.Range cell in target.Cells)
+            {
+                if (cell == null)
+                {
+                    continue;
+                }
+
                 result.Add(new WorksheetCellValue
                 {
                     Row = cell.Row,
                     Column = cell.Column,
-                    Text = cell.Value ?? string.Empty,
+                    Text = Convert.ToString(cell.Text) ?? string.Empty,
                 });
             }
 
@@ -341,8 +353,18 @@ namespace OfficeAgent.ExcelAddIn
         private static IReadOnlyList<WorksheetCellAddress> ReadWorksheetCellAddresses(ExcelInterop.Range target)
         {
             var result = new List<WorksheetCellAddress>();
-            foreach (var cell in ExcelVisibleSelectionReader.ReadVisibleSelection(target))
+            if (target == null || IsRangeTooLarge(target))
             {
+                return result;
+            }
+
+            foreach (ExcelInterop.Range cell in target.Cells)
+            {
+                if (cell == null)
+                {
+                    continue;
+                }
+
                 result.Add(new WorksheetCellAddress
                 {
                     Row = cell.Row,
@@ -351,6 +373,18 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             return result;
+        }
+
+        private static bool IsRangeTooLarge(ExcelInterop.Range target)
+        {
+            try
+            {
+                return Convert.ToDouble(target.Cells.CountLarge) > MaxTrackedRangeCellCount;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private string GetExcelUiLocale()
