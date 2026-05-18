@@ -8,6 +8,7 @@
     <VisualStudioMSBuildPath Condition="'$(VisualStudioMSBuildPath)' == '' and Exists('$(ProgramFiles)\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe')">$(ProgramFiles)\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe</VisualStudioMSBuildPath>
     <VisualStudioMSBuildPath Condition="'$(VisualStudioMSBuildPath)' == '' and Exists('$(ProgramFiles)\\Microsoft Visual Studio\\2022\\Enterprise\\MSBuild\\Current\\Bin\\MSBuild.exe')">$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe</VisualStudioMSBuildPath>
     <VisualStudioMSBuildPath Condition="'$(VisualStudioMSBuildPath)' == '' and Exists('$(ProgramFiles)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin\\MSBuild.exe')">$(ProgramFiles)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe</VisualStudioMSBuildPath>
+    <VisualStudioMSBuildPath Condition="'$(VisualStudioMSBuildPath)' == '' and Exists('$(MSBuildProgramFiles32)\\Microsoft Visual Studio\\18\\BuildTools\\MSBuild\\Current\\Bin\\MSBuild.exe')">$(MSBuildProgramFiles32)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe</VisualStudioMSBuildPath>
   </PropertyGroup>
 
   <ItemGroup>

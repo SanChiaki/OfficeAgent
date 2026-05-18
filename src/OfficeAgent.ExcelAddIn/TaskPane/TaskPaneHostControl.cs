@@ -31,6 +31,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
+            AccountSessionService accountSessionService,
             Func<AppSettings, string> getResolvedUiLocale,
             IAnalyticsService analyticsService = null)
         {
@@ -44,7 +45,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             };
             Controls.Add(webView);
 
-            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService);
+            bootstrapper = new WebViewBootstrapper(webView, sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, accountSessionService, getResolvedUiLocale, analyticsService);
             Load += TaskPaneHostControl_Load;
         }
 

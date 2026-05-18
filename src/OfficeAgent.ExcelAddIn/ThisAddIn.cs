@@ -36,6 +36,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ExcelFocusCoordinator ExcelFocusCoordinator { get; private set; }
         internal SharedCookieContainer SharedCookies { get; private set; }
         internal FileCookieStore CookieStore { get; private set; }
+        internal AccountSessionService AccountSessionService { get; private set; }
         internal ISystemConnector CurrentBusinessConnector { get; private set; }
         internal ISystemConnectorRegistry SystemConnectorRegistry { get; private set; }
         internal IWorksheetMetadataStore WorksheetMetadataStore { get; private set; }
@@ -76,6 +77,7 @@ namespace OfficeAgent.ExcelAddIn
             CookieStore.Load(SharedCookies.Container);
             WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
             AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider();
+            AccountSessionService = new AccountSessionService(SharedCookies, CookieStore);
             AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
                 ? NoopAnalyticsService.Instance
                 : new OfficeAgent.Core.Analytics.AnalyticsService(
@@ -87,18 +89,7 @@ namespace OfficeAgent.ExcelAddIn
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
-            // Set SSO domain from settings for login status checks.
-            if (!string.IsNullOrWhiteSpace(initialSettings.SsoUrl))
-            {
-                try
-                {
-                    SharedCookies.SsoDomain = new Uri(initialSettings.SsoUrl).Host;
-                }
-                catch (UriFormatException)
-                {
-                    SharedCookies.SsoDomain = string.Empty;
-                }
-            }
+            AccountSessionService.ConfigureSsoDomain(initialSettings.SsoUrl);
 
             ExcelContextService = new ExcelSelectionContextService(Application);
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
@@ -156,7 +147,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
             lastProjectRefreshSheetName = GetActiveWorksheetName();
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, GetResolvedUiLocale, AnalyticsService);
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, AccountSessionService, GetResolvedUiLocale, AnalyticsService);
             Application.WorkbookActivate += Application_WorkbookActivate;
             Application.SheetActivate += Application_SheetActivate;
             Application.SheetSelectionChange += Application_SheetSelectionChange;
@@ -301,6 +292,11 @@ namespace OfficeAgent.ExcelAddIn
                 GetActiveWorksheetName,
                 GetActiveWorkbookName,
                 () => HostLocalizedStrings);
+        }
+
+        internal void LogoutAccountSession()
+        {
+            AccountSessionService?.Logout();
         }
 
         private static string GetWorksheetName(object sheet)

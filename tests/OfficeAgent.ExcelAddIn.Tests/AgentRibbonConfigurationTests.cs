@@ -49,6 +49,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.fullUploadButton.OfficeImageId = \"FilePublishToSharePoint\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialUploadButton.OfficeImageId = \"FileSendAsAttachment\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.loginButton.OfficeImageId = \"Lock\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.logoutButton.OfficeImageId = \"Lock\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.OfficeImageId = \"FileOpen\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.aboutButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("ShowImage = false;", designerText, StringComparison.Ordinal);
@@ -72,6 +73,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.fullUploadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialUploadButton.ShowImage = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.loginButton.ShowImage = true;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.logoutButton.ShowImage = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.ShowImage = true;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.aboutButton.ShowImage = true;", designerText, StringComparison.Ordinal);
         }
@@ -93,7 +95,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.partialDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.fullUploadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.partialUploadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.logoutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
             Assert.Contains("this.aboutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;", designerText, StringComparison.Ordinal);
         }
@@ -182,6 +185,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.DoesNotContain("this.partialUploadButton.Label = \"Partial upload\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.group2.Label = \"Account\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.loginButton.Label = \"Login\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.logoutButton.Label = \"Logout\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.groupHelp.Label = \"Help\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.Label = \"Documentation\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.aboutButton.Label = \"About\";", designerText, StringComparison.Ordinal);
@@ -211,7 +215,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [InlineData("上传", "上传\r")]
         [InlineData("文档", "文档\r")]
         [InlineData("关于", "关于\r")]
-        [InlineData("登录", "登录\r")]
         [InlineData("全量下载", "全量下载")]
         [InlineData("Download", "Download")]
         [InlineData("", "")]
@@ -253,6 +256,32 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.DoesNotContain("this.groupDataSync.Items.Add(this.fullUploadButton);", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.groupDownload", designerText, StringComparison.Ordinal);
             Assert.DoesNotContain("this.groupUpload", designerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AccountGroupContainsSmallLoginAndLogoutButtonsWithLinkedState()
+        {
+            var designerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.Designer.cs"));
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            var loginIndex = designerText.IndexOf("this.group2.Items.Add(this.loginButton);", StringComparison.Ordinal);
+            var logoutIndex = designerText.IndexOf("this.group2.Items.Add(this.logoutButton);", StringComparison.Ordinal);
+
+            Assert.True(loginIndex >= 0);
+            Assert.True(logoutIndex > loginIndex);
+            Assert.Contains("this.logoutButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.LogoutButton_Click);", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+            Assert.Contains("this.logoutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;", designerText, StringComparison.Ordinal);
+            Assert.Contains("loginButton.Enabled = !isLoggedIn;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("logoutButton.Enabled = isLoggedIn;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("loginButton.Label = strings.RibbonLoginButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("logoutButton.Label = strings.RibbonLogoutButtonLabel;", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -375,6 +404,104 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.True(showDialogIndex >= 0);
             Assert.True(repopulateIndex > showDialogIndex);
+        }
+
+        [Fact]
+        public void LogoutClearsSessionRefreshesRibbonAndMarksProjectsAsLoginRequired()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("private void LogoutButton_Click(object sender, RibbonControlEventArgs e)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.logout.clicked\"", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("Globals.ThisAddIn?.LogoutAccountSession();", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("isProjectListAuthenticationRequired = true;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("suppressAuthenticationRequiredPromptAfterLogout = true;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("RefreshAccountButtonsFromSession();", ribbonCodeText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ProjectLoadingDoesNotAutoPromptForLoginAfterExplicitLogout()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            var catchIndex = ribbonCodeText.IndexOf("catch (AuthenticationRequiredException ex)", StringComparison.Ordinal);
+            var promptIndex = ribbonCodeText.IndexOf(
+                "OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage)",
+                catchIndex,
+                StringComparison.Ordinal);
+            var guardIndex = ribbonCodeText.LastIndexOf(
+                "if (!suppressAuthenticationRequiredPromptAfterLogout &&",
+                promptIndex,
+                StringComparison.Ordinal);
+            var loginRefreshIndex = ribbonCodeText.IndexOf("if (refreshProjectsAfterSuccess)", StringComparison.Ordinal);
+            var resetIndex = ribbonCodeText.LastIndexOf(
+                "suppressAuthenticationRequiredPromptAfterLogout = false;",
+                loginRefreshIndex,
+                StringComparison.Ordinal);
+
+            Assert.Contains("private static bool suppressAuthenticationRequiredPromptAfterLogout;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.True(catchIndex >= 0);
+            Assert.True(promptIndex > catchIndex);
+            Assert.True(guardIndex > catchIndex && guardIndex < promptIndex);
+            Assert.True(resetIndex > 0 && resetIndex < loginRefreshIndex);
+        }
+
+        [Fact]
+        public void ProjectLoadingShowsAutomaticLoginPromptOnlyOncePerExcelSession()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            var catchIndex = ribbonCodeText.IndexOf("catch (AuthenticationRequiredException ex)", StringComparison.Ordinal);
+            var promptIndex = ribbonCodeText.IndexOf(
+                "OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage)",
+                catchIndex,
+                StringComparison.Ordinal);
+            var guardIndex = ribbonCodeText.LastIndexOf(
+                "!hasShownProjectLoadAuthenticationPrompt",
+                promptIndex,
+                StringComparison.Ordinal);
+            var markShownIndex = ribbonCodeText.LastIndexOf(
+                "hasShownProjectLoadAuthenticationPrompt = true;",
+                promptIndex,
+                StringComparison.Ordinal);
+            var loginRefreshIndex = ribbonCodeText.IndexOf("if (refreshProjectsAfterSuccess)", StringComparison.Ordinal);
+            var resetIndex = ribbonCodeText.LastIndexOf(
+                "hasShownProjectLoadAuthenticationPrompt = false;",
+                loginRefreshIndex,
+                StringComparison.Ordinal);
+
+            Assert.Contains("private static bool hasShownProjectLoadAuthenticationPrompt;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.True(catchIndex >= 0);
+            Assert.True(promptIndex > catchIndex);
+            Assert.True(guardIndex > catchIndex && guardIndex < promptIndex);
+            Assert.True(markShownIndex > catchIndex && markShownIndex < promptIndex);
+            Assert.True(resetIndex > 0 && resetIndex < loginRefreshIndex);
+        }
+
+        [Fact]
+        public void AuthenticationRequiredProjectStatusIsPreservedOverExistingSheetBinding()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            Assert.Contains("private bool isProjectListAuthenticationRequired;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("if (isProjectListAuthenticationRequired && projectOptionsByKey.Count == 0)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("SetProjectDropDownText(GetStrings().ProjectDropDownLoginRequiredText);", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("isProjectListAuthenticationRequired = false;", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("catch (AuthenticationRequiredException ex)", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("isProjectListAuthenticationRequired = true;", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -981,6 +1108,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("TrackRibbonClick(\"ribbon.taskpane.toggle.clicked\"", ribbonText, StringComparison.Ordinal);
             Assert.Contains("TrackRibbonClick(\"ribbon.login.clicked\"", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("TrackRibbonClick(\"ribbon.logout.clicked\"", ribbonText, StringComparison.Ordinal);
             Assert.Contains("TrackRibbonClick(\"ribbon.initialize.clicked\"", ribbonText, StringComparison.Ordinal);
             Assert.Contains("TrackRibbonClick(\"ribbon.download.clicked\"", ribbonText, StringComparison.Ordinal);
             Assert.Contains("TrackRibbonClick(\"ribbon.upload.clicked\"", ribbonText, StringComparison.Ordinal);

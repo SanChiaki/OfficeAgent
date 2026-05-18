@@ -41,6 +41,7 @@ namespace OfficeAgent.ExcelAddIn
             this.fullUploadButton = Factory.CreateRibbonButton();
             this.partialUploadButton = Factory.CreateRibbonButton();
             this.loginButton = Factory.CreateRibbonButton();
+            this.logoutButton = Factory.CreateRibbonButton();
             this.documentationButton = Factory.CreateRibbonButton();
             this.aboutButton = Factory.CreateRibbonButton();
             this.tab1.SuspendLayout();
@@ -196,14 +197,24 @@ namespace OfficeAgent.ExcelAddIn
             // loginButton
             //
             this.group2.Items.Add(this.loginButton);
+            this.group2.Items.Add(this.logoutButton);
             this.group2.Label = "Account";
             this.group2.Name = "group2";
             this.loginButton.Label = "Login";
             this.loginButton.Name = "loginButton";
             this.loginButton.OfficeImageId = "Lock";
             this.loginButton.ShowImage = true;
-            this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.loginButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
             this.loginButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.LoginButton_Click);
+            //
+            // logoutButton
+            //
+            this.logoutButton.Label = "Logout";
+            this.logoutButton.Name = "logoutButton";
+            this.logoutButton.OfficeImageId = "Lock";
+            this.logoutButton.ShowImage = true;
+            this.logoutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeRegular;
+            this.logoutButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.LogoutButton_Click);
             //
             // groupHelp
             //
@@ -272,6 +283,7 @@ namespace OfficeAgent.ExcelAddIn
         internal Microsoft.Office.Tools.Ribbon.RibbonButton fullUploadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton partialUploadButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton loginButton;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton logoutButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton documentationButton;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton aboutButton;
     }
