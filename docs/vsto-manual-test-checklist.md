@@ -69,7 +69,7 @@
 - Run the Ribbon Sync checks twice: once under Chinese Excel (`zh-*` UI) and once under English Excel (any non-`zh-*` UI).
 - In Chinese Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
 - In English Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
-- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
+- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `登录` / `Login`, `登出` / `Logout`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
@@ -90,6 +90,10 @@
 - After switching to another project and confirming the dialog, verify old `SheetFieldMappings` are cleared; before clicking `初始化当前表` / `Initialize sheet`, running download/upload should report that the current sheet is not initialized.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized sign-in-required status (`请先登录` / `Sign in first`).
+- Close the automatic sign-in-required prompt without logging in, then open or activate another workbook in the same Excel process and confirm the prompt is not shown again; the project dropdown should remain at `请先登录` / `Sign in first`.
+- Confirm the account group shows small regular `登录` / `Login` and `登出` / `Logout` buttons; while unauthenticated, `登录` / `Login` is enabled and `登出` / `Logout` is disabled.
+- Complete SSO login from the Ribbon and confirm `登录` / `Login` becomes disabled, `登出` / `Logout` becomes enabled, and the project dropdown can load projects.
+- Click `登出` / `Logout` and confirm the project dropdown switches to `请先登录` / `Sign in first`, `登录` / `Login` becomes enabled, `登出` / `Logout` becomes disabled, and reopening the project dropdown does not automatically show the login prompt or reuse the previous cookie.
 - Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `xISDP_Setting` changes; the business area should remain untouched.
 - Configure `Base URL`, `API Key`, `Model`, and `API Format` in the existing Settings UI for an OpenAI-compatible model endpoint, then use `AI映射列` / `AI map columns` and confirm it reuses those settings rather than asking for a separate AI mapping configuration.
@@ -115,7 +119,7 @@
 - Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
 - Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
 - Confirm the Ribbon includes a dedicated `配置` / `Setting` group with `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, and `另存配置` / `Save as Setting`.
-- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, and all buttons in the `配置` / `Setting` group should use the small regular button layout; data sync, account, and help command buttons should remain in the large icon-above-label layout.
+- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, all buttons in the `配置` / `Setting` group, and the account `登录` / `Login` plus `登出` / `Logout` buttons should use the small regular button layout; data sync and help command buttons should remain in the large icon-above-label layout.
 - Confirm the `xISDP AI` group task-pane button shows only its icon and does not display the `Open` label.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
@@ -132,7 +136,7 @@
 - Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `上传` / `Upload`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
 - Clear the worksheet header area, keep the grouped-single metadata in `xISDP_Setting`, then run the hidden full-download path and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
-- Verify the task pane button and login button still work after the Ribbon Sync controls are added.
+- Verify the task pane button and account buttons still work after the Ribbon Sync controls are added.
 
 ## Analytics
 

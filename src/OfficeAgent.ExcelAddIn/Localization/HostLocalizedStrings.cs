@@ -150,6 +150,8 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonLoginButtonLabel => Locale == "zh" ? "登录" : "Login";
 
+        public string RibbonLogoutButtonLabel => Locale == "zh" ? "登出" : "Logout";
+
         public string RibbonLoginInProgressButtonLabel => Locale == "zh" ? "登录中..." : "Signing in...";
 
         public string ConfigureSsoUrlFirstMessage => Locale == "zh"

@@ -32,9 +32,13 @@ namespace OfficeAgent.ExcelAddIn
         private readonly Dictionary<string, string> projectLabelsByKey =
             new Dictionary<string, string>(StringComparer.Ordinal);
 
+        private static bool suppressAuthenticationRequiredPromptAfterLogout;
+        private static bool hasShownProjectLoadAuthenticationPrompt;
+
         private bool isUpdatingProjectDropDown;
         private bool isBoundToSyncController;
         private bool isBoundToTemplateController;
+        private bool isProjectListAuthenticationRequired;
         private string lastControllerOwnedProjectDropDownText = HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText;
         private RibbonAnalyticsHelper analytics;
 
@@ -42,6 +46,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             EnsureAnalyticsHelper();
             ApplyLocalizedLabels();
+            RefreshAccountButtonsFromSession();
             SetProjectDropDownText(ProjectDropDownPlaceholderText);
             RefreshTemplateButtonsFromController();
             BindToControllersAndRefresh();
@@ -57,6 +62,20 @@ namespace OfficeAgent.ExcelAddIn
         {
             TrackRibbonClick("ribbon.login.clicked");
             BeginLoginFlow(refreshProjectsAfterSuccess: true);
+        }
+
+        private void LogoutButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            TrackRibbonClick("ribbon.logout.clicked");
+            Globals.ThisAddIn?.LogoutAccountSession();
+            projectOptionsByKey.Clear();
+            projectOptionsByLabel.Clear();
+            projectLabelsByKey.Clear();
+            isProjectListAuthenticationRequired = true;
+            suppressAuthenticationRequiredPromptAfterLogout = true;
+            SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);
+            RefreshAccountButtonsFromSession();
+            RefreshTemplateButtonsFromController();
         }
 
         private void DocumentationButton_Click(object sender, RibbonControlEventArgs e)
@@ -135,6 +154,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             var settings = Globals.ThisAddIn.SettingsStore.Load();
             var ssoUrl = settings.SsoUrl;
+            Globals.ThisAddIn.AccountSessionService?.ConfigureSsoDomain(ssoUrl);
 
             if (string.IsNullOrWhiteSpace(ssoUrl))
             {
@@ -143,7 +163,7 @@ namespace OfficeAgent.ExcelAddIn
                 return false;
             }
 
-            loginButton.Label = FormatRibbonButtonLabel(GetStrings().RibbonLoginInProgressButtonLabel);
+            loginButton.Label = GetStrings().RibbonLoginInProgressButtonLabel;
             loginButton.Enabled = false;
 
             try
@@ -158,12 +178,15 @@ namespace OfficeAgent.ExcelAddIn
                     }
                 }
 
+                suppressAuthenticationRequiredPromptAfterLogout = false;
+                hasShownProjectLoadAuthenticationPrompt = false;
                 if (refreshProjectsAfterSuccess)
                 {
                     PopulateProjectDropDown();
                     RefreshProjectDropDownFromController();
                 }
 
+                RefreshAccountButtonsFromSession();
                 return true;
             }
             catch (Exception ex)
@@ -173,8 +196,9 @@ namespace OfficeAgent.ExcelAddIn
             }
             finally
             {
-                loginButton.Label = FormatRibbonButtonLabel(GetStrings().RibbonLoginButtonLabel);
+                loginButton.Label = GetStrings().RibbonLoginButtonLabel;
                 loginButton.Enabled = true;
+                RefreshAccountButtonsFromSession();
             }
         }
 
@@ -216,6 +240,16 @@ namespace OfficeAgent.ExcelAddIn
                             $"Refreshed project dropdown. ItemCount={projectDropDown.Items.Count}; Text={GetProjectDropDownDisplayText() ?? "<null>"}");
                     }
 
+                    return;
+                }
+
+                if (isProjectListAuthenticationRequired && projectOptionsByKey.Count == 0)
+                {
+                    SetProjectDropDownText(GetStrings().ProjectDropDownLoginRequiredText);
+                    OfficeAgentLog.Warn(
+                        "ribbon",
+                        "project_dropdown.refresh_preserved_login_required",
+                        $"Preserved login-required project dropdown status. ItemCount={projectDropDown.Items.Count}; Text={GetProjectDropDownDisplayText() ?? "<null>"}");
                     return;
                 }
 
@@ -269,6 +303,7 @@ namespace OfficeAgent.ExcelAddIn
                 projectDropDown.Items.Clear();
                 AddProjectDropDownPlaceholderItem();
                 SetProjectDropDownText(ProjectDropDownPlaceholderText);
+                isProjectListAuthenticationRequired = false;
 
                 try
                 {
@@ -301,6 +336,7 @@ namespace OfficeAgent.ExcelAddIn
                     }
                     else
                     {
+                        isProjectListAuthenticationRequired = false;
                         OfficeAgentLog.Info("ribbon", "project_dropdown.loaded", $"Loaded {projectOptionsByKey.Count} projects.");
                         OfficeAgentLog.Info(
                             "ribbon",
@@ -310,11 +346,17 @@ namespace OfficeAgent.ExcelAddIn
                 }
                 catch (AuthenticationRequiredException ex)
                 {
+                    isProjectListAuthenticationRequired = true;
                     SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);
                     OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
-                    if (OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage))
+                    if (!suppressAuthenticationRequiredPromptAfterLogout &&
+                        !hasShownProjectLoadAuthenticationPrompt)
                     {
-                        BeginLoginFlow(refreshProjectsAfterSuccess: true);
+                        hasShownProjectLoadAuthenticationPrompt = true;
+                        if (OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage))
+                        {
+                            BeginLoginFlow(refreshProjectsAfterSuccess: true);
+                        }
                     }
                 }
                 catch (InvalidOperationException ex)
@@ -528,6 +570,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             EnsureAnalyticsHelper();
             ApplyLocalizedLabels();
+            RefreshAccountButtonsFromSession();
             if (TryBindToSyncController())
             {
                 Globals.ThisAddIn.RibbonSyncController?.RefreshActiveProjectFromSheetMetadata();
@@ -735,11 +778,19 @@ namespace OfficeAgent.ExcelAddIn
             fullUploadButton.Label = FormatRibbonButtonLabel(strings.RibbonFullUploadButtonLabel);
             partialUploadButton.Label = FormatRibbonButtonLabel(strings.RibbonPartialUploadButtonLabel);
             group2.Label = strings.RibbonAccountGroupLabel;
-            loginButton.Label = FormatRibbonButtonLabel(strings.RibbonLoginButtonLabel);
+            loginButton.Label = strings.RibbonLoginButtonLabel;
+            logoutButton.Label = strings.RibbonLogoutButtonLabel;
             groupHelp.Label = strings.RibbonHelpGroupLabel;
             documentationButton.Label = FormatRibbonButtonLabel(strings.RibbonDocumentationButtonLabel);
             aboutButton.Label = FormatRibbonButtonLabel(strings.RibbonAboutButtonLabel);
             projectDropDown.Label = ProjectDropDownPlaceholderText;
+        }
+
+        private void RefreshAccountButtonsFromSession()
+        {
+            var isLoggedIn = Globals.ThisAddIn?.AccountSessionService?.IsLoggedIn() == true;
+            loginButton.Enabled = !isLoggedIn;
+            logoutButton.Enabled = isLoggedIn;
         }
 
         private static string FormatRibbonButtonLabel(string label)

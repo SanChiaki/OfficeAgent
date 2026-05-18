@@ -19,6 +19,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
+        private readonly AccountSessionService accountSessionService;
         private readonly Func<AppSettings, string> getResolvedUiLocale;
         private readonly IAnalyticsService analyticsService;
         private Microsoft.Office.Tools.CustomTaskPane taskPane;
@@ -33,6 +34,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
+            AccountSessionService accountSessionService,
             Func<AppSettings, string> getResolvedUiLocale,
             IAnalyticsService analyticsService = null)
         {
@@ -44,6 +46,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
             this.agentOrchestrator = agentOrchestrator;
             this.sharedCookies = sharedCookies;
             this.cookieStore = cookieStore;
+            this.accountSessionService = accountSessionService;
             this.getResolvedUiLocale = getResolvedUiLocale;
             this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
         }
@@ -81,7 +84,7 @@ namespace OfficeAgent.ExcelAddIn.TaskPane
                 return;
             }
 
-            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService);
+            hostControl = new TaskPaneHostControl(sessionStore, settingsStore, excelContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, accountSessionService, getResolvedUiLocale, analyticsService);
             taskPane = addIn.CustomTaskPanes.Add(hostControl, "xISDP AI");
             taskPane.DockPosition = MsoCTPDockPosition.msoCTPDockPositionRight;
             taskPane.Width = 800;
