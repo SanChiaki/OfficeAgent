@@ -272,6 +272,12 @@ namespace OfficeAgent.ExcelAddIn
                 ? Array.Empty<IDictionary<string, object>>()
                 : worksheetSyncService.Download(context.Binding.SystemKey, context.Binding.ProjectId, selection.RowIds, selection.ApiFieldKeys);
 
+            OfficeAgentLog.Info(
+                "worksheet-sync",
+                "partial_download.prepared",
+                $"Prepared partial download for sheet '{sheetName}'.",
+                BuildPartialDownloadDiagnostics(context.Binding, selection, rows));
+
             return new WorksheetDownloadPlan
             {
                 OperationName = GetStrings().RibbonPartialDownloadButtonLabel,
@@ -1117,9 +1123,20 @@ namespace OfficeAgent.ExcelAddIn
             var snapshot = selectionReader.ReadSelectionSnapshot();
             if (snapshot?.Areas == null || snapshot.Areas.Length == 0)
             {
+                OfficeAgentLog.Info(
+                    "worksheet-sync",
+                    "selection.snapshot.empty",
+                    $"Selection snapshot is empty for sheet '{sheetName}', falling back to visible cells.",
+                    BuildSelectionAreaDiagnostics(sheetName, binding, Array.Empty<WorksheetSelectionArea>(), Array.Empty<int>(), lastUsedRow: null));
                 var rowIdAccessor = CreateCachedRowIdAccessor(sheetName, schema);
                 return ResolveCurrentSelection(schema, rowIdAccessor);
             }
+
+            OfficeAgentLog.Info(
+                "worksheet-sync",
+                "selection.snapshot.read",
+                $"Read selection snapshot for sheet '{sheetName}'.",
+                BuildSelectionSnapshotDiagnostics(sheetName, binding, snapshot.Areas));
 
             return ResolveSelectionAreas(sheetName, binding, schema, snapshot.Areas);
         }
@@ -1151,6 +1168,11 @@ namespace OfficeAgent.ExcelAddIn
                 .ToArray();
             if (selectedFieldKeys.Length == 0 || selectedColumnIndexes.Length == 0)
             {
+                OfficeAgentLog.Info(
+                    "worksheet-sync",
+                    "selection.resolve.no_data_columns",
+                    $"Selection for sheet '{sheetName}' does not include managed data columns.",
+                    BuildSelectionAreaDiagnostics(sheetName, binding, areas, selectedColumnIndexes, lastUsedRow: null));
                 return new ResolvedSelection
                 {
                     ApiFieldKeys = selectedFieldKeys,
@@ -1162,6 +1184,11 @@ namespace OfficeAgent.ExcelAddIn
             var lastUsedRow = gridAdapter.GetLastUsedRow(sheetName);
             if (binding == null || lastUsedRow < binding.DataStartRow)
             {
+                OfficeAgentLog.Info(
+                    "worksheet-sync",
+                    "selection.resolve.no_used_rows",
+                    $"Selection for sheet '{sheetName}' has no readable managed rows.",
+                    BuildSelectionAreaDiagnostics(sheetName, binding, areas, selectedColumnIndexes, lastUsedRow));
                 return new ResolvedSelection
                 {
                     ApiFieldKeys = selectedFieldKeys,
@@ -1175,6 +1202,11 @@ namespace OfficeAgent.ExcelAddIn
             var targetRows = ReadRowsWithIds(sheetName, schema, rowStart, rowEnd)
                 .Where(row => IsRowSelected(row.Row, areas))
                 .ToArray();
+            OfficeAgentLog.Info(
+                "worksheet-sync",
+                "selection.resolve.completed",
+                $"Resolved partial selection rows for sheet '{sheetName}'.",
+                BuildResolvedRowDiagnostics(sheetName, binding, areas, selectedColumnIndexes, lastUsedRow, targetRows));
             return new ResolvedSelection
             {
                 RowIds = targetRows
@@ -1201,6 +1233,7 @@ namespace OfficeAgent.ExcelAddIn
             }
 
             var result = new List<WorksheetSelectionRow>();
+            var sampledRows = new List<string>();
             for (var batchStartRow = startRow; batchStartRow <= endRow; batchStartRow += RowIdReadBatchSize)
             {
                 var batchEndRow = Math.Min(endRow, batchStartRow + RowIdReadBatchSize - 1);
@@ -1209,6 +1242,12 @@ namespace OfficeAgent.ExcelAddIn
                 for (var rowOffset = 0; rowOffset < rowCount; rowOffset++)
                 {
                     var rowId = Convert.ToString(GetRangeValue(values, rowOffset, 0)) ?? string.Empty;
+                    var currentRow = batchStartRow + rowOffset;
+                    if (currentRow >= Math.Max(startRow, endRow - 9))
+                    {
+                        sampledRows.Add($"{currentRow}:{(string.IsNullOrWhiteSpace(rowId) ? "<empty>" : rowId)}");
+                    }
+
                     if (string.IsNullOrWhiteSpace(rowId))
                     {
                         continue;
@@ -1216,11 +1255,17 @@ namespace OfficeAgent.ExcelAddIn
 
                     result.Add(new WorksheetSelectionRow
                     {
-                        Row = batchStartRow + rowOffset,
+                        Row = currentRow,
                         RowId = rowId,
                     });
                 }
             }
+
+            OfficeAgentLog.Info(
+                "worksheet-sync",
+                "selection.read_row_ids",
+                $"Read row ids for sheet '{sheetName}'.",
+                $"range={startRow}-{endRow}; idColumn={idColumn.ColumnIndex}; resolvedCount={result.Count}; tailSample=[{string.Join(", ", sampledRows)}]");
 
             return result.ToArray();
         }
@@ -1811,6 +1856,90 @@ namespace OfficeAgent.ExcelAddIn
         private static string NormalizeHeaderType(string headerType)
         {
             return string.IsNullOrWhiteSpace(headerType) ? "single" : headerType;
+        }
+
+        private static string BuildPartialDownloadDiagnostics(
+            SheetBinding binding,
+            ResolvedSelection selection,
+            IReadOnlyList<IDictionary<string, object>> rows)
+        {
+            var rowIds = selection?.RowIds ?? Array.Empty<string>();
+            var targetRows = selection?.TargetRows ?? Array.Empty<WorksheetSelectionRow>();
+            var targetColumns = selection?.TargetColumns ?? Array.Empty<int>();
+            return $"dataStartRow={binding?.DataStartRow ?? 0}; " +
+                   $"selectedRowIds={rowIds.Length}; " +
+                   $"selectedTargetRows={targetRows.Length}; " +
+                   $"selectedColumns={string.Join(",", targetColumns)}; " +
+                   $"downloadedRows={rows?.Count ?? 0}; " +
+                   $"rowIds=[{string.Join(", ", rowIds.Take(20))}]";
+        }
+
+        private static string BuildSelectionAreaDiagnostics(
+            string sheetName,
+            SheetBinding binding,
+            IReadOnlyList<WorksheetSelectionArea> areas,
+            IReadOnlyList<int> selectedColumnIndexes,
+            int? lastUsedRow)
+        {
+            return $"sheet={sheetName}; " +
+                   $"dataStartRow={binding?.DataStartRow ?? 0}; " +
+                   $"lastUsedRow={(lastUsedRow.HasValue ? lastUsedRow.Value.ToString() : "<null>")}; " +
+                   $"areas=[{FormatAreas(areas)}]; " +
+                   $"selectedColumns=[{string.Join(",", selectedColumnIndexes ?? Array.Empty<int>())}]";
+        }
+
+        private static string BuildResolvedRowDiagnostics(
+            string sheetName,
+            SheetBinding binding,
+            IReadOnlyList<WorksheetSelectionArea> areas,
+            IReadOnlyList<int> selectedColumnIndexes,
+            int lastUsedRow,
+            IReadOnlyList<WorksheetSelectionRow> targetRows)
+        {
+            var targetRowList = targetRows ?? Array.Empty<WorksheetSelectionRow>();
+            var orderedRows = targetRowList
+                .OrderBy(row => row.Row)
+                .ToArray();
+            var tailRows = orderedRows
+                .Skip(Math.Max(0, orderedRows.Length - 10))
+                .Select(row => $"{row.Row}:{row.RowId}");
+            return $"sheet={sheetName}; " +
+                   $"dataStartRow={binding?.DataStartRow ?? 0}; " +
+                   $"lastUsedRow={lastUsedRow}; " +
+                   $"areas=[{FormatAreas(areas)}]; " +
+                   $"selectedColumns=[{string.Join(",", selectedColumnIndexes ?? Array.Empty<int>())}]; " +
+                   $"resolvedTargetRows={targetRowList.Count}; " +
+                   $"tailResolvedRows=[{string.Join(", ", tailRows)}]";
+        }
+
+        private static string BuildSelectionSnapshotDiagnostics(
+            string sheetName,
+            SheetBinding binding,
+            IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            var normalizedAreas = (areas ?? Array.Empty<WorksheetSelectionArea>())
+                .Where(area => area != null)
+                .ToArray();
+            var selectedRowCount = normalizedAreas
+                .Sum(area => Math.Max(0, area.EndRow - area.StartRow + 1));
+            var selectedColumnCount = normalizedAreas
+                .Sum(area => Math.Max(0, area.EndColumn - area.StartColumn + 1));
+
+            return $"sheet={sheetName}; " +
+                   $"dataStartRow={binding?.DataStartRow ?? 0}; " +
+                   $"areaCount={normalizedAreas.Length}; " +
+                   $"selectedRows={selectedRowCount}; " +
+                   $"selectedColumns={selectedColumnCount}; " +
+                   $"areas=[{FormatAreas(normalizedAreas)}]";
+        }
+
+        private static string FormatAreas(IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            return string.Join(
+                ", ",
+                (areas ?? Array.Empty<WorksheetSelectionArea>())
+                    .Where(area => area != null)
+                    .Select(area => $"R{area.StartRow}-R{area.EndRow}/C{area.StartColumn}-C{area.EndColumn}"));
         }
     }
 

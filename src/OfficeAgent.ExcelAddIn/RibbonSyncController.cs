@@ -421,6 +421,11 @@ namespace OfficeAgent.ExcelAddIn
                 var strings = GetStrings();
                 var plan = preparePlan(EnsureExecutionService());
                 var rowCount = plan.Rows?.Count ?? 0;
+                OfficeAgentLog.Info(
+                    "ribbon_sync",
+                    "download.plan_prepared",
+                    $"Prepared download plan for sheet '{plan?.SheetName ?? string.Empty}'.",
+                    BuildDownloadPlanDetails(plan, rowCount, CountDownloadFields(plan)));
                 if (rowCount == 0)
                 {
                     TrackRibbonEvent(
@@ -735,6 +740,31 @@ namespace OfficeAgent.ExcelAddIn
             };
         }
 
+        private static string BuildDownloadPlanDetails(
+            WorksheetDownloadPlan plan,
+            int rowCount,
+            int fieldCount)
+        {
+            var selection = plan?.Selection;
+            var targetRows = selection?.TargetRows ?? Array.Empty<WorksheetSelectionRow>();
+            var targetAreas = selection?.TargetAreas ?? Array.Empty<WorksheetSelectionArea>();
+            var tailRows = targetRows
+                .OrderBy(row => row.Row)
+                .Skip(Math.Max(0, targetRows.Length - 10))
+                .Select(row => $"{row.Row}:{row.RowId}");
+
+            var builder = new StringBuilder();
+            AppendDetail(builder, "SheetName", plan?.SheetName);
+            AppendDetail(builder, "OperationName", plan?.OperationName);
+            AppendDetail(builder, "RowCount", rowCount.ToString());
+            AppendDetail(builder, "FieldCount", fieldCount.ToString());
+            AppendDetail(builder, "SelectionRowIds", (selection?.RowIds?.Length ?? 0).ToString());
+            AppendDetail(builder, "SelectionTargetRows", targetRows.Length.ToString());
+            AppendDetail(builder, "SelectionAreas", FormatSelectionAreas(targetAreas));
+            AppendDetail(builder, "TailTargetRows", string.Join(", ", tailRows));
+            return builder.ToString();
+        }
+
         private static string GetOperationScope(string operationName)
         {
             if (string.IsNullOrWhiteSpace(operationName))
@@ -806,6 +836,20 @@ namespace OfficeAgent.ExcelAddIn
             AppendDetail(builder, "ProjectId", project?.ProjectId);
             AppendDetail(builder, "ProjectName", project?.DisplayName);
             return builder.ToString();
+        }
+
+        private static string FormatSelectionAreas(IReadOnlyList<WorksheetSelectionArea> areas)
+        {
+            if (areas == null || areas.Count == 0)
+            {
+                return "<empty>";
+            }
+
+            return string.Join(
+                ", ",
+                areas
+                    .Where(area => area != null)
+                    .Select(area => $"R{area.StartRow}-R{area.EndRow}/C{area.StartColumn}-C{area.EndColumn}"));
         }
 
         private static void AppendDetail(StringBuilder builder, string name, string value)
