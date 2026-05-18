@@ -938,6 +938,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     "GetWorkbookScopeKey" => HandleGetWorkbookScopeKey(call),
                     "EnsureWorksheet" => HandleEnsureWorksheet(call),
                     "WriteTable" => HandleWriteTable(call),
+                    "ApplyMetadataPresentation" => HandleApplyMetadataPresentation(call),
                     "ReadHeaders" => HandleReadHeaders(call),
                     "ReadTable" => HandleReadTable(call),
                     _ => throw new NotSupportedException(call.MethodName),
@@ -974,6 +975,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     tables[tableName] = rows.Select(row => row?.ToArray() ?? Array.Empty<string>()).ToList();
                 }
 
+                return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+            }
+
+            private static IMessage HandleApplyMetadataPresentation(IMethodCallMessage call)
+            {
                 return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
             }
 

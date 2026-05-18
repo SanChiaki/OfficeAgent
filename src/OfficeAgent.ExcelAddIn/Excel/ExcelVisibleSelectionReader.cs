@@ -32,7 +32,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var area = selection.Areas == null
                     ? selection
                     : selection.Areas[areaIndex] as ExcelInterop.Range;
-
                 if (area == null)
                 {
                     continue;
@@ -40,7 +39,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
                 var rowCount = Convert.ToInt32(area.Rows.Count);
                 var columnCount = Convert.ToInt32(area.Columns.Count);
-
                 for (var rowIndex = 1; rowIndex <= rowCount; rowIndex++)
                 {
                     for (var columnIndex = 1; columnIndex <= columnCount; columnIndex++)

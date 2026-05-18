@@ -2618,6 +2618,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 Bindings[binding.SheetName] = binding;
             }
 
+            public void RefreshMetadataPresentation(string sheetName, bool hideTemplateBindingRows = false)
+            {
+            }
+
             public SheetBinding LoadBinding(string sheetName)
             {
                 if (!Bindings.TryGetValue(sheetName, out var binding))
@@ -3088,6 +3092,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "GetWorkbookScopeKey":
                         return new ReturnMessage(WorkbookScopeKey, null, 0, call.LogicalCallContext, call);
                     case "EnsureWorksheet":
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ApplyMetadataPresentation":
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "WriteTable":
                         {

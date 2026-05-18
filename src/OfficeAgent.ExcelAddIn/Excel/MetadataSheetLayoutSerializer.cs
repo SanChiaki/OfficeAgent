@@ -8,9 +8,9 @@ namespace OfficeAgent.ExcelAddIn.Excel
     {
         private static readonly string[] SectionOrder =
         {
-            "TemplateBindings",
             "SheetBindings",
             "SheetFieldMappings",
+            "TemplateBindings",
         };
 
         internal static IReadOnlyList<string> OrderedSectionNames => SectionOrder;
