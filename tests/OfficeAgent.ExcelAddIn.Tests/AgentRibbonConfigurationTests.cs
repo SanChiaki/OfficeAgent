@@ -403,6 +403,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("public string AssemblyVersion { get; set; }", dialogText, StringComparison.Ordinal);
             Assert.Contains("public string BuildConfiguration { get; set; }", dialogText, StringComparison.Ordinal);
             Assert.Contains("public string BuildTime { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("OfficeAgent Excel Add-in", dialogText, StringComparison.Ordinal);
             Assert.DoesNotContain("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
             Assert.DoesNotContain("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
         }
@@ -1204,6 +1205,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("AboutDialogAction.IgnoreVersion", dialogText, StringComparison.Ordinal);
             Assert.Contains("DownloadUrl", dialogText, StringComparison.Ordinal);
             Assert.Contains("ReleaseNotesUrl", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AboutReleaseNotesButtonText", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("IsSupportedHttpUrl(model.ReleaseNotesUrl)", dialogText, StringComparison.Ordinal);
             Assert.DoesNotContain("public static AboutDialogAction Show(", dialogText, StringComparison.Ordinal);
         }
 
@@ -1213,7 +1216,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
             var stringsText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Localization", "HostLocalizedStrings.cs"));
 
-            Assert.Contains("IsSupportedHttpUrl(model.ReleaseNotesUrl)", dialogText, StringComparison.Ordinal);
             Assert.Contains("IsSupportedHttpUrl(model.DownloadUrl)", dialogText, StringComparison.Ordinal);
             Assert.Contains("Uri.TryCreate", dialogText, StringComparison.Ordinal);
             Assert.Contains("Uri.UriSchemeHttp", dialogText, StringComparison.Ordinal);
@@ -1232,7 +1234,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("AboutLatestVersionLabel", stringsText, StringComparison.Ordinal);
             Assert.Contains("AboutIgnoreVersionButtonText", stringsText, StringComparison.Ordinal);
             Assert.Contains("AboutDownloadButtonText", stringsText, StringComparison.Ordinal);
-            Assert.Contains("AboutReleaseNotesButtonText", stringsText, StringComparison.Ordinal);
+            Assert.Contains("\"当前已是最新版本。\"", stringsText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AboutReleaseNotesButtonText", stringsText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutDialogAllowsMoreUpdateSummaryText()
+        {
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+
+            Assert.Contains("private const int WrappedLineHeight = 96;", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight)", dialogText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

@@ -181,11 +181,9 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string AboutPublishedAtLabel => Locale == "zh" ? "发布时间" : "Published";
 
-        public string AboutNoUpdateAvailableText => Locale == "zh" ? "当前没有可用的新版本。" : "No new version is available.";
+        public string AboutNoUpdateAvailableText => Locale == "zh" ? "当前已是最新版本。" : "You are on the latest version.";
 
         public string AboutDownloadButtonText => Locale == "zh" ? "下载" : "Download";
-
-        public string AboutReleaseNotesButtonText => Locale == "zh" ? "发布说明" : "Release notes";
 
         public string AboutIgnoreVersionButtonText => Locale == "zh" ? "忽略此版本" : "Ignore this version";
 

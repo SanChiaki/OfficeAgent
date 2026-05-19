@@ -82,7 +82,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.
 
 #### `GET /update-release-notes`
 
-返回一页本地发布说明，用于验证 `关于` 弹窗里的发布说明入口。
+返回一页本地发布说明。当前 `关于` 弹窗不再显示发布说明按钮，该 endpoint 保留用于兼容 manifest 字段和历史验证。
 
 #### `GET /update-download/xISDP.Setup.exe`
 
