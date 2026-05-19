@@ -71,6 +71,79 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        [Theory]
+        [InlineData("manifest.json")]
+        [InlineData("ftp://updates.example/manifest.json")]
+        public async Task GetManifestAsyncRejectsInvalidManifestUrlsWithoutSendingHttp(string manifestUrl)
+        {
+            var handler = new StubHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"latestVersion\":\"1.0.176\"}", Encoding.UTF8, "application/json"),
+            });
+            using (var httpClient = new HttpClient(handler))
+            {
+                var client = new UpdateManifestClient(httpClient);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => client.GetManifestAsync(manifestUrl, CancellationToken.None));
+
+                Assert.Equal(0, handler.CallCount);
+            }
+        }
+
+        [Fact]
+        public async Task GetManifestAsyncNormalizesOptionalUrls()
+        {
+            const string body = "{\"latestVersion\":\"1.0.176\",\"downloadUrl\":\" https://updates.example/download.exe \",\"releaseNotesUrl\":\" https://updates.example/notes \"}";
+            var handler = new StubHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
+            using (var httpClient = new HttpClient(handler))
+            {
+                var client = new UpdateManifestClient(httpClient);
+
+                var manifest = await client.GetManifestAsync("https://updates.example/manifest.json", CancellationToken.None);
+
+                Assert.Equal("https://updates.example/download.exe", manifest.DownloadUrl);
+                Assert.Equal("https://updates.example/notes", manifest.ReleaseNotesUrl);
+            }
+
+            const string invalidBody = "{\"latestVersion\":\"1.0.176\",\"downloadUrl\":\"ftp://updates.example/download.exe\",\"releaseNotesUrl\":\"notes\"}";
+            handler = new StubHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(invalidBody, Encoding.UTF8, "application/json"),
+            });
+            using (var httpClient = new HttpClient(handler))
+            {
+                var client = new UpdateManifestClient(httpClient);
+
+                var manifest = await client.GetManifestAsync("https://updates.example/manifest.json", CancellationToken.None);
+
+                Assert.Equal(string.Empty, manifest.DownloadUrl);
+                Assert.Equal(string.Empty, manifest.ReleaseNotesUrl);
+            }
+        }
+
+        [Fact]
+        public async Task GetManifestAsyncTrimsTitleAndSummary()
+        {
+            const string body = "{\"latestVersion\":\"1.0.176\",\"title\":\" Release \",\"summary\":\" Summary \"}";
+            var handler = new StubHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
+            using (var httpClient = new HttpClient(handler))
+            {
+                var client = new UpdateManifestClient(httpClient);
+
+                var manifest = await client.GetManifestAsync("https://updates.example/manifest.json", CancellationToken.None);
+
+                Assert.Equal("Release", manifest.Title);
+                Assert.Equal("Summary", manifest.Summary);
+            }
+        }
+
         private sealed class StubHttpHandler : HttpMessageHandler
         {
             private readonly HttpResponseMessage response;

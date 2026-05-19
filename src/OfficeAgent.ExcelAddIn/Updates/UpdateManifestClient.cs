@@ -49,8 +49,8 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 manifest.LatestVersion = manifest.LatestVersion.Trim();
                 manifest.DownloadUrl = NormalizeHttpUrl(manifest.DownloadUrl);
                 manifest.ReleaseNotesUrl = NormalizeHttpUrl(manifest.ReleaseNotesUrl);
-                manifest.Title = manifest.Title ?? string.Empty;
-                manifest.Summary = manifest.Summary ?? string.Empty;
+                manifest.Title = (manifest.Title ?? string.Empty).Trim();
+                manifest.Summary = (manifest.Summary ?? string.Empty).Trim();
 
                 return manifest;
             }
