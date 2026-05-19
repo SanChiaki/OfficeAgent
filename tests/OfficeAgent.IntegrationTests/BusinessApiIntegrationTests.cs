@@ -177,11 +177,6 @@ namespace OfficeAgent.IntegrationTests
                 try
                 {
                     using var response = client.GetAsync(url).GetAwaiter().GetResult();
-                    if (process.HasExited)
-                    {
-                        break;
-                    }
-
                     return;
                 }
                 catch (Exception ex)

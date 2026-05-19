@@ -334,20 +334,35 @@ namespace OfficeAgent.Infrastructure.Tests
         private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
         {
             var entries = new List<OfficeAgentLogEntry>();
-            OfficeAgentLog.Configure(entries.Add);
+            var syncRoot = new object();
+            OfficeAgentLog.Configure(entry =>
+            {
+                lock (syncRoot)
+                {
+                    entries.Add(entry);
+                }
+            });
 
             try
             {
                 action();
-                return new LogCaptureResult(entries, null);
+                return new LogCaptureResult(SnapshotEntries(entries, syncRoot), null);
             }
             catch (Exception ex)
             {
-                return new LogCaptureResult(entries, ex);
+                return new LogCaptureResult(SnapshotEntries(entries, syncRoot), ex);
             }
             finally
             {
                 OfficeAgentLog.Reset();
+            }
+        }
+
+        private static List<OfficeAgentLogEntry> SnapshotEntries(List<OfficeAgentLogEntry> entries, object syncRoot)
+        {
+            lock (syncRoot)
+            {
+                return entries.ToList();
             }
         }
 
