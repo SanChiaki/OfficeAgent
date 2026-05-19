@@ -203,6 +203,10 @@
     <Compile Include="Localization\UiLocaleResolver.cs" />
     <Compile Include="Analytics\WorkbookAnalyticsProjectContextProvider.cs" />
     <Compile Include="Analytics\RibbonAnalyticsHelper.cs" />
+    <Compile Include="Updates\IUpdateManifestClient.cs" />
+    <Compile Include="Updates\UpdateManifestClient.cs" />
+    <Compile Include="Updates\IUpdateStateStore.cs" />
+    <Compile Include="Updates\FileUpdateStateStore.cs" />
     <Compile Include="Updates\UpdateVersionComparer.cs" />
     <Compile Include="Updates\UpdateManifest.cs" />
     <Compile Include="Updates\UpdateState.cs" />
