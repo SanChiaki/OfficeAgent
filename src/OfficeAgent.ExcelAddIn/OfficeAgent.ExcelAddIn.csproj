@@ -203,6 +203,10 @@
     <Compile Include="Localization\UiLocaleResolver.cs" />
     <Compile Include="Analytics\WorkbookAnalyticsProjectContextProvider.cs" />
     <Compile Include="Analytics\RibbonAnalyticsHelper.cs" />
+    <Compile Include="Updates\UpdateVersionComparer.cs" />
+    <Compile Include="Updates\UpdateManifest.cs" />
+    <Compile Include="Updates\UpdateState.cs" />
+    <Compile Include="Updates\UpdateNotificationState.cs" />
     <Compile Include="SsoLoginPopup.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />
     <Compile Include="TaskPane\TaskPaneHostControl.cs">
