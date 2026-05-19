@@ -75,6 +75,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 if (!options.IsEnabled || string.IsNullOrWhiteSpace(options.ManifestUrl))
                 {
                     OfficeAgentLog.Info("updates", "check.skipped_disabled", "Update check skipped because update checks are disabled.");
+                    MergeLatestIgnoredVersion(previousState);
                     ApplyState(previousState);
                     RaiseStateChangedIfNeeded(raiseStateChanged);
                     return;
@@ -83,6 +84,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 var nowUtc = getUtcNow();
                 if (IsCacheFresh(previousState, nowUtc))
                 {
+                    MergeLatestIgnoredVersion(previousState);
                     ApplyState(previousState);
                     RaiseStateChangedIfNeeded(raiseStateChanged);
                     return;

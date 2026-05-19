@@ -251,6 +251,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public async Task CheckForUpdatesAsyncKeepsIgnoredVersionHiddenWhenIgnoreSaveFailsAndCacheIsFresh()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore
+            {
+                State = new UpdateState
+                {
+                    LastCheckedAtUtc = NowUtc.AddHours(-1),
+                    LatestVersion = "1.0.176",
+                },
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            service.LoadCachedState();
+            store.ThrowOnSave = true;
+
+            service.IgnoreCurrentVersion();
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(0, client.CallCount);
+            Assert.Equal(string.Empty, store.State.IgnoredVersion);
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
         public async Task CheckForUpdatesAsyncPreservesPreviousStateWhenManifestSaveFails()
         {
             var client = new FakeUpdateManifestClient();
