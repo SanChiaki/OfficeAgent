@@ -682,16 +682,22 @@ namespace OfficeAgent.ExcelAddIn
                 updateNotificationUiThreadId != 0 &&
                 Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
             {
+                var postedToUpdateNotificationUiContext = false;
+
                 try
                 {
                     updateNotificationUiContext.Post(_ => RefreshAboutButtonImageSafely(), null);
+                    postedToUpdateNotificationUiContext = true;
                 }
                 catch (Exception ex)
                 {
                     OfficeAgentLog.Warn("ribbon", "about_icon.post_failed", "Failed to post about icon refresh to the UI thread.", ex.Message);
                 }
 
-                return;
+                if (postedToUpdateNotificationUiContext)
+                {
+                    return;
+                }
             }
 
             if (updateNotificationUiControl != null &&
