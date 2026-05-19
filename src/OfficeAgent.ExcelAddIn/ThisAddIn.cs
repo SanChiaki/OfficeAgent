@@ -94,12 +94,7 @@ namespace OfficeAgent.ExcelAddIn
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
             AccountSessionService.ConfigureSsoDomain(initialSettings.SsoUrl);
-            UpdateNotificationService = new UpdateNotificationService(
-                UpdateCheckConfiguration.CreateDefault(),
-                new UpdateManifestClient(),
-                new FileUpdateStateStore(Path.Combine(appDataDirectory, "update-state.json")),
-                VersionInfo.AppVersion);
-            UpdateNotificationService.LoadCachedState();
+            InitializeUpdateNotificationService(appDataDirectory);
 
             ExcelContextService = new ExcelSelectionContextService(Application);
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
@@ -156,7 +151,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
-            UpdateNotificationService.StartBackgroundCheck(startupSynchronizationContext);
+            UpdateNotificationService?.StartBackgroundCheck(startupSynchronizationContext);
             lastProjectRefreshSheetName = GetActiveWorksheetName();
             TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, AccountSessionService, GetResolvedUiLocale, AnalyticsService);
             Application.WorkbookActivate += Application_WorkbookActivate;
@@ -180,6 +175,24 @@ namespace OfficeAgent.ExcelAddIn
         {
             Startup += ThisAddIn_Startup;
             Shutdown += ThisAddIn_Shutdown;
+        }
+
+        private void InitializeUpdateNotificationService(string appDataDirectory)
+        {
+            try
+            {
+                UpdateNotificationService = new UpdateNotificationService(
+                    UpdateCheckConfiguration.CreateDefault(),
+                    new UpdateManifestClient(),
+                    new FileUpdateStateStore(Path.Combine(appDataDirectory, "update-state.json")),
+                    VersionInfo.AppVersion);
+                UpdateNotificationService.LoadCachedState();
+            }
+            catch (Exception ex)
+            {
+                UpdateNotificationService = null;
+                OfficeAgentLog.Warn("updates", "update.setup.failed", "Update notification setup failed. Startup will continue without update reminders.", ex.Message);
+            }
         }
 
         private void Application_SheetSelectionChange(object sh, ExcelInterop.Range target)

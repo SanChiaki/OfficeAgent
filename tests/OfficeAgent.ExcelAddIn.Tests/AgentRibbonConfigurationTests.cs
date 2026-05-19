@@ -1130,9 +1130,14 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
 
             Assert.Contains("internal UpdateNotificationService UpdateNotificationService { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("private void InitializeUpdateNotificationService(string appDataDirectory)", addInText, StringComparison.Ordinal);
+            Assert.Contains("InitializeUpdateNotificationService(appDataDirectory);", addInText, StringComparison.Ordinal);
+            Assert.Contains("try", addInText, StringComparison.Ordinal);
             Assert.Contains("UpdateNotificationService = new UpdateNotificationService(", addInText, StringComparison.Ordinal);
             Assert.Contains("UpdateNotificationService.LoadCachedState();", addInText, StringComparison.Ordinal);
-            Assert.Contains("UpdateNotificationService.StartBackgroundCheck(startupSynchronizationContext);", addInText, StringComparison.Ordinal);
+            Assert.Contains("catch (Exception ex)", addInText, StringComparison.Ordinal);
+            Assert.Contains("OfficeAgentLog.Warn(\"updates\", \"update.setup.failed\"", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService?.StartBackgroundCheck(startupSynchronizationContext);", addInText, StringComparison.Ordinal);
             Assert.DoesNotContain("await UpdateNotificationService", addInText, StringComparison.Ordinal);
         }
 
