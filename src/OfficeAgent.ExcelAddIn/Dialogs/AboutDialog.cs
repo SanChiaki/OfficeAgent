@@ -42,6 +42,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private const int DialogWidth = 460;
         private const int HorizontalPadding = 18;
         private const int ButtonHeight = 28;
+        private const int WrappedLineHeight = 96;
 
         private readonly AboutDialogModel model;
         private readonly HostLocalizedStrings strings;
@@ -84,7 +85,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             ShowInTaskbar = false;
 
             var top = 16;
-            AddLine("OfficeAgent Excel Add-in", FontStyle.Bold, ref top);
             AddLine($"{strings.AboutCurrentVersionLabel}: {model.AppVersion}", FontStyle.Regular, ref top);
             AddLine($"{strings.AboutAssemblyVersionLabel}: {model.AssemblyVersion}", FontStyle.Regular, ref top);
             AddLine($"{strings.AboutBuildConfigurationLabel}: {model.BuildConfiguration}", FontStyle.Regular, ref top);
@@ -102,7 +102,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateTitle))
                 {
-                    AddWrappedLine(model.UpdateTitle, ref top);
+                    AddLine(model.UpdateTitle, FontStyle.Regular, ref top);
                 }
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateSummary))
@@ -139,10 +139,10 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             {
                 AutoSize = false,
                 Text = text ?? string.Empty,
-                Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), 48),
+                Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight),
             };
             Controls.Add(label);
-            top += 50;
+            top += WrappedLineHeight + 2;
         }
 
         private void AddButtons(int top)
@@ -168,14 +168,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 };
                 Controls.Add(ignoreButton);
                 right -= 126;
-            }
-
-            if (IsSupportedHttpUrl(model.ReleaseNotesUrl))
-            {
-                var releaseNotesButton = CreateButton(strings.AboutReleaseNotesButtonText, right - 110, top, 110);
-                releaseNotesButton.Click += (sender, e) => OpenUrl(model.ReleaseNotesUrl);
-                Controls.Add(releaseNotesButton);
-                right -= 118;
             }
 
             if (IsSupportedHttpUrl(model.DownloadUrl))
