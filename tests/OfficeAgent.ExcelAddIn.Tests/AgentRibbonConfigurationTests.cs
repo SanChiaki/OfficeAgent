@@ -383,12 +383,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
+            var dialogText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "AboutDialog.cs"));
 
-            Assert.Contains("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialog.Show(CreateAboutDialogModel(), GetStrings())", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("private static AboutDialogModel CreateAboutDialogModel()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AppVersion = VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AssemblyVersion = assemblyVersion", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("BuildConfiguration = GetBuildConfiguration()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("BuildTime = GetAssemblyBuildTime(assembly)", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("GetBuildConfiguration()", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("File.GetLastWriteTime", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal sealed class AboutDialogModel", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string AppVersion { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string AssemblyVersion { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string BuildConfiguration { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string BuildTime { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
