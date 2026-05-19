@@ -205,6 +205,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public async Task CheckForUpdatesAsyncInvokesLaterStateChangedSubscribersWhenEarlierSubscriberThrows()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore();
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            var laterSubscriberCallCount = 0;
+            service.StateChanged += (sender, args) => throw new InvalidOperationException("subscriber failed");
+            service.StateChanged += (sender, args) => laterSubscriberCallCount++;
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(1, laterSubscriberCallCount);
+        }
+
+        [Fact]
         public async Task CheckForUpdatesAsyncDoesNotThrowWhenStoreLoadFails()
         {
             var client = new FakeUpdateManifestClient();
@@ -236,6 +251,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public async Task CheckForUpdatesAsyncPreservesPreviousStateWhenManifestSaveFails()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore
+            {
+                ThrowOnSave = true,
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(1, client.CallCount);
+            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.Equal(string.Empty, store.State.LatestVersion);
+        }
+
+        [Fact]
         public async Task CheckForUpdatesAsyncDoesNotUseFutureCacheTimestamp()
         {
             var client = new FakeUpdateManifestClient();
@@ -262,6 +294,39 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.NotNull(options);
         }
 
+        [Fact]
+        public async Task CheckForUpdatesAsyncKeepsIgnoredVersionHiddenWhenIgnoredDuringInFlightRequest()
+        {
+            var client = new FakeUpdateManifestClient
+            {
+                Manifest = new UpdateManifest
+                {
+                    LatestVersion = "1.0.176",
+                },
+                WaitForRelease = true,
+            };
+            var store = new MemoryUpdateStateStore
+            {
+                State = new UpdateState
+                {
+                    LastCheckedAtUtc = NowUtc.AddDays(-2),
+                    LatestVersion = "1.0.176",
+                },
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            service.LoadCachedState();
+
+            var checkTask = service.CheckForUpdatesAsync(CancellationToken.None);
+            Assert.True(client.WaitForCall(TimeSpan.FromSeconds(5)));
+
+            service.IgnoreCurrentVersion();
+            client.Release();
+            await checkTask;
+
+            Assert.Equal("1.0.176", store.State.IgnoredVersion);
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
         private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, IUpdateStateStore store)
         {
             return new UpdateNotificationService(options, client, store, "1.0.175", () => NowUtc);
@@ -275,11 +340,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
             };
 
             public int CallCount { get; private set; }
+            public bool WaitForRelease { get; set; }
+            private readonly ManualResetEventSlim called = new ManualResetEventSlim(false);
+            private readonly ManualResetEventSlim released = new ManualResetEventSlim(false);
 
             public Task<UpdateManifest> GetManifestAsync(string manifestUrl, CancellationToken cancellationToken)
             {
                 CallCount++;
+                called.Set();
+                if (WaitForRelease)
+                {
+                    released.Wait(cancellationToken);
+                }
+
                 return Task.FromResult(Manifest);
+            }
+
+            public bool WaitForCall(TimeSpan timeout)
+            {
+                return called.Wait(timeout);
+            }
+
+            public void Release()
+            {
+                released.Set();
             }
         }
 

@@ -99,6 +99,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
                     var nextState = CloneState(previousState);
                     nextState.ApplyManifest(manifest, nowUtc);
+                    MergeLatestIgnoredVersion(nextState);
                     stateStore.Save(nextState);
                     ApplyState(nextState);
                     RaiseStateChangedIfNeeded(raiseStateChanged);
@@ -139,6 +140,23 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
             OfficeAgentLog.Info("updates", "version.ignored", "User ignored the current update version.", nextState.IgnoredVersion);
             RaiseStateChanged(null);
+        }
+
+        private void MergeLatestIgnoredVersion(UpdateState state)
+        {
+            var latestState = LoadStateSafely();
+            if (!string.IsNullOrWhiteSpace(latestState.IgnoredVersion))
+            {
+                state.IgnoredVersion = latestState.IgnoredVersion;
+            }
+
+            lock (syncRoot)
+            {
+                if (!string.IsNullOrWhiteSpace(cachedState.IgnoredVersion))
+                {
+                    state.IgnoredVersion = cachedState.IgnoredVersion;
+                }
+            }
         }
 
         private bool IsCacheFresh(UpdateState state, DateTime nowUtc)
@@ -225,13 +243,16 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
         private void InvokeStateChangedHandler(EventHandler handler)
         {
-            try
+            foreach (EventHandler subscriber in handler.GetInvocationList())
             {
-                handler(this, EventArgs.Empty);
-            }
-            catch (Exception ex)
-            {
-                OfficeAgentLog.Warn("updates", "state_changed.handler_failed", "Update notification state change subscriber failed.", ex.Message);
+                try
+                {
+                    subscriber(this, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    OfficeAgentLog.Warn("updates", "state_changed.handler_failed", "Update notification state change subscriber failed.", ex.Message);
+                }
             }
         }
 

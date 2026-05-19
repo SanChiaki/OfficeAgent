@@ -71,6 +71,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
+        [Fact]
+        public void SaveThrowsWhenStateCannotBePersisted()
+        {
+            var tempDirectory = CreateTempDirectory();
+            try
+            {
+                var blockingFilePath = Path.Combine(tempDirectory, "blocking-file");
+                File.WriteAllText(blockingFilePath, "not a directory");
+                var store = new FileUpdateStateStore(Path.Combine(blockingFilePath, "state.json"));
+
+                Assert.Throws<IOException>(() => store.Save(new UpdateState
+                {
+                    LatestVersion = "1.0.176",
+                }));
+            }
+            finally
+            {
+                DeleteTempDirectory(tempDirectory);
+            }
+        }
+
         private static string CreateTempDirectory()
         {
             var path = Path.Combine(Path.GetTempPath(), "OfficeAgent.Tests", Guid.NewGuid().ToString("N"));

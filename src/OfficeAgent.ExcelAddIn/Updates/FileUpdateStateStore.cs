@@ -48,6 +48,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
             catch (Exception ex)
             {
                 OfficeAgentLog.Error("updates", "state.save_failed", "Failed to save update state.", ex);
+                throw;
             }
         }
     }
