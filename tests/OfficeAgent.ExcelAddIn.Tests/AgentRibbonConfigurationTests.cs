@@ -389,7 +389,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "Dialogs",
                 "AboutDialog.cs"));
 
-            Assert.Contains("AboutDialog.Show(CreateAboutDialogModel(), GetStrings())", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialog.ShowDialogForUpdate(CreateAboutDialogModel(), GetStrings())", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("private static AboutDialogModel CreateAboutDialogModel()", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("AppVersion = VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("AssemblyVersion = assemblyVersion", ribbonCodeText, StringComparison.Ordinal);
@@ -404,6 +404,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("public string BuildConfiguration { get; set; }", dialogText, StringComparison.Ordinal);
             Assert.Contains("public string BuildTime { get; set; }", dialogText, StringComparison.Ordinal);
             Assert.DoesNotContain("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -1174,6 +1175,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("TryBindToUpdateNotificationService();", ribbonText, StringComparison.Ordinal);
             Assert.Contains("UpdateNotificationService_StateChanged", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiContext = SynchronizationContext.Current;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiContext.Post", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("RefreshAboutButtonImageSafely", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("OfficeAgentLog.Warn(", ribbonText, StringComparison.Ordinal);
             Assert.Contains("ApplyAboutButtonImage();", ribbonText, StringComparison.Ordinal);
             Assert.Contains("aboutButton.OfficeImageId = string.Empty;", ribbonText, StringComparison.Ordinal);
             Assert.Contains("RibbonAboutIconFactory.CreateAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
@@ -1185,11 +1192,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
             var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
 
-            Assert.Contains("AboutDialog.Show(", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialog.ShowDialogForUpdate(", ribbonText, StringComparison.Ordinal);
             Assert.Contains("IgnoreCurrentVersion();", ribbonText, StringComparison.Ordinal);
             Assert.Contains("AboutDialogAction.IgnoreVersion", dialogText, StringComparison.Ordinal);
             Assert.Contains("DownloadUrl", dialogText, StringComparison.Ordinal);
             Assert.Contains("ReleaseNotesUrl", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("public static AboutDialogAction Show(", dialogText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutDialogOnlyOpensSupportedUrlsAndReportsFailures()
+        {
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+            var stringsText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Localization", "HostLocalizedStrings.cs"));
+
+            Assert.Contains("IsSupportedHttpUrl(model.ReleaseNotesUrl)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("IsSupportedHttpUrl(model.DownloadUrl)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.TryCreate", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.UriSchemeHttp", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.UriSchemeHttps", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Process.Start(new ProcessStartInfo", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBox.Show(this, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AboutOpenUrlFailedMessage", stringsText, StringComparison.Ordinal);
         }
 
         [Fact]

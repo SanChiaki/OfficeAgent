@@ -46,10 +46,13 @@ namespace OfficeAgent.ExcelAddIn
         private RibbonAnalyticsHelper analytics;
         private Image aboutButtonImage;
         private Image aboutButtonImageWithUpdate;
+        private SynchronizationContext updateNotificationUiContext;
+        private int updateNotificationUiThreadId;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
             EnsureAnalyticsHelper();
+            CaptureUpdateNotificationUiContext();
             ApplyLocalizedLabels();
             ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
@@ -105,7 +108,7 @@ namespace OfficeAgent.ExcelAddIn
         private void AboutButton_Click(object sender, RibbonControlEventArgs e)
         {
             TrackRibbonClick("ribbon.about.clicked");
-            var result = AboutDialog.Show(CreateAboutDialogModel(), GetStrings());
+            var result = AboutDialog.ShowDialogForUpdate(CreateAboutDialogModel(), GetStrings());
             if (result == AboutDialogAction.IgnoreVersion)
             {
                 var latestVersion = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.LatestVersion ?? string.Empty;
@@ -126,19 +129,6 @@ namespace OfficeAgent.ExcelAddIn
                 FileName = url,
                 UseShellExecute = true,
             });
-        }
-
-        private static string CreateAboutMessage()
-        {
-            var assembly = typeof(AgentRibbon).Assembly;
-            var strings = GetStrings();
-            var assemblyVersion = assembly.GetName().Version?.ToString() ?? strings.UnknownText;
-
-            return strings.AboutMessage(
-                VersionInfo.AppVersion,
-                assemblyVersion,
-                GetBuildConfiguration(),
-                GetAssemblyBuildTime(assembly));
         }
 
         private static AboutDialogModel CreateAboutDialogModel()
@@ -608,6 +598,7 @@ namespace OfficeAgent.ExcelAddIn
         internal void BindToControllersAndRefresh()
         {
             EnsureAnalyticsHelper();
+            CaptureUpdateNotificationUiContext();
             TryBindToUpdateNotificationService();
             ApplyLocalizedLabels();
             ApplyAboutButtonImage();
@@ -664,6 +655,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private bool TryBindToUpdateNotificationService()
         {
+            CaptureUpdateNotificationUiContext();
             if (isBoundToUpdateNotificationService)
             {
                 return true;
@@ -683,7 +675,54 @@ namespace OfficeAgent.ExcelAddIn
 
         private void UpdateNotificationService_StateChanged(object sender, EventArgs e)
         {
-            ApplyAboutButtonImage();
+            if (updateNotificationUiContext != null &&
+                updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                try
+                {
+                    updateNotificationUiContext.Post(_ => RefreshAboutButtonImageSafely(), null);
+                }
+                catch (Exception ex)
+                {
+                    OfficeAgentLog.Warn("ribbon", "about_icon.post_failed", "Failed to post about icon refresh to the UI thread.", ex.Message);
+                }
+
+                return;
+            }
+
+            if (updateNotificationUiContext == null &&
+                updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_skipped_no_context", "Skipped about icon refresh because no UI synchronization context is available.");
+                return;
+            }
+
+            RefreshAboutButtonImageSafely();
+        }
+
+        private void RefreshAboutButtonImageSafely()
+        {
+            try
+            {
+                ApplyAboutButtonImage();
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_failed", "Failed to refresh about icon for update notification.", ex.Message);
+            }
+        }
+
+        private void CaptureUpdateNotificationUiContext()
+        {
+            if (SynchronizationContext.Current == null && updateNotificationUiContext != null)
+            {
+                return;
+            }
+
+            updateNotificationUiContext = SynchronizationContext.Current;
+            updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;
         }
 
         private void ApplyAboutButtonImage()

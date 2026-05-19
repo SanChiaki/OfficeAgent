@@ -54,7 +54,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             BuildLayout();
         }
 
-        public static AboutDialogAction Show(AboutDialogModel model, HostLocalizedStrings strings)
+        public static AboutDialogAction ShowDialogForUpdate(AboutDialogModel model, HostLocalizedStrings strings)
         {
             var owner = ExcelDialogOwner.FromCurrentApplication();
             using (var dialog = new AboutDialog(model, strings))
@@ -170,7 +170,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 right -= 126;
             }
 
-            if (!string.IsNullOrWhiteSpace(model.ReleaseNotesUrl))
+            if (IsSupportedHttpUrl(model.ReleaseNotesUrl))
             {
                 var releaseNotesButton = CreateButton(strings.AboutReleaseNotesButtonText, right - 110, top, 110);
                 releaseNotesButton.Click += (sender, e) => OpenUrl(model.ReleaseNotesUrl);
@@ -178,7 +178,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 right -= 118;
             }
 
-            if (!string.IsNullOrWhiteSpace(model.DownloadUrl))
+            if (IsSupportedHttpUrl(model.DownloadUrl))
             {
                 var downloadButton = CreateButton(strings.AboutDownloadButtonText, right - 88, top, 88);
                 downloadButton.Click += (sender, e) => OpenUrl(model.DownloadUrl);
@@ -197,13 +197,33 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             };
         }
 
-        private static void OpenUrl(string url)
+        private static bool IsSupportedHttpUrl(string url)
         {
-            Process.Start(new ProcessStartInfo
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                   (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void OpenUrl(string url)
+        {
+            if (!IsSupportedHttpUrl(url))
             {
-                FileName = url,
-                UseShellExecute = true,
-            });
+                MessageBox.Show(this, strings.AboutOpenUrlFailedMessage(url), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, strings.AboutOpenUrlFailedMessage(ex.Message), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }

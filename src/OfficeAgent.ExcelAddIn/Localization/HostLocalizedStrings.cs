@@ -189,22 +189,14 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string AboutIgnoreVersionButtonText => Locale == "zh" ? "忽略此版本" : "Ignore this version";
 
-        public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
-
-        public string AboutMessage(string appVersion, string assemblyVersion, string buildConfiguration, string buildTime)
+        public string AboutOpenUrlFailedMessage(string details)
         {
             return Locale == "zh"
-                ? "OfficeAgent Excel Add-in\r\n" +
-                    "版本号: " + appVersion + "\r\n" +
-                    "程序集版本: " + assemblyVersion + "\r\n" +
-                    "构建配置: " + buildConfiguration + "\r\n" +
-                    "构建时间: " + buildTime
-                : "OfficeAgent Excel Add-in\r\n" +
-                    "Version: " + appVersion + "\r\n" +
-                    "Assembly version: " + assemblyVersion + "\r\n" +
-                    "Build configuration: " + buildConfiguration + "\r\n" +
-                    "Build time: " + buildTime;
+                ? $"无法打开更新链接。\r\n{details}"
+                : $"Could not open the update link.\r\n{details}";
         }
+
+        public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
 
         public string AuthenticationRequiredDefaultMessage => Locale == "zh"
             ? "当前未登录，请先登录"
