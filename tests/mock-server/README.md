@@ -78,7 +78,7 @@ node server.js
 pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1 -UpdateManifestUrl "http://localhost:3200/update-manifest"
 ```
 
-安装 `artifacts/installer/xISDP.Setup.exe` 后保持 mock server 运行，打开 Excel，`关于` / `About` 图标应在后台检查完成后显示红点。
+安装 `artifacts/installer/xISDP.Setup.exe` 后保持 mock server 运行，打开 Excel，`关于` / `About` 图标应在后台检查完成后显示红点。点击 `忽略此版本` / `Ignore this version` 后红点应消失，但再次打开 `关于` 仍应显示同一版本的更新信息和下载入口。
 
 #### `GET /update-release-notes`
 

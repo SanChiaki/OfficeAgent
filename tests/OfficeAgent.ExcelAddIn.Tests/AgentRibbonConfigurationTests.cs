@@ -1190,6 +1190,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("RefreshAboutButtonImageSafely", ribbonText, StringComparison.Ordinal);
             Assert.Contains("OfficeAgentLog.Warn(", ribbonText, StringComparison.Ordinal);
             Assert.Contains("ApplyAboutButtonImage();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("CurrentState?.ShouldShowReminder == true", ribbonText, StringComparison.Ordinal);
             Assert.Contains("aboutButton.OfficeImageId = string.Empty;", ribbonText, StringComparison.Ordinal);
             Assert.Contains("RibbonAboutIconFactory.CreateAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
         }

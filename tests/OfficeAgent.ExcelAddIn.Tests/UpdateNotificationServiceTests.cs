@@ -21,6 +21,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(0, client.CallCount);
             Assert.False(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -33,6 +34,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             service.LoadCachedState();
 
             Assert.False(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -46,6 +48,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(0, client.CallCount);
             Assert.False(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -59,6 +62,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(0, client.CallCount);
             Assert.False(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -79,6 +83,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(0, client.CallCount);
             Assert.True(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.ShouldShowReminder);
             Assert.Equal("1.0.176", service.CurrentState.LatestVersion);
         }
 
@@ -105,6 +110,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(1, client.CallCount);
             Assert.True(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.ShouldShowReminder);
             Assert.Equal("1.0.176", service.CurrentState.LatestVersion);
             Assert.Equal("https://updates.example/download.exe", service.CurrentState.DownloadUrl);
             Assert.Equal("https://updates.example/notes", service.CurrentState.ReleaseNotesUrl);
@@ -121,7 +127,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public async Task CheckForUpdatesAsyncHidesIgnoredVersionButShowsHigherFutureVersion()
+        public async Task CheckForUpdatesAsyncHidesIgnoredReminderButKeepsIgnoredVersionAvailable()
         {
             var client = new FakeUpdateManifestClient
             {
@@ -141,7 +147,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             await service.CheckForUpdatesAsync(CancellationToken.None);
 
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
+            Assert.Equal("1.0.176", service.CurrentState.LatestVersion);
 
             client.Manifest = new UpdateManifest
             {
@@ -152,6 +160,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             await service.CheckForUpdatesAsync(CancellationToken.None);
 
             Assert.True(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.ShouldShowReminder);
             Assert.Equal("1.0.177", service.CurrentState.LatestVersion);
             Assert.Equal(2, client.CallCount);
         }
@@ -175,7 +184,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
             service.IgnoreCurrentVersion();
 
             Assert.Equal("1.0.176", store.State.IgnoredVersion);
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
+            Assert.Equal("1.0.176", service.CurrentState.LatestVersion);
             Assert.True(stateChangedCount >= 1);
         }
 
@@ -240,6 +251,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             await service.CheckForUpdatesAsync(CancellationToken.None);
 
             Assert.True(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -285,7 +297,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             service.IgnoreCurrentVersion();
 
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -309,7 +322,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(0, client.CallCount);
             Assert.Equal(string.Empty, store.State.IgnoredVersion);
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -326,6 +340,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Equal(1, client.CallCount);
             Assert.False(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
             Assert.Equal(string.Empty, store.State.LatestVersion);
         }
 
@@ -386,7 +401,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             await checkTask;
 
             Assert.Equal("1.0.176", store.State.IgnoredVersion);
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         [Fact]
@@ -420,7 +436,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             await checkTask;
 
             Assert.Equal("1.0.176", store.State.IgnoredVersion);
-            Assert.False(service.CurrentState.HasNewVersion);
+            Assert.True(service.CurrentState.HasNewVersion);
+            Assert.False(service.CurrentState.ShouldShowReminder);
         }
 
         private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, IUpdateStateStore store)

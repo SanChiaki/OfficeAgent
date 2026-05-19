@@ -796,7 +796,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void ApplyAboutButtonImage()
         {
-            var hasUpdate = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.HasNewVersion == true;
+            var hasUpdate = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.ShouldShowReminder == true;
             aboutButton.OfficeImageId = string.Empty;
             aboutButton.Image = hasUpdate ? GetAboutButtonImageWithUpdate() : GetAboutButtonImage();
             aboutButton.ShowImage = true;

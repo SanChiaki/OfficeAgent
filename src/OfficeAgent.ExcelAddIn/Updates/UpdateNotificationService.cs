@@ -224,14 +224,15 @@ namespace OfficeAgent.ExcelAddIn.Updates
         private UpdateNotificationState BuildNotificationState(UpdateState state)
         {
             if (state == null ||
-                !UpdateVersionComparer.IsNewerThanCurrent(state.LatestVersion, currentVersion) ||
-                string.Equals(state.LatestVersion, state.IgnoredVersion, StringComparison.OrdinalIgnoreCase))
+                !UpdateVersionComparer.IsNewerThanCurrent(state.LatestVersion, currentVersion))
             {
                 return UpdateNotificationState.Empty;
             }
 
+            var shouldShowReminder = !string.Equals(state.LatestVersion, state.IgnoredVersion, StringComparison.OrdinalIgnoreCase);
             return new UpdateNotificationState(
                 true,
+                shouldShowReminder,
                 state.LatestVersion,
                 state.DownloadUrl,
                 state.ReleaseNotesUrl,
