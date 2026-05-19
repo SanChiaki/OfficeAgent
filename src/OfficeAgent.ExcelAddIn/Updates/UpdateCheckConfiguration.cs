@@ -10,7 +10,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
         private const string ManifestUrlValueName = "UpdateManifestUrl";
         private const string DefaultManifestUrl = "";
 
-        public static UpdateCheckOptions Load()
+        public static UpdateCheckOptions CreateDefault()
         {
 #if DEBUG
             OfficeAgentLog.Info("updates", "configuration.disabled_debug", "Update checks are disabled in Debug builds.");
@@ -35,6 +35,11 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
             return UpdateCheckOptions.Enabled(manifestUrl.Trim());
 #endif
+        }
+
+        public static UpdateCheckOptions Load()
+        {
+            return CreateDefault();
         }
 
         private static string ReadManifestUrl(RegistryKey root)

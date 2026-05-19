@@ -158,7 +158,111 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(0, client.CallCount);
         }
 
-        private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, MemoryUpdateStateStore store)
+        [Fact]
+        public void StartBackgroundCheckPostsOneStateChangedToSynchronizationContext()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore();
+            var context = new RecordingSynchronizationContext();
+            var service = CreateService(
+                UpdateCheckOptions.Enabled(
+                    "https://updates.example/manifest.json",
+                    startupDelay: TimeSpan.Zero),
+                client,
+                store);
+            var callerThreadId = Thread.CurrentThread.ManagedThreadId;
+            var stateChangedCount = 0;
+            var stateChangedThreadId = 0;
+            service.StateChanged += (sender, args) =>
+            {
+                stateChangedCount++;
+                stateChangedThreadId = Thread.CurrentThread.ManagedThreadId;
+            };
+
+            service.StartBackgroundCheck(context);
+
+            Assert.True(context.WaitForPost(TimeSpan.FromSeconds(5)));
+            Assert.Equal(0, stateChangedCount);
+
+            context.RunPostedCallback();
+
+            Assert.Equal(1, stateChangedCount);
+            Assert.Equal(1, context.PostCount);
+            Assert.Equal(callerThreadId, stateChangedThreadId);
+        }
+
+        [Fact]
+        public async Task CheckForUpdatesAsyncDoesNotThrowWhenStateChangedSubscriberThrows()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore();
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            service.StateChanged += (sender, args) => throw new InvalidOperationException("subscriber failed");
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.True(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
+        public async Task CheckForUpdatesAsyncDoesNotThrowWhenStoreLoadFails()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore
+            {
+                ThrowOnLoad = true,
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(1, client.CallCount);
+            Assert.True(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
+        public async Task IgnoreCurrentVersionDoesNotThrowWhenStoreSaveOrSubscriberFails()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore();
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+            store.ThrowOnSave = true;
+            service.StateChanged += (sender, args) => throw new InvalidOperationException("subscriber failed");
+
+            service.IgnoreCurrentVersion();
+
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
+        public async Task CheckForUpdatesAsyncDoesNotUseFutureCacheTimestamp()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = new MemoryUpdateStateStore
+            {
+                State = new UpdateState
+                {
+                    LastCheckedAtUtc = NowUtc.AddHours(1),
+                    LatestVersion = "1.0.176",
+                },
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(1, client.CallCount);
+        }
+
+        [Fact]
+        public void UpdateCheckConfigurationCreateDefaultReturnsOptions()
+        {
+            var options = UpdateCheckConfiguration.CreateDefault();
+
+            Assert.NotNull(options);
+        }
+
+        private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, IUpdateStateStore store)
         {
             return new UpdateNotificationService(options, client, store, "1.0.175", () => NowUtc);
         }
@@ -182,14 +286,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
         private sealed class MemoryUpdateStateStore : IUpdateStateStore
         {
             public UpdateState State { get; set; } = new UpdateState();
+            public bool ThrowOnLoad { get; set; }
+            public bool ThrowOnSave { get; set; }
 
             public UpdateState Load()
             {
+                if (ThrowOnLoad)
+                {
+                    throw new InvalidOperationException("load failed");
+                }
+
                 return Clone(State);
             }
 
             public void Save(UpdateState state)
             {
+                if (ThrowOnSave)
+                {
+                    throw new InvalidOperationException("save failed");
+                }
+
                 State = Clone(state);
             }
 
@@ -206,6 +322,33 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Summary = state.Summary,
                     IgnoredVersion = state.IgnoredVersion,
                 };
+            }
+        }
+
+        private sealed class RecordingSynchronizationContext : SynchronizationContext
+        {
+            private readonly ManualResetEventSlim posted = new ManualResetEventSlim(false);
+            private SendOrPostCallback callback;
+            private object state;
+
+            public int PostCount { get; private set; }
+
+            public override void Post(SendOrPostCallback d, object state)
+            {
+                callback = d;
+                this.state = state;
+                PostCount++;
+                posted.Set();
+            }
+
+            public bool WaitForPost(TimeSpan timeout)
+            {
+                return posted.Wait(timeout);
+            }
+
+            public void RunPostedCallback()
+            {
+                callback(state);
             }
         }
     }

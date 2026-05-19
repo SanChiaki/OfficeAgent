@@ -36,7 +36,8 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
         public void LoadCachedState()
         {
-            ApplyState(stateStore.Load(), raiseStateChanged: true);
+            ApplyState(LoadStateSafely());
+            RaiseStateChanged(null);
         }
 
         public void StartBackgroundCheck(SynchronizationContext uiContext)
@@ -50,7 +51,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
                         await Task.Delay(options.StartupDelay).ConfigureAwait(false);
                     }
 
-                    await CheckForUpdatesAsync(CancellationToken.None).ConfigureAwait(false);
+                    await CheckForUpdatesCoreAsync(CancellationToken.None, raiseStateChanged: false).ConfigureAwait(false);
                     RaiseStateChanged(uiContext);
                 }
                 catch (Exception ex)
@@ -62,21 +63,28 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
         public async Task CheckForUpdatesAsync(CancellationToken cancellationToken)
         {
-            var previousState = stateStore.Load();
+            await CheckForUpdatesCoreAsync(cancellationToken, raiseStateChanged: true).ConfigureAwait(false);
+        }
+
+        private async Task CheckForUpdatesCoreAsync(CancellationToken cancellationToken, bool raiseStateChanged)
+        {
+            var previousState = LoadStateSafely();
 
             try
             {
                 if (!options.IsEnabled || string.IsNullOrWhiteSpace(options.ManifestUrl))
                 {
                     OfficeAgentLog.Info("updates", "check.skipped_disabled", "Update check skipped because update checks are disabled.");
-                    ApplyState(previousState, raiseStateChanged: true);
+                    ApplyState(previousState);
+                    RaiseStateChangedIfNeeded(raiseStateChanged);
                     return;
                 }
 
                 var nowUtc = getUtcNow();
                 if (IsCacheFresh(previousState, nowUtc))
                 {
-                    ApplyState(previousState, raiseStateChanged: true);
+                    ApplyState(previousState);
+                    RaiseStateChangedIfNeeded(raiseStateChanged);
                     return;
                 }
 
@@ -92,13 +100,15 @@ namespace OfficeAgent.ExcelAddIn.Updates
                     var nextState = CloneState(previousState);
                     nextState.ApplyManifest(manifest, nowUtc);
                     stateStore.Save(nextState);
-                    ApplyState(nextState, raiseStateChanged: true);
+                    ApplyState(nextState);
+                    RaiseStateChangedIfNeeded(raiseStateChanged);
                 }
             }
             catch (Exception ex)
             {
                 OfficeAgentLog.Warn("updates", "check.failed", "Update check failed.", ex.Message);
-                ApplyState(previousState, raiseStateChanged: true);
+                ApplyState(previousState);
+                RaiseStateChangedIfNeeded(raiseStateChanged);
             }
         }
 
@@ -118,7 +128,15 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 CurrentState = BuildNotificationState(nextState);
             }
 
-            stateStore.Save(nextState);
+            try
+            {
+                stateStore.Save(nextState);
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("updates", "ignore.save_failed", "Failed to save ignored update version.", ex.Message);
+            }
+
             OfficeAgentLog.Info("updates", "version.ignored", "User ignored the current update version.", nextState.IgnoredVersion);
             RaiseStateChanged(null);
         }
@@ -126,21 +144,40 @@ namespace OfficeAgent.ExcelAddIn.Updates
         private bool IsCacheFresh(UpdateState state, DateTime nowUtc)
         {
             return state.LastCheckedAtUtc.HasValue &&
+                   state.LastCheckedAtUtc.Value <= nowUtc &&
                    nowUtc - state.LastCheckedAtUtc.Value < options.CacheDuration;
         }
 
-        private void ApplyState(UpdateState state, bool raiseStateChanged)
+        private UpdateState LoadStateSafely()
+        {
+            try
+            {
+                return stateStore.Load();
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("updates", "state.load_failed", "Failed to load update state.", ex.Message);
+                return new UpdateState();
+            }
+        }
+
+        private void ApplyState(UpdateState state)
         {
             lock (syncRoot)
             {
                 cachedState = CloneState(state);
                 CurrentState = BuildNotificationState(cachedState);
             }
+        }
 
-            if (raiseStateChanged)
+        private void RaiseStateChangedIfNeeded(bool raiseStateChanged)
+        {
+            if (!raiseStateChanged)
             {
-                RaiseStateChanged(null);
+                return;
             }
+
+            RaiseStateChanged(null);
         }
 
         private UpdateNotificationState BuildNotificationState(UpdateState state)
@@ -172,11 +209,30 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
             if (uiContext == null)
             {
-                handler(this, EventArgs.Empty);
+                InvokeStateChangedHandler(handler);
                 return;
             }
 
-            uiContext.Post(_ => handler(this, EventArgs.Empty), null);
+            try
+            {
+                uiContext.Post(_ => InvokeStateChangedHandler(handler), null);
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("updates", "state_changed.post_failed", "Failed to post update notification state change.", ex.Message);
+            }
+        }
+
+        private void InvokeStateChangedHandler(EventHandler handler)
+        {
+            try
+            {
+                handler(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("updates", "state_changed.handler_failed", "Update notification state change subscriber failed.", ex.Message);
+            }
         }
 
         private static UpdateState CloneState(UpdateState state)
