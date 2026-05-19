@@ -1,12 +1,14 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = "Release",
-    [string[]]$Architectures = @("x86", "x64")
+    [string[]]$Architectures = @("x86", "x64"),
+    [string]$UpdateManifestUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$escapedUpdateManifestUrl = [System.Security.SecurityElement]::Escape($UpdateManifestUrl)
 
 function Select-MsBuildExe {
     $editions = @("Enterprise", "Professional", "Community", "BuildTools", "TestAgent")
@@ -108,7 +110,8 @@ function Build-MsiForArchitecture {
     }
 
     Write-Host "Building MSI for $normalizedArchitecture..."
-    Invoke-NativeCommand "dotnet" "wix" "build" $wixSource "-arch" $normalizedArchitecture "-d" "PublishRoot=$payloadRoot" "-d" "ProductVersion=$ProductVersion" "-o" $msiPath
+    $updateManifestUrlArgument = "UpdateManifestUrl=$escapedUpdateManifestUrl"
+    Invoke-NativeCommand "dotnet" "wix" "build" $wixSource "-arch" $normalizedArchitecture "-d" "PublishRoot=$payloadRoot" "-d" "ProductVersion=$ProductVersion" "-d" $updateManifestUrlArgument "-o" $msiPath
     return $msiPath
 }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -14,6 +15,7 @@ using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Analytics;
 using OfficeAgent.ExcelAddIn.Dialogs;
 using OfficeAgent.ExcelAddIn.Localization;
+using OfficeAgent.ExcelAddIn.Updates;
 
 namespace OfficeAgent.ExcelAddIn
 {
@@ -38,14 +40,23 @@ namespace OfficeAgent.ExcelAddIn
         private bool isUpdatingProjectDropDown;
         private bool isBoundToSyncController;
         private bool isBoundToTemplateController;
+        private bool isBoundToUpdateNotificationService;
         private bool isProjectListAuthenticationRequired;
         private string lastControllerOwnedProjectDropDownText = HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText;
         private RibbonAnalyticsHelper analytics;
+        private Image aboutButtonImage;
+        private Image aboutButtonImageWithUpdate;
+        private SynchronizationContext updateNotificationUiContext;
+        private Control updateNotificationUiControl;
+        private int updateNotificationUiThreadId;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
             EnsureAnalyticsHelper();
+            CaptureUpdateNotificationUiContext();
+            EnsureUpdateNotificationUiControl();
             ApplyLocalizedLabels();
+            ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
             SetProjectDropDownText(ProjectDropDownPlaceholderText);
             RefreshTemplateButtonsFromController();
@@ -99,8 +110,18 @@ namespace OfficeAgent.ExcelAddIn
         private void AboutButton_Click(object sender, RibbonControlEventArgs e)
         {
             TrackRibbonClick("ribbon.about.clicked");
-            var strings = GetStrings();
-            MessageBox.Show(CreateAboutMessage(), strings.RibbonAboutDialogTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var result = AboutDialog.ShowDialogForUpdate(CreateAboutDialogModel(), GetStrings());
+            if (result == AboutDialogAction.IgnoreVersion)
+            {
+                var latestVersion = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.LatestVersion ?? string.Empty;
+                Globals.ThisAddIn?.UpdateNotificationService?.IgnoreCurrentVersion();
+                TrackRibbonClick(
+                    "ribbon.version_update.ignored",
+                    new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["latestVersion"] = latestVersion,
+                    });
+            }
         }
 
         private static void OpenUrlInDefaultBrowser(string url)
@@ -112,17 +133,27 @@ namespace OfficeAgent.ExcelAddIn
             });
         }
 
-        private static string CreateAboutMessage()
+        private static AboutDialogModel CreateAboutDialogModel()
         {
             var assembly = typeof(AgentRibbon).Assembly;
             var strings = GetStrings();
             var assemblyVersion = assembly.GetName().Version?.ToString() ?? strings.UnknownText;
+            var updateState = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState ?? UpdateNotificationState.Empty;
 
-            return strings.AboutMessage(
-                VersionInfo.AppVersion,
-                assemblyVersion,
-                GetBuildConfiguration(),
-                GetAssemblyBuildTime(assembly));
+            return new AboutDialogModel
+            {
+                AppVersion = VersionInfo.AppVersion,
+                AssemblyVersion = assemblyVersion,
+                BuildConfiguration = GetBuildConfiguration(),
+                BuildTime = GetAssemblyBuildTime(assembly),
+                HasNewVersion = updateState.HasNewVersion,
+                LatestVersion = updateState.LatestVersion,
+                DownloadUrl = updateState.DownloadUrl,
+                ReleaseNotesUrl = updateState.ReleaseNotesUrl,
+                PublishedAtUtc = updateState.PublishedAtUtc,
+                UpdateTitle = updateState.Title,
+                UpdateSummary = updateState.Summary,
+            };
         }
 
         private static string GetAssemblyBuildTime(Assembly assembly)
@@ -569,7 +600,11 @@ namespace OfficeAgent.ExcelAddIn
         internal void BindToControllersAndRefresh()
         {
             EnsureAnalyticsHelper();
+            CaptureUpdateNotificationUiContext();
+            EnsureUpdateNotificationUiControl();
+            TryBindToUpdateNotificationService();
             ApplyLocalizedLabels();
+            ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
             if (TryBindToSyncController())
             {
@@ -619,6 +654,163 @@ namespace OfficeAgent.ExcelAddIn
             controller.TemplateStateChanged += TemplateController_TemplateStateChanged;
             isBoundToTemplateController = true;
             return true;
+        }
+
+        private bool TryBindToUpdateNotificationService()
+        {
+            CaptureUpdateNotificationUiContext();
+            if (isBoundToUpdateNotificationService)
+            {
+                return true;
+            }
+
+            var service = Globals.ThisAddIn?.UpdateNotificationService;
+            if (service == null)
+            {
+                return false;
+            }
+
+            service.StateChanged += UpdateNotificationService_StateChanged;
+            isBoundToUpdateNotificationService = true;
+            ApplyAboutButtonImage();
+            return true;
+        }
+
+        private void UpdateNotificationService_StateChanged(object sender, EventArgs e)
+        {
+            if (updateNotificationUiContext != null &&
+                updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                var postedToUpdateNotificationUiContext = false;
+
+                try
+                {
+                    updateNotificationUiContext.Post(_ => RefreshAboutButtonImageSafely(), null);
+                    postedToUpdateNotificationUiContext = true;
+                }
+                catch (Exception ex)
+                {
+                    OfficeAgentLog.Warn("ribbon", "about_icon.post_failed", "Failed to post about icon refresh to the UI thread.", ex.Message);
+                }
+
+                if (postedToUpdateNotificationUiContext)
+                {
+                    return;
+                }
+            }
+
+            if (updateNotificationUiControl != null &&
+                !updateNotificationUiControl.IsDisposed &&
+                updateNotificationUiControl.IsHandleCreated &&
+                updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                try
+                {
+                    updateNotificationUiControl.BeginInvoke(new Action(RefreshAboutButtonImageSafely));
+                }
+                catch (Exception ex)
+                {
+                    OfficeAgentLog.Warn("ribbon", "about_icon.begin_invoke_failed", "Failed to begin invoke about icon refresh on the UI thread.", ex.Message);
+                }
+
+                return;
+            }
+
+            if (updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_skipped_no_marshal", "Skipped about icon refresh because no UI marshal is available.");
+                return;
+            }
+
+            RefreshAboutButtonImageSafely();
+        }
+
+        private void RefreshAboutButtonImageSafely()
+        {
+            try
+            {
+                ApplyAboutButtonImage();
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_failed", "Failed to refresh about icon for update notification.", ex.Message);
+            }
+        }
+
+        private void CaptureUpdateNotificationUiContext()
+        {
+            if (SynchronizationContext.Current == null && updateNotificationUiContext != null)
+            {
+                return;
+            }
+
+            updateNotificationUiContext = SynchronizationContext.Current;
+            updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;
+        }
+
+        private void EnsureUpdateNotificationUiControl()
+        {
+            if (updateNotificationUiControl != null &&
+                !updateNotificationUiControl.IsDisposed &&
+                updateNotificationUiControl.IsHandleCreated)
+            {
+                return;
+            }
+
+            if (updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                return;
+            }
+
+            try
+            {
+                updateNotificationUiControl?.Dispose();
+                var marshalControl = new UpdateNotificationMarshalControl();
+                updateNotificationUiControl = marshalControl;
+                updateNotificationUiControl.CreateControl();
+                if (!updateNotificationUiControl.IsHandleCreated)
+                {
+                    marshalControl.EnsureHandleCreated();
+                }
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.ui_control_failed", "Failed to create about icon UI marshal control.", ex.Message);
+            }
+        }
+
+        private sealed class UpdateNotificationMarshalControl : Control
+        {
+            public void EnsureHandleCreated()
+            {
+                if (!IsHandleCreated)
+                {
+                    CreateHandle();
+                }
+            }
+        }
+
+        private void ApplyAboutButtonImage()
+        {
+            var hasUpdate = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.HasNewVersion == true;
+            aboutButton.OfficeImageId = string.Empty;
+            aboutButton.Image = hasUpdate ? GetAboutButtonImageWithUpdate() : GetAboutButtonImage();
+            aboutButton.ShowImage = true;
+            RibbonUI?.InvalidateControl(aboutButton.Name);
+        }
+
+        private Image GetAboutButtonImage()
+        {
+            return aboutButtonImage ?? (aboutButtonImage = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: false));
+        }
+
+        private Image GetAboutButtonImageWithUpdate()
+        {
+            return aboutButtonImageWithUpdate ?? (aboutButtonImageWithUpdate = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: true));
         }
 
         internal void RefreshTemplateButtonsFromController()

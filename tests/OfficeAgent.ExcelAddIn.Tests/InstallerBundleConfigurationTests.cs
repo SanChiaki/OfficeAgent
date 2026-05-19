@@ -135,6 +135,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void InstallerBuildCanInjectHiddenUpdateManifestUrl()
+        {
+            var buildScriptText = ReadRepositoryFile(
+                "installer",
+                "OfficeAgent.Setup",
+                "build.ps1");
+            var workflowText = ReadRepositoryFile(".github", "workflows", "build-msi.yml");
+
+            Assert.Contains("[string]$UpdateManifestUrl = \"\"", buildScriptText, StringComparison.Ordinal);
+            Assert.Contains("[System.Security.SecurityElement]::Escape($UpdateManifestUrl)", buildScriptText, StringComparison.Ordinal);
+            Assert.Equal(
+                1,
+                buildScriptText.Split(new[] { "\"UpdateManifestUrl=$escapedUpdateManifestUrl\"" }, StringSplitOptions.None).Length - 1);
+            Assert.Contains("RESY_UPDATE_MANIFEST_URL", workflowText, StringComparison.Ordinal);
+            Assert.Contains("-UpdateManifestUrl $env:RESY_UPDATE_MANIFEST_URL", workflowText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void BundlePrerequisiteReadmeIncludesOnlyVstoInstallerFilename()
         {
             var prereqReadmeText = ReadRepositoryFile(

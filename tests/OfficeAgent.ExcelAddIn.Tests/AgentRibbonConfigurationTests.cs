@@ -383,12 +383,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.cs"));
+            var dialogText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "AboutDialog.cs"));
 
-            Assert.Contains("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialog.ShowDialogForUpdate(CreateAboutDialogModel(), GetStrings())", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("private static AboutDialogModel CreateAboutDialogModel()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AppVersion = VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("AssemblyVersion = assemblyVersion", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("BuildConfiguration = GetBuildConfiguration()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("BuildTime = GetAssemblyBuildTime(assembly)", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("VersionInfo.AppVersion", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("GetBuildConfiguration()", ribbonCodeText, StringComparison.Ordinal);
             Assert.Contains("File.GetLastWriteTime", ribbonCodeText, StringComparison.Ordinal);
-            Assert.Contains("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("internal sealed class AboutDialogModel", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string AppVersion { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string AssemblyVersion { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string BuildConfiguration { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.Contains("public string BuildTime { get; set; }", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("MessageBox.Show(CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("private static string CreateAboutMessage()", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -1122,6 +1138,101 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
 
             Assert.Contains("<Compile Include=\"Analytics\\RibbonAnalyticsHelper.cs\" />", projectText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ThisAddInComposesUpdateNotificationServiceWithoutAwaitingBackgroundCheck()
+        {
+            var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
+
+            Assert.Contains("internal UpdateNotificationService UpdateNotificationService { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("private void InitializeUpdateNotificationService(string appDataDirectory)", addInText, StringComparison.Ordinal);
+            Assert.Contains("InitializeUpdateNotificationService(appDataDirectory);", addInText, StringComparison.Ordinal);
+            Assert.Contains("try", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService = new UpdateNotificationService(", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService.LoadCachedState();", addInText, StringComparison.Ordinal);
+            Assert.Contains("catch (Exception ex)", addInText, StringComparison.Ordinal);
+            Assert.Contains("OfficeAgentLog.Warn(\"updates\", \"update.setup.failed\"", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService?.StartBackgroundCheck(startupSynchronizationContext);", addInText, StringComparison.Ordinal);
+            Assert.DoesNotContain("await UpdateNotificationService", addInText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ExcelAddInProjectIncludesUpdateNotificationSources()
+        {
+            var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
+
+            Assert.Contains("<Compile Include=\"Updates\\UpdateCheckConfiguration.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\UpdateNotificationService.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\UpdateManifestClient.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\FileUpdateStateStore.cs\" />", projectText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AgentRibbonBindsUpdateNotificationServiceAndRefreshesAboutIcon()
+        {
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+
+            Assert.Contains("TryBindToUpdateNotificationService();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService_StateChanged", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiContext = SynchronizationContext.Current;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("Control updateNotificationUiControl", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("EnsureUpdateNotificationUiControl();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiControl.BeginInvoke", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiControl.IsHandleCreated", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("var postedToUpdateNotificationUiContext = false;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiContext.Post", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("postedToUpdateNotificationUiContext = true;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("if (postedToUpdateNotificationUiContext)", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("RefreshAboutButtonImageSafely", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("OfficeAgentLog.Warn(", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("ApplyAboutButtonImage();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("aboutButton.OfficeImageId = string.Empty;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("RibbonAboutIconFactory.CreateAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutButtonOpensUpdateAwareDialogAndCanIgnoreVersion()
+        {
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+
+            Assert.Contains("AboutDialog.ShowDialogForUpdate(", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("IgnoreCurrentVersion();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialogAction.IgnoreVersion", dialogText, StringComparison.Ordinal);
+            Assert.Contains("DownloadUrl", dialogText, StringComparison.Ordinal);
+            Assert.Contains("ReleaseNotesUrl", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("public static AboutDialogAction Show(", dialogText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutDialogOnlyOpensSupportedUrlsAndReportsFailures()
+        {
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+            var stringsText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Localization", "HostLocalizedStrings.cs"));
+
+            Assert.Contains("IsSupportedHttpUrl(model.ReleaseNotesUrl)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("IsSupportedHttpUrl(model.DownloadUrl)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.TryCreate", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.UriSchemeHttp", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Uri.UriSchemeHttps", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Process.Start(new ProcessStartInfo", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBox.Show(this, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AboutOpenUrlFailedMessage", stringsText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void HostLocalizedStringsIncludeUpdateReminderText()
+        {
+            var stringsText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Localization", "HostLocalizedStrings.cs"));
+
+            Assert.Contains("AboutCurrentVersionLabel", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutLatestVersionLabel", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutIgnoreVersionButtonText", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutDownloadButtonText", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutReleaseNotesButtonText", stringsText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

@@ -134,11 +134,13 @@
     <Compile Include="AgentRibbon.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="RibbonAboutIconFactory.cs" />
     <Compile Include="AgentRibbon.Designer.cs">
       <DependentUpon>AgentRibbon.cs</DependentUpon>
     </Compile>
     <Compile Include="Dialogs\AiColumnMappingProgressDialog.cs" />
     <Compile Include="Dialogs\AiColumnMappingPreviewDialog.cs" />
+    <Compile Include="Dialogs\AboutDialog.cs" />
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
     <Compile Include="Dialogs\ExcelDialogOwner.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
@@ -203,6 +205,17 @@
     <Compile Include="Localization\UiLocaleResolver.cs" />
     <Compile Include="Analytics\WorkbookAnalyticsProjectContextProvider.cs" />
     <Compile Include="Analytics\RibbonAnalyticsHelper.cs" />
+    <Compile Include="Updates\IUpdateManifestClient.cs" />
+    <Compile Include="Updates\UpdateManifestClient.cs" />
+    <Compile Include="Updates\IUpdateStateStore.cs" />
+    <Compile Include="Updates\FileUpdateStateStore.cs" />
+    <Compile Include="Updates\UpdateCheckOptions.cs" />
+    <Compile Include="Updates\UpdateCheckConfiguration.cs" />
+    <Compile Include="Updates\UpdateNotificationService.cs" />
+    <Compile Include="Updates\UpdateVersionComparer.cs" />
+    <Compile Include="Updates\UpdateManifest.cs" />
+    <Compile Include="Updates\UpdateState.cs" />
+    <Compile Include="Updates\UpdateNotificationState.cs" />
     <Compile Include="SsoLoginPopup.cs" />
     <Compile Include="TaskPane\TaskPaneController.cs" />
     <Compile Include="TaskPane\TaskPaneHostControl.cs">

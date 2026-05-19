@@ -17,7 +17,7 @@ using DpapiSecretProtector = OfficeAgent.Infrastructure.Security.DpapiSecretProt
 namespace OfficeAgent.IntegrationTests
 {
     [Collection(MockServerCollection.Name)]
-    public sealed class BusinessApiIntegrationTests : IClassFixture<MockServerFixture>
+    public sealed class BusinessApiIntegrationTests
     {
         private const string ProjectA = "\u9879\u76EEA";
 
@@ -177,6 +177,11 @@ namespace OfficeAgent.IntegrationTests
                 try
                 {
                     using var response = client.GetAsync(url).GetAwaiter().GetResult();
+                    if (process.HasExited)
+                    {
+                        break;
+                    }
+
                     return;
                 }
                 catch (Exception ex)
