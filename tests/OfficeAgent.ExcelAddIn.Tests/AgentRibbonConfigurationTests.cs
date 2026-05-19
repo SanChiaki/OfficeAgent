@@ -1124,6 +1124,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("<Compile Include=\"Analytics\\RibbonAnalyticsHelper.cs\" />", projectText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void ThisAddInComposesUpdateNotificationServiceWithoutAwaitingBackgroundCheck()
+        {
+            var addInText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "ThisAddIn.cs"));
+
+            Assert.Contains("internal UpdateNotificationService UpdateNotificationService { get; private set; }", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService = new UpdateNotificationService(", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService.LoadCachedState();", addInText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService.StartBackgroundCheck(startupSynchronizationContext);", addInText, StringComparison.Ordinal);
+            Assert.DoesNotContain("await UpdateNotificationService", addInText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ExcelAddInProjectIncludesUpdateNotificationSources()
+        {
+            var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
+
+            Assert.Contains("<Compile Include=\"Updates\\UpdateCheckConfiguration.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\UpdateNotificationService.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\UpdateManifestClient.cs\" />", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Compile Include=\"Updates\\FileUpdateStateStore.cs\" />", projectText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]

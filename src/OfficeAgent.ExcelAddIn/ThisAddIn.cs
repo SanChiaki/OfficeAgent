@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using Microsoft.Office.Core;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
@@ -14,6 +15,7 @@ using OfficeAgent.Core.Templates;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.ExcelAddIn.TaskPane;
+using OfficeAgent.ExcelAddIn.Updates;
 using OfficeAgent.Infrastructure.Analytics;
 using OfficeAgent.Infrastructure.Diagnostics;
 using OfficeAgent.Infrastructure.Http;
@@ -48,6 +50,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
+        internal UpdateNotificationService UpdateNotificationService { get; private set; }
         internal IAnalyticsProjectContextProvider AnalyticsProjectContextProvider { get; private set; }
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
         internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
@@ -70,6 +73,7 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
             var initialSettings = SettingsStore.Load();
+            var startupSynchronizationContext = SynchronizationContext.Current;
             SharedCookies = new SharedCookieContainer();
             CookieStore = new FileCookieStore(
                 Path.Combine(appDataDirectory, "cookies.json"),
@@ -90,6 +94,12 @@ namespace OfficeAgent.ExcelAddIn
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
             AccountSessionService.ConfigureSsoDomain(initialSettings.SsoUrl);
+            UpdateNotificationService = new UpdateNotificationService(
+                UpdateCheckConfiguration.CreateDefault(),
+                new UpdateManifestClient(),
+                new FileUpdateStateStore(Path.Combine(appDataDirectory, "update-state.json")),
+                VersionInfo.AppVersion);
+            UpdateNotificationService.LoadCachedState();
 
             ExcelContextService = new ExcelSelectionContextService(Application);
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
@@ -146,6 +156,7 @@ namespace OfficeAgent.ExcelAddIn
             RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
+            UpdateNotificationService.StartBackgroundCheck(startupSynchronizationContext);
             lastProjectRefreshSheetName = GetActiveWorksheetName();
             TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, AccountSessionService, GetResolvedUiLocale, AnalyticsService);
             Application.WorkbookActivate += Application_WorkbookActivate;
