@@ -1152,6 +1152,43 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("<Compile Include=\"Updates\\FileUpdateStateStore.cs\" />", projectText, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void AgentRibbonBindsUpdateNotificationServiceAndRefreshesAboutIcon()
+        {
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+
+            Assert.Contains("TryBindToUpdateNotificationService();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("UpdateNotificationService_StateChanged", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("ApplyAboutButtonImage();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("aboutButton.OfficeImageId = string.Empty;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("RibbonAboutIconFactory.CreateAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutButtonOpensUpdateAwareDialogAndCanIgnoreVersion()
+        {
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+
+            Assert.Contains("AboutDialog.Show(", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("IgnoreCurrentVersion();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("AboutDialogAction.IgnoreVersion", dialogText, StringComparison.Ordinal);
+            Assert.Contains("DownloadUrl", dialogText, StringComparison.Ordinal);
+            Assert.Contains("ReleaseNotesUrl", dialogText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void HostLocalizedStringsIncludeUpdateReminderText()
+        {
+            var stringsText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Localization", "HostLocalizedStrings.cs"));
+
+            Assert.Contains("AboutCurrentVersionLabel", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutLatestVersionLabel", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutIgnoreVersionButtonText", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutDownloadButtonText", stringsText, StringComparison.Ordinal);
+            Assert.Contains("AboutReleaseNotesButtonText", stringsText, StringComparison.Ordinal);
+        }
+
         private static string ResolveRepositoryPath(params string[] segments)
         {
             return Path.GetFullPath(Path.Combine(new[]

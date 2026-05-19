@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -14,6 +15,7 @@ using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Analytics;
 using OfficeAgent.ExcelAddIn.Dialogs;
 using OfficeAgent.ExcelAddIn.Localization;
+using OfficeAgent.ExcelAddIn.Updates;
 
 namespace OfficeAgent.ExcelAddIn
 {
@@ -38,14 +40,18 @@ namespace OfficeAgent.ExcelAddIn
         private bool isUpdatingProjectDropDown;
         private bool isBoundToSyncController;
         private bool isBoundToTemplateController;
+        private bool isBoundToUpdateNotificationService;
         private bool isProjectListAuthenticationRequired;
         private string lastControllerOwnedProjectDropDownText = HostLocalizedStrings.ForLocale("en").ProjectDropDownPlaceholderText;
         private RibbonAnalyticsHelper analytics;
+        private Image aboutButtonImage;
+        private Image aboutButtonImageWithUpdate;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
             EnsureAnalyticsHelper();
             ApplyLocalizedLabels();
+            ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
             SetProjectDropDownText(ProjectDropDownPlaceholderText);
             RefreshTemplateButtonsFromController();
@@ -99,8 +105,18 @@ namespace OfficeAgent.ExcelAddIn
         private void AboutButton_Click(object sender, RibbonControlEventArgs e)
         {
             TrackRibbonClick("ribbon.about.clicked");
-            var strings = GetStrings();
-            MessageBox.Show(CreateAboutMessage(), strings.RibbonAboutDialogTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var result = AboutDialog.Show(CreateAboutDialogModel(), GetStrings());
+            if (result == AboutDialogAction.IgnoreVersion)
+            {
+                var latestVersion = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.LatestVersion ?? string.Empty;
+                Globals.ThisAddIn?.UpdateNotificationService?.IgnoreCurrentVersion();
+                TrackRibbonClick(
+                    "ribbon.version_update.ignored",
+                    new Dictionary<string, object>(StringComparer.Ordinal)
+                    {
+                        ["latestVersion"] = latestVersion,
+                    });
+            }
         }
 
         private static void OpenUrlInDefaultBrowser(string url)
@@ -123,6 +139,29 @@ namespace OfficeAgent.ExcelAddIn
                 assemblyVersion,
                 GetBuildConfiguration(),
                 GetAssemblyBuildTime(assembly));
+        }
+
+        private static AboutDialogModel CreateAboutDialogModel()
+        {
+            var assembly = typeof(AgentRibbon).Assembly;
+            var strings = GetStrings();
+            var assemblyVersion = assembly.GetName().Version?.ToString() ?? strings.UnknownText;
+            var updateState = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState ?? UpdateNotificationState.Empty;
+
+            return new AboutDialogModel
+            {
+                AppVersion = VersionInfo.AppVersion,
+                AssemblyVersion = assemblyVersion,
+                BuildConfiguration = GetBuildConfiguration(),
+                BuildTime = GetAssemblyBuildTime(assembly),
+                HasNewVersion = updateState.HasNewVersion,
+                LatestVersion = updateState.LatestVersion,
+                DownloadUrl = updateState.DownloadUrl,
+                ReleaseNotesUrl = updateState.ReleaseNotesUrl,
+                PublishedAtUtc = updateState.PublishedAtUtc,
+                UpdateTitle = updateState.Title,
+                UpdateSummary = updateState.Summary,
+            };
         }
 
         private static string GetAssemblyBuildTime(Assembly assembly)
@@ -569,7 +608,9 @@ namespace OfficeAgent.ExcelAddIn
         internal void BindToControllersAndRefresh()
         {
             EnsureAnalyticsHelper();
+            TryBindToUpdateNotificationService();
             ApplyLocalizedLabels();
+            ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
             if (TryBindToSyncController())
             {
@@ -619,6 +660,49 @@ namespace OfficeAgent.ExcelAddIn
             controller.TemplateStateChanged += TemplateController_TemplateStateChanged;
             isBoundToTemplateController = true;
             return true;
+        }
+
+        private bool TryBindToUpdateNotificationService()
+        {
+            if (isBoundToUpdateNotificationService)
+            {
+                return true;
+            }
+
+            var service = Globals.ThisAddIn?.UpdateNotificationService;
+            if (service == null)
+            {
+                return false;
+            }
+
+            service.StateChanged += UpdateNotificationService_StateChanged;
+            isBoundToUpdateNotificationService = true;
+            ApplyAboutButtonImage();
+            return true;
+        }
+
+        private void UpdateNotificationService_StateChanged(object sender, EventArgs e)
+        {
+            ApplyAboutButtonImage();
+        }
+
+        private void ApplyAboutButtonImage()
+        {
+            var hasUpdate = Globals.ThisAddIn?.UpdateNotificationService?.CurrentState?.HasNewVersion == true;
+            aboutButton.OfficeImageId = string.Empty;
+            aboutButton.Image = hasUpdate ? GetAboutButtonImageWithUpdate() : GetAboutButtonImage();
+            aboutButton.ShowImage = true;
+            RibbonUI?.InvalidateControl(aboutButton.Name);
+        }
+
+        private Image GetAboutButtonImage()
+        {
+            return aboutButtonImage ?? (aboutButtonImage = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: false));
+        }
+
+        private Image GetAboutButtonImageWithUpdate()
+        {
+            return aboutButtonImageWithUpdate ?? (aboutButtonImageWithUpdate = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: true));
         }
 
         internal void RefreshTemplateButtonsFromController()

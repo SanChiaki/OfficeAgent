@@ -167,6 +167,28 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonAboutDialogTitle => Locale == "zh" ? "关于 xISDP" : "About xISDP";
 
+        public string AboutCurrentVersionLabel => Locale == "zh" ? "当前版本" : "Current version";
+
+        public string AboutAssemblyVersionLabel => Locale == "zh" ? "程序集版本" : "Assembly version";
+
+        public string AboutBuildConfigurationLabel => Locale == "zh" ? "构建配置" : "Build configuration";
+
+        public string AboutBuildTimeLabel => Locale == "zh" ? "构建时间" : "Build time";
+
+        public string AboutNewVersionAvailableTitle => Locale == "zh" ? "发现新版本" : "New version available";
+
+        public string AboutLatestVersionLabel => Locale == "zh" ? "最新版本" : "Latest version";
+
+        public string AboutPublishedAtLabel => Locale == "zh" ? "发布时间" : "Published";
+
+        public string AboutNoUpdateAvailableText => Locale == "zh" ? "当前没有可用的新版本。" : "No new version is available.";
+
+        public string AboutDownloadButtonText => Locale == "zh" ? "下载" : "Download";
+
+        public string AboutReleaseNotesButtonText => Locale == "zh" ? "发布说明" : "Release notes";
+
+        public string AboutIgnoreVersionButtonText => Locale == "zh" ? "忽略此版本" : "Ignore this version";
+
         public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
 
         public string AboutMessage(string appVersion, string assemblyVersion, string buildConfiguration, string buildTime)
