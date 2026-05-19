@@ -47,12 +47,14 @@ namespace OfficeAgent.ExcelAddIn
         private Image aboutButtonImage;
         private Image aboutButtonImageWithUpdate;
         private SynchronizationContext updateNotificationUiContext;
+        private Control updateNotificationUiControl;
         private int updateNotificationUiThreadId;
 
         private void AgentRibbon_Load(object sender, RibbonUIEventArgs e)
         {
             EnsureAnalyticsHelper();
             CaptureUpdateNotificationUiContext();
+            EnsureUpdateNotificationUiControl();
             ApplyLocalizedLabels();
             ApplyAboutButtonImage();
             RefreshAccountButtonsFromSession();
@@ -599,6 +601,7 @@ namespace OfficeAgent.ExcelAddIn
         {
             EnsureAnalyticsHelper();
             CaptureUpdateNotificationUiContext();
+            EnsureUpdateNotificationUiControl();
             TryBindToUpdateNotificationService();
             ApplyLocalizedLabels();
             ApplyAboutButtonImage();
@@ -691,11 +694,28 @@ namespace OfficeAgent.ExcelAddIn
                 return;
             }
 
-            if (updateNotificationUiContext == null &&
+            if (updateNotificationUiControl != null &&
+                !updateNotificationUiControl.IsDisposed &&
+                updateNotificationUiControl.IsHandleCreated &&
                 updateNotificationUiThreadId != 0 &&
                 Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
             {
-                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_skipped_no_context", "Skipped about icon refresh because no UI synchronization context is available.");
+                try
+                {
+                    updateNotificationUiControl.BeginInvoke(new Action(RefreshAboutButtonImageSafely));
+                }
+                catch (Exception ex)
+                {
+                    OfficeAgentLog.Warn("ribbon", "about_icon.begin_invoke_failed", "Failed to begin invoke about icon refresh on the UI thread.", ex.Message);
+                }
+
+                return;
+            }
+
+            if (updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.refresh_skipped_no_marshal", "Skipped about icon refresh because no UI marshal is available.");
                 return;
             }
 
@@ -723,6 +743,49 @@ namespace OfficeAgent.ExcelAddIn
 
             updateNotificationUiContext = SynchronizationContext.Current;
             updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;
+        }
+
+        private void EnsureUpdateNotificationUiControl()
+        {
+            if (updateNotificationUiControl != null &&
+                !updateNotificationUiControl.IsDisposed &&
+                updateNotificationUiControl.IsHandleCreated)
+            {
+                return;
+            }
+
+            if (updateNotificationUiThreadId != 0 &&
+                Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId)
+            {
+                return;
+            }
+
+            try
+            {
+                updateNotificationUiControl?.Dispose();
+                var marshalControl = new UpdateNotificationMarshalControl();
+                updateNotificationUiControl = marshalControl;
+                updateNotificationUiControl.CreateControl();
+                if (!updateNotificationUiControl.IsHandleCreated)
+                {
+                    marshalControl.EnsureHandleCreated();
+                }
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("ribbon", "about_icon.ui_control_failed", "Failed to create about icon UI marshal control.", ex.Message);
+            }
+        }
+
+        private sealed class UpdateNotificationMarshalControl : Control
+        {
+            public void EnsureHandleCreated()
+            {
+                if (!IsHandleCreated)
+                {
+                    CreateHandle();
+                }
+            }
         }
 
         private void ApplyAboutButtonImage()

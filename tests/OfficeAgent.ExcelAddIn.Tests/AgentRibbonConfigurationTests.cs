@@ -1177,6 +1177,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("UpdateNotificationService_StateChanged", ribbonText, StringComparison.Ordinal);
             Assert.Contains("updateNotificationUiContext = SynchronizationContext.Current;", ribbonText, StringComparison.Ordinal);
             Assert.Contains("updateNotificationUiThreadId = Thread.CurrentThread.ManagedThreadId;", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("Control updateNotificationUiControl", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("EnsureUpdateNotificationUiControl();", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiControl.BeginInvoke", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("updateNotificationUiControl.IsHandleCreated", ribbonText, StringComparison.Ordinal);
             Assert.Contains("updateNotificationUiContext.Post", ribbonText, StringComparison.Ordinal);
             Assert.Contains("Thread.CurrentThread.ManagedThreadId != updateNotificationUiThreadId", ribbonText, StringComparison.Ordinal);
             Assert.Contains("RefreshAboutButtonImageSafely", ribbonText, StringComparison.Ordinal);
