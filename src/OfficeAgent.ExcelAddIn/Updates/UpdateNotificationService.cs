@@ -108,6 +108,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
             catch (Exception ex)
             {
                 OfficeAgentLog.Warn("updates", "check.failed", "Update check failed.", ex.Message);
+                MergeLatestIgnoredVersion(previousState);
                 ApplyState(previousState);
                 RaiseStateChangedIfNeeded(raiseStateChanged);
             }

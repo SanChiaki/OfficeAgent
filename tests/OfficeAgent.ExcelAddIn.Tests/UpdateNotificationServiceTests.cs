@@ -327,6 +327,40 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.False(service.CurrentState.HasNewVersion);
         }
 
+        [Fact]
+        public async Task CheckForUpdatesAsyncKeepsIgnoredVersionHiddenWhenInFlightManifestSaveFails()
+        {
+            var client = new FakeUpdateManifestClient
+            {
+                Manifest = new UpdateManifest
+                {
+                    LatestVersion = "1.0.176",
+                },
+                WaitForRelease = true,
+            };
+            var store = new MemoryUpdateStateStore
+            {
+                State = new UpdateState
+                {
+                    LastCheckedAtUtc = NowUtc.AddDays(-2),
+                    LatestVersion = "1.0.176",
+                },
+            };
+            var service = CreateService(UpdateCheckOptions.Enabled("https://updates.example/manifest.json"), client, store);
+            service.LoadCachedState();
+
+            var checkTask = service.CheckForUpdatesAsync(CancellationToken.None);
+            Assert.True(client.WaitForCall(TimeSpan.FromSeconds(5)));
+
+            service.IgnoreCurrentVersion();
+            store.ThrowOnSave = true;
+            client.Release();
+            await checkTask;
+
+            Assert.Equal("1.0.176", store.State.IgnoredVersion);
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
         private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, IUpdateStateStore store)
         {
             return new UpdateNotificationService(options, client, store, "1.0.175", () => NowUtc);
@@ -342,18 +376,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public int CallCount { get; private set; }
             public bool WaitForRelease { get; set; }
             private readonly ManualResetEventSlim called = new ManualResetEventSlim(false);
-            private readonly ManualResetEventSlim released = new ManualResetEventSlim(false);
+            private readonly TaskCompletionSource<bool> released = new TaskCompletionSource<bool>();
 
-            public Task<UpdateManifest> GetManifestAsync(string manifestUrl, CancellationToken cancellationToken)
+            public async Task<UpdateManifest> GetManifestAsync(string manifestUrl, CancellationToken cancellationToken)
             {
                 CallCount++;
                 called.Set();
                 if (WaitForRelease)
                 {
-                    released.Wait(cancellationToken);
+                    using (cancellationToken.Register(() => released.TrySetCanceled()))
+                    {
+                        await released.Task.ConfigureAwait(false);
+                    }
                 }
 
-                return Task.FromResult(Manifest);
+                return Manifest;
             }
 
             public bool WaitForCall(TimeSpan timeout)
@@ -363,7 +400,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public void Release()
             {
-                released.Set();
+                released.TrySetResult(true);
             }
         }
 
