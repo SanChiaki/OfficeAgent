@@ -119,10 +119,13 @@
 - Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
 - Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
 - Confirm the Ribbon includes a dedicated `配置` / `Setting` group with `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, and `另存配置` / `Save as Setting`.
-- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, all buttons in the `配置` / `Setting` group, and the account `登录` / `Login` plus `登出` / `Logout` buttons should use the small regular button layout; data sync and help command buttons should remain in the large icon-above-label layout.
+- Confirm all Ribbon buttons display icons that match their action semantics. `关于` / `About` may use a host-generated custom icon for the version reminder red dot; other Ribbon buttons should display Office built-in icons. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, all buttons in the `配置` / `Setting` group, and the account `登录` / `Login` plus `登出` / `Logout` buttons should use the small regular button layout; data sync and help command buttons should remain in the large icon-above-label layout.
 - Confirm the `xISDP AI` group task-pane button shows only its icon and does not display the `Open` label.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
+- Release 安装包更新提醒：配置内部更新 manifest URL，使其返回 `Content-Type: application/octet-stream` 的 JSON 字节流，且 `latestVersion` 高于当前 `VersionInfo.AppVersion`。打开 Excel 后确认 `关于` / `About` 图标显示红点；点击 `关于` 后确认显示当前版本、最新版本、下载入口和发布说明入口；点击 `忽略此版本` / `Ignore this version` 后确认红点消失；把 manifest 提高到更高版本后确认红点重新出现。
+- 更新检查失败隔离：让更新 manifest URL 断开或返回非法 JSON，重新打开 Excel，确认 Ribbon、任务窗格、登录、下载、上传和模板操作仍可用，且没有更新失败弹窗。
+- Debug 环境隔离：运行 `eng/Dev-RefreshExcelAddIn.ps1 -CloseExcel` 后打开 Excel，确认不会请求更新 manifest URL。
 - In the same project, save two different local templates and confirm `应用配置` / `Apply Setting` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
 - Manually edit `xISDP_Setting` field mapping text after applying a template, click `保存配置` / `Save Setting`, then reapply that template and confirm the edited mapping is preserved.

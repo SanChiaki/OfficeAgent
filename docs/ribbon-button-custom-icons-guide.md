@@ -22,6 +22,8 @@ this.partialDownloadButton.ControlSize = Microsoft.Office.Core.RibbonControlSize
 
 如果要使用自己的图片，应改为给按钮设置 `Image`，并清空 `OfficeImageId`。
 
+例外：`关于` / `About` 在新版本提醒功能中会由运行时代码设置为宿主生成的自定义图标。无更新时显示普通信息图标；有未忽略的新版本时显示带红点的信息图标。该例外只改变 `aboutButton` 图片来源，不改变按钮标签、本地化、点击行为或大按钮布局。
+
 重要：图标替换只应改变按钮图片来源，不应改变 Ribbon 标签来源。当前 Ribbon 组名、按钮名和项目下拉框状态文本由 `HostLocalizedStrings` 按 Excel UI 语言解析为中文或英文；不要在图标替换代码里重新写死中文或英文 `Label`。
 
 ## 2. 推荐图片规格
