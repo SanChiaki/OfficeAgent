@@ -11,7 +11,7 @@ using Xunit;
 namespace OfficeAgent.IntegrationTests
 {
     [Collection(MockServerCollection.Name)]
-    public sealed class CurrentBusinessSystemConnectorIntegrationTests : IClassFixture<MockServerFixture>
+    public sealed class CurrentBusinessSystemConnectorIntegrationTests
     {
         private readonly MockServerFixture fixture;
 

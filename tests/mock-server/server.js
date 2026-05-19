@@ -295,6 +295,31 @@ apiApp.delete("/analytics/logs", function (_req, res) {
   res.json({ ok: true, count: 0 });
 });
 
+apiApp.get("/update-manifest", function (_req, res) {
+  var manifest = {
+    latestVersion: "9.9.9",
+    title: "xISDP mock release",
+    summary: "Local mock manifest for Release installer update reminder verification.",
+    downloadUrl: "http://localhost:3200/update-download/xISDP.Setup.exe",
+    releaseNotesUrl: "http://localhost:3200/update-release-notes",
+    publishedAtUtc: "2026-05-19T08:00:00Z",
+  };
+
+  res
+    .type("application/octet-stream")
+    .send(Buffer.from(JSON.stringify(manifest), "utf8"));
+});
+
+apiApp.get("/update-release-notes", function (_req, res) {
+  res.type("html").send("<!doctype html><meta charset=\"utf-8\"><title>xISDP mock release notes</title><h1>xISDP mock release notes</h1><p>Release installer update reminder verification page.</p>");
+});
+
+apiApp.get("/update-download/xISDP.Setup.exe", function (_req, res) {
+  res
+    .type("application/octet-stream")
+    .send(Buffer.from("Mock installer download target for update reminder verification.", "utf8"));
+});
+
 function requireAuth(req, res, next) {
   if (!req.cookies || !req.cookies.session_token) {
     return res.status(401).json({ code: "unauthorized", message: "未登录，请先通过 SSO 登录。" });
@@ -476,9 +501,11 @@ apiApp.listen(3200, function () {
   console.log("[Business] http://localhost:3200/api/download/:project");
   console.log("[Business] http://localhost:3200/upload_data");
   console.log("[Business] http://localhost:3200/projects");
+  console.log("[Update]   http://localhost:3200/update-manifest");
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
+  console.log("  Update Manifest URL   = http://localhost:3200/update-manifest (Release installer only)");
   console.log("  Analytics URL         = http://localhost:3200/insertLog (hidden setting)");
   console.log("  SSO URL               = http://localhost:3100/login");
   console.log("  登录成功路径           = /rest/login");
