@@ -69,8 +69,10 @@ jobs:
 
       - name: Build installer
         shell: pwsh
+        env:
+          RESY_UPDATE_MANIFEST_URL: ${{ secrets.RESY_UPDATE_MANIFEST_URL }}
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File "installer/OfficeAgent.Setup/build.ps1"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File "installer/OfficeAgent.Setup/build.ps1" -UpdateManifestUrl $env:RESY_UPDATE_MANIFEST_URL
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v6
