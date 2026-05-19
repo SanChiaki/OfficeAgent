@@ -24,6 +24,44 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LoadCachedStateDoesNotShowCachedUpdateWhenDisabled()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = CreateFreshCachedUpdateStore();
+            var service = CreateService(UpdateCheckOptions.Disabled(), client, store);
+
+            service.LoadCachedState();
+
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
+        public async Task CheckForUpdatesAsyncDoesNotShowCachedUpdateWhenDisabled()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = CreateFreshCachedUpdateStore();
+            var service = CreateService(UpdateCheckOptions.Disabled(), client, store);
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(0, client.CallCount);
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
+        public async Task CheckForUpdatesAsyncDoesNotShowCachedUpdateWhenManifestUrlIsBlank()
+        {
+            var client = new FakeUpdateManifestClient();
+            var store = CreateFreshCachedUpdateStore();
+            var service = CreateService(UpdateCheckOptions.Enabled(""), client, store);
+
+            await service.CheckForUpdatesAsync(CancellationToken.None);
+
+            Assert.Equal(0, client.CallCount);
+            Assert.False(service.CurrentState.HasNewVersion);
+        }
+
+        [Fact]
         public async Task CheckForUpdatesAsyncUsesCacheWindowWithoutHttp()
         {
             var client = new FakeUpdateManifestClient();
@@ -388,6 +426,18 @@ namespace OfficeAgent.ExcelAddIn.Tests
         private static UpdateNotificationService CreateService(UpdateCheckOptions options, FakeUpdateManifestClient client, IUpdateStateStore store)
         {
             return new UpdateNotificationService(options, client, store, "1.0.175", () => NowUtc);
+        }
+
+        private static MemoryUpdateStateStore CreateFreshCachedUpdateStore()
+        {
+            return new MemoryUpdateStateStore
+            {
+                State = new UpdateState
+                {
+                    LastCheckedAtUtc = NowUtc.AddHours(-1),
+                    LatestVersion = "1.0.176",
+                },
+            };
         }
 
         private sealed class FakeUpdateManifestClient : IUpdateManifestClient

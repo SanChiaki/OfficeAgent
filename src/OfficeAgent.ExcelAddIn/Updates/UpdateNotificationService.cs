@@ -36,6 +36,13 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
         public void LoadCachedState()
         {
+            if (!CanShowUpdateNotifications())
+            {
+                ApplyEmptyState();
+                RaiseStateChanged(null);
+                return;
+            }
+
             ApplyState(LoadStateSafely());
             RaiseStateChanged(null);
         }
@@ -75,8 +82,7 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 if (!options.IsEnabled || string.IsNullOrWhiteSpace(options.ManifestUrl))
                 {
                     OfficeAgentLog.Info("updates", "check.skipped_disabled", "Update check skipped because update checks are disabled.");
-                    MergeLatestIgnoredVersion(previousState);
-                    ApplyState(previousState);
+                    ApplyEmptyState();
                     RaiseStateChangedIfNeeded(raiseStateChanged);
                     return;
                 }
@@ -189,6 +195,20 @@ namespace OfficeAgent.ExcelAddIn.Updates
                 cachedState = CloneState(state);
                 CurrentState = BuildNotificationState(cachedState);
             }
+        }
+
+        private void ApplyEmptyState()
+        {
+            lock (syncRoot)
+            {
+                cachedState = new UpdateState();
+                CurrentState = UpdateNotificationState.Empty;
+            }
+        }
+
+        private bool CanShowUpdateNotifications()
+        {
+            return options.IsEnabled && !string.IsNullOrWhiteSpace(options.ManifestUrl);
         }
 
         private void RaiseStateChangedIfNeeded(bool raiseStateChanged)
