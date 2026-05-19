@@ -1246,6 +1246,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("private const int WrappedLineHeight = 96;", dialogText, StringComparison.Ordinal);
             Assert.Contains("Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AddLine(model.UpdateTitle, FontStyle.Regular, ref top);", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AddWrappedLine(model.UpdateSummary, ref top);", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AddWrappedLine(model.UpdateTitle", dialogText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

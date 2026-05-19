@@ -102,7 +102,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateTitle))
                 {
-                    AddWrappedLine(model.UpdateTitle, ref top);
+                    AddLine(model.UpdateTitle, FontStyle.Regular, ref top);
                 }
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateSummary))
