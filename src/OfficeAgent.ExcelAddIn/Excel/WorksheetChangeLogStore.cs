@@ -10,6 +10,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private const string LogSheetName = "xISDP_Log";
         private const int MaxEntries = 2000;
         private const string TimestampFormat = "yyyy-MM-dd HH:mm:ss";
+        private const string TextNumberFormat = "@";
 
         private static readonly string[] Headers =
         {
@@ -70,11 +71,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var rows = new List<WorksheetChangeLogEntry>();
             for (var row = 0; row < values.GetLength(0); row++)
             {
-                var key = Convert.ToString(values[row, 0]) ?? string.Empty;
-                var headerText = Convert.ToString(values[row, 1]) ?? string.Empty;
-                var changeMode = Convert.ToString(values[row, 2]) ?? string.Empty;
-                var newValue = Convert.ToString(values[row, 3]) ?? string.Empty;
-                var oldValue = Convert.ToString(values[row, 4]) ?? string.Empty;
+                var worksheetRow = row + 2;
+                var key = ReadStableCellText(values, row, 0, worksheetRow, 1);
+                var headerText = ReadStableCellText(values, row, 1, worksheetRow, 2);
+                var changeMode = ReadStableCellText(values, row, 2, worksheetRow, 3);
+                var newValue = ReadStableCellText(values, row, 3, worksheetRow, 4);
+                var oldValue = ReadStableCellText(values, row, 4, worksheetRow, 5);
                 var changedAtValue = values[row, 5];
                 var changedAtText = Convert.ToString(changedAtValue) ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(key) &&
@@ -105,6 +107,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             var existingLastRow = Math.Max(1, gridAdapter.GetLastUsedRow(LogSheetName));
             gridAdapter.ClearRange(LogSheetName, 1, Math.Max(existingLastRow, rows.Count + 1), 1, Headers.Length);
+            gridAdapter.SetRangeNumberFormat(LogSheetName, 1, rows.Count + 1, 1, Headers.Length, TextNumberFormat);
             gridAdapter.WriteRangeValues(LogSheetName, 1, 1, BuildMatrix(rows));
         }
 
@@ -130,6 +133,23 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return result;
+        }
+
+        private string ReadStableCellText(object[,] values, int row, int column, int worksheetRow, int worksheetColumn)
+        {
+            var value = values[row, column];
+            if (value is string textValue)
+            {
+                return textValue;
+            }
+
+            var text = gridAdapter.GetCellText(LogSheetName, worksheetRow, worksheetColumn);
+            if (!string.IsNullOrEmpty(text))
+            {
+                return text;
+            }
+
+            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
         private static string NormalizeChangeMode(string value)
