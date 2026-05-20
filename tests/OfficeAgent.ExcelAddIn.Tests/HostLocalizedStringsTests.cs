@@ -66,7 +66,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
-        [InlineData("zh", "登录", "登出")]
+        [InlineData("zh", "登录", "退出")]
         [InlineData("en", "Login", "Logout")]
         public void ForLocaleReturnsExpectedAccountButtonLabels(
             string locale,

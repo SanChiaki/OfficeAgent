@@ -149,7 +149,7 @@ export const uiStrings: Record<UiLocale, UiStrings> = {
     loggedOut: '未登录',
     loginInProgress: '登录中...',
     login: '登录',
-    logout: '登出',
+    logout: '退出',
     cancel: '取消',
     save: '保存',
     deleteSessionDialogTitle: '删除会话',
