@@ -1222,7 +1222,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("Uri.UriSchemeHttp", dialogText, StringComparison.Ordinal);
             Assert.Contains("Uri.UriSchemeHttps", dialogText, StringComparison.Ordinal);
             Assert.Contains("Process.Start(new ProcessStartInfo", dialogText, StringComparison.Ordinal);
-            Assert.Contains("MessageBox.Show(this, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBox.Show(owner, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
             Assert.Contains("AboutOpenUrlFailedMessage", stringsText, StringComparison.Ordinal);
         }
 
@@ -1244,11 +1244,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
 
-            Assert.Contains("private const int WrappedLineHeight = 96;", dialogText, StringComparison.Ordinal);
-            Assert.Contains("Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight)", dialogText, StringComparison.Ordinal);
-            Assert.Contains("AddLine(model.UpdateTitle, FontStyle.Regular, ref top);", dialogText, StringComparison.Ordinal);
-            Assert.Contains("AddWrappedLine(model.UpdateSummary, ref top);", dialogText, StringComparison.Ordinal);
-            Assert.DoesNotContain("AddWrappedLine(model.UpdateTitle", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AppendLine(model.UpdateTitle.Trim())", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AppendLine(model.UpdateSummary.Trim())", dialogText, StringComparison.Ordinal);
+            Assert.Contains("EstimatePromptHeight(message)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("EnableMessageScroll = true", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("WrappedLineHeight", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AddWrappedLine", dialogText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutDialogUsesTemplatePromptDialogShell()
+        {
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+            var promptText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "TemplatePromptDialog.cs"));
+
+            Assert.Contains("TemplatePromptDialog.ShowPrompt(", dialogText, StringComparison.Ordinal);
+            Assert.Contains("new TemplatePromptDialog.DialogButtonSpec", dialogText, StringComparison.Ordinal);
+            Assert.Contains("DialogResult.None", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBoxIcon.Information", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Action<IWin32Window>", promptText, StringComparison.Ordinal);
+            Assert.DoesNotContain(": Form", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("SystemFonts.MessageBoxFont", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("new Button", dialogText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)
