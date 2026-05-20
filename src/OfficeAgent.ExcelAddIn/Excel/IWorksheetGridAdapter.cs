@@ -18,6 +18,8 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         string[,] ReadRangeNumberFormats(string sheetName, int startRow, int endRow, int startColumn, int endColumn);
 
+        void SetRangeNumberFormat(string sheetName, int startRow, int endRow, int startColumn, int endColumn, string numberFormat);
+
         void ClearRange(string sheetName, int startRow, int endRow, int startColumn, int endColumn);
 
         void ClearWorksheet(string sheetName);
