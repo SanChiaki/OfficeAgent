@@ -910,7 +910,7 @@ namespace OfficeAgent.ExcelAddIn
                     {
                         Key = rowId,
                         HeaderText = BuildHeaderText(column),
-                        ChangeMode = GetStrings().ChangeModeDownload,
+                        ChangeMode = "Download",
                         NewValue = newValue,
                         OldValue = oldValue,
                     });
@@ -935,7 +935,7 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     Key = item.Cell.RowId,
                     HeaderText = item.Cell.HeaderText,
-                    ChangeMode = GetStrings().ChangeModeDownload,
+                    ChangeMode = "Download",
                     NewValue = item.NewValue,
                     OldValue = item.Cell.OldValue ?? string.Empty,
                 })
@@ -988,7 +988,7 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     Key = candidate.RowId,
                     HeaderText = candidate.HeaderText,
-                    ChangeMode = GetStrings().ChangeModeUpload,
+                    ChangeMode = "Upload",
                     NewValue = candidate.NewValue,
                     OldValue = candidate.OldValue,
                 })

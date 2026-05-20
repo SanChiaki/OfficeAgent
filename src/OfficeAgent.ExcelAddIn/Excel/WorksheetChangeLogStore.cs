@@ -13,12 +13,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
 
         private static readonly string[] Headers =
         {
-            "key",
-            "表头",
-            "修改模式",
-            "修改值",
-            "原始值",
-            "修改时间",
+            "Key",
+            "Header",
+            "Change Mode",
+            "New Value",
+            "Old Value",
+            "Changed At",
         };
 
         private readonly IWorksheetGridAdapter gridAdapter;
@@ -91,7 +91,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 {
                     Key = key,
                     HeaderText = headerText,
-                    ChangeMode = changeMode,
+                    ChangeMode = NormalizeChangeMode(changeMode),
                     NewValue = newValue,
                     OldValue = oldValue,
                     ChangedAt = ParseTimestamp(changedAtValue),
@@ -122,7 +122,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var entry = rows[row] ?? new WorksheetChangeLogEntry();
                 result[row + 1, 0] = entry.Key ?? string.Empty;
                 result[row + 1, 1] = entry.HeaderText ?? string.Empty;
-                result[row + 1, 2] = entry.ChangeMode ?? string.Empty;
+                result[row + 1, 2] = NormalizeChangeMode(entry.ChangeMode);
                 result[row + 1, 3] = entry.NewValue ?? string.Empty;
                 result[row + 1, 4] = entry.OldValue ?? string.Empty;
                 result[row + 1, 5] = (entry.ChangedAt == default(DateTime) ? now : entry.ChangedAt)
@@ -130,6 +130,24 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return result;
+        }
+
+        private static string NormalizeChangeMode(string value)
+        {
+            var text = value ?? string.Empty;
+            if (string.Equals(text, "下载", StringComparison.Ordinal) ||
+                string.Equals(text, "Download", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Download";
+            }
+
+            if (string.Equals(text, "上传", StringComparison.Ordinal) ||
+                string.Equals(text, "Upload", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Upload";
+            }
+
+            return text;
         }
 
         private static DateTime ParseTimestamp(object value)

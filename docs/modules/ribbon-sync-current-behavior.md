@@ -539,21 +539,21 @@ grouped single 当前支持的运行场景：
 
 `xISDP_Log` 固定列为：
 
-- `key`
-- `表头`
-- `修改模式`
-- `修改值`
-- `原始值`
-- `修改时间`
+- `Key`
+- `Header`
+- `Change Mode`
+- `New Value`
+- `Old Value`
+- `Changed At`
 
 字段含义：
 
-- `key` 是业务行 ID，也就是当前系统约定的 `row_id`
-- `表头` 使用当前 Excel 表头显示文本；双层表头显示为 `父表头/子表头`
-- `修改模式` 固定为 `上传` 或 `下载`
-- `修改值` 是同步动作写入 Excel 或提交给业务系统的新值
-- `原始值` 在下载时取覆盖前 Excel 值，在上传时取用户编辑前 Excel 值
-- `修改时间` 使用本机时间，格式为 `yyyy-MM-dd HH:mm:ss`
+- `Key` 是业务行 ID，也就是当前系统约定的 `row_id`
+- `Header` 使用当前 Excel 表头显示文本；双层表头显示为 `父表头/子表头`
+- `Change Mode` 固定为 `Upload` 或 `Download`
+- `New Value` 是同步动作写入 Excel 或提交给业务系统的新值
+- `Old Value` 在下载时取覆盖前 Excel 值，在上传时取用户编辑前 Excel 值
+- `Changed At` 使用本机时间，格式为 `yyyy-MM-dd HH:mm:ss`
 
 保留策略：
 
@@ -569,9 +569,9 @@ grouped single 当前支持的运行场景：
 - 同步前后文本值未变化的单元格
 - 普通手工编辑、初始化当前表、模板操作、`xISDP_Setting` 改动、任务窗格 Agent 写入
 
-上传日志依赖当前 Excel 会话内捕获到的用户编辑前值。插件会在选区变化时缓存待编辑单元格的旧值，并在 `SheetChange` 后标记为 pending；只有 `BatchSave` 成功后才写 `上传` 日志并清除对应 pending 值。如果上传失败，不写日志也不清除 pending 值。
+上传日志依赖当前 Excel 会话内捕获到的用户编辑前值。插件会在选区变化时缓存待编辑单元格的旧值，并在 `SheetChange` 后标记为 pending；只有 `BatchSave` 成功后才写 `Upload` 日志并清除对应 pending 值。如果上传失败，不写日志也不清除 pending 值。
 
-下载日志不依赖 pending 值；插件在覆盖 Excel 单元格前直接读取当前单元格文本作为 `原始值`，写入成功后追加 `下载` 日志。
+下载日志不依赖 pending 值；插件在覆盖 Excel 单元格前直接读取当前单元格文本作为 `Old Value`，写入成功后追加 `Download` 日志。
 
 日志写入失败不会阻断上传 / 下载主流程；失败细节会写入 `%LocalAppData%\\OfficeAgent\\logs\\officeagent.log`。
 
