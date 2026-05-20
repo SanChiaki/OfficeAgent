@@ -38,6 +38,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "src",
                 "OfficeAgent.ExcelAddIn",
                 "AgentRibbon.Designer.cs"));
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
 
             Assert.Contains("this.toggleTaskPaneButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.initializeSheetButton.OfficeImageId = \"TableInsert\";", designerText, StringComparison.Ordinal);
@@ -51,7 +55,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("this.loginButton.OfficeImageId = \"Lock\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.logoutButton.OfficeImageId = \"Lock\";", designerText, StringComparison.Ordinal);
             Assert.Contains("this.documentationButton.OfficeImageId = \"FileOpen\";", designerText, StringComparison.Ordinal);
-            Assert.Contains("this.aboutButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.aboutButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.Contains("ApplyAboutButtonImage();", ribbonCodeText, StringComparison.Ordinal);
             Assert.DoesNotContain("ShowImage = false;", designerText, StringComparison.Ordinal);
         }
 
@@ -1192,7 +1197,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("ApplyAboutButtonImage();", ribbonText, StringComparison.Ordinal);
             Assert.Contains("CurrentState?.ShouldShowReminder == true", ribbonText, StringComparison.Ordinal);
             Assert.Contains("aboutButton.OfficeImageId = string.Empty;", ribbonText, StringComparison.Ordinal);
-            Assert.Contains("RibbonAboutIconFactory.CreateAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("RibbonAboutIconFactory.LoadAboutIcon(hasUpdate:", ribbonText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutButtonUsesCustomImageAssetsForBothUpdateStates()
+        {
+            var projectText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "OfficeAgent.ExcelAddIn.csproj"));
+            var designerText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.Designer.cs"));
+            var ribbonText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "AgentRibbon.cs"));
+            var factoryText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "RibbonAboutIconFactory.cs"));
+            var normalIconPath = ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Resources", "about_32.png");
+            var updateIconPath = ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Resources", "about_update_32.png");
+
+            Assert.Contains("<Content Include=\"Resources\\about_32.png\">", projectText, StringComparison.Ordinal);
+            Assert.Contains("<Content Include=\"Resources\\about_update_32.png\">", projectText, StringComparison.Ordinal);
+            Assert.True(File.Exists(normalIconPath), normalIconPath);
+            Assert.True(File.Exists(updateIconPath), updateIconPath);
+            Assert.True(new FileInfo(normalIconPath).Length > 0, normalIconPath);
+            Assert.True(new FileInfo(updateIconPath).Length > 0, updateIconPath);
+            Assert.Contains("LoadAboutIcon(hasUpdate: false)", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("LoadAboutIcon(hasUpdate: true)", ribbonText, StringComparison.Ordinal);
+            Assert.Contains("Image.FromStream", factoryText, StringComparison.Ordinal);
+            Assert.Contains("about_32.png", factoryText, StringComparison.Ordinal);
+            Assert.Contains("about_update_32.png", factoryText, StringComparison.Ordinal);
+            Assert.DoesNotContain("this.aboutButton.OfficeImageId = \"Info\";", designerText, StringComparison.Ordinal);
+            Assert.DoesNotContain("Graphics.FromImage", factoryText, StringComparison.Ordinal);
+            Assert.DoesNotContain("FillEllipse", factoryText, StringComparison.Ordinal);
+            Assert.DoesNotContain("DrawString", factoryText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -1222,7 +1254,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("Uri.UriSchemeHttp", dialogText, StringComparison.Ordinal);
             Assert.Contains("Uri.UriSchemeHttps", dialogText, StringComparison.Ordinal);
             Assert.Contains("Process.Start(new ProcessStartInfo", dialogText, StringComparison.Ordinal);
-            Assert.Contains("MessageBox.Show(this, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBox.Show(owner, strings.AboutOpenUrlFailedMessage", dialogText, StringComparison.Ordinal);
             Assert.Contains("AboutOpenUrlFailedMessage", stringsText, StringComparison.Ordinal);
         }
 
@@ -1244,11 +1276,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
 
-            Assert.Contains("private const int WrappedLineHeight = 96;", dialogText, StringComparison.Ordinal);
-            Assert.Contains("Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight)", dialogText, StringComparison.Ordinal);
-            Assert.Contains("AddLine(model.UpdateTitle, FontStyle.Regular, ref top);", dialogText, StringComparison.Ordinal);
-            Assert.Contains("AddWrappedLine(model.UpdateSummary, ref top);", dialogText, StringComparison.Ordinal);
-            Assert.DoesNotContain("AddWrappedLine(model.UpdateTitle", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AppendLine(model.UpdateTitle.Trim())", dialogText, StringComparison.Ordinal);
+            Assert.Contains("AppendLine(model.UpdateSummary.Trim())", dialogText, StringComparison.Ordinal);
+            Assert.Contains("EstimatePromptHeight(message)", dialogText, StringComparison.Ordinal);
+            Assert.Contains("EnableMessageScroll = true", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("WrappedLineHeight", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AddWrappedLine", dialogText, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void AboutDialogUsesTemplatePromptDialogShell()
+        {
+            var dialogText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "AboutDialog.cs"));
+            var promptText = File.ReadAllText(ResolveRepositoryPath("src", "OfficeAgent.ExcelAddIn", "Dialogs", "TemplatePromptDialog.cs"));
+
+            Assert.Contains("TemplatePromptDialog.ShowPrompt(", dialogText, StringComparison.Ordinal);
+            Assert.Contains("new TemplatePromptDialog.DialogButtonSpec", dialogText, StringComparison.Ordinal);
+            Assert.Contains("DialogResult.None", dialogText, StringComparison.Ordinal);
+            Assert.Contains("MessageBoxIcon.Information", dialogText, StringComparison.Ordinal);
+            Assert.Contains("Action<IWin32Window>", promptText, StringComparison.Ordinal);
+            Assert.DoesNotContain(": Form", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("SystemFonts.MessageBoxFont", dialogText, StringComparison.Ordinal);
+            Assert.DoesNotContain("new Button", dialogText, StringComparison.Ordinal);
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

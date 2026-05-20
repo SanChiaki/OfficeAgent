@@ -12,10 +12,6 @@ namespace OfficeAgent.ExcelAddIn.Updates
 
         public static UpdateCheckOptions CreateDefault()
         {
-#if DEBUG
-            OfficeAgentLog.Info("updates", "configuration.disabled_debug", "Update checks are disabled in Debug builds.");
-            return UpdateCheckOptions.Disabled();
-#else
             var manifestUrl = ReadManifestUrl(Registry.CurrentUser);
             if (string.IsNullOrWhiteSpace(manifestUrl))
             {
@@ -34,7 +30,6 @@ namespace OfficeAgent.ExcelAddIn.Updates
             }
 
             return UpdateCheckOptions.Enabled(manifestUrl.Trim());
-#endif
         }
 
         public static UpdateCheckOptions Load()

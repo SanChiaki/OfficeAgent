@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using OfficeAgent.ExcelAddIn.Updates;
 using Xunit;
 
@@ -369,6 +370,42 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var options = UpdateCheckConfiguration.CreateDefault();
 
             Assert.NotNull(options);
+        }
+
+        [Fact]
+        public void UpdateCheckConfigurationCreateDefaultUsesConfiguredManifestUrlInAnyBuild()
+        {
+            const string registryPath = @"Software\OfficeAgent";
+            const string valueName = "UpdateManifestUrl";
+            const string manifestUrl = "http://localhost:3200/update-manifest";
+
+            using (var key = Registry.CurrentUser.CreateSubKey(registryPath))
+            {
+                var existingValue = key.GetValue(valueName);
+                var hasExistingValue = existingValue != null;
+                var existingValueKind = hasExistingValue ? key.GetValueKind(valueName) : RegistryValueKind.String;
+
+                try
+                {
+                    key.SetValue(valueName, manifestUrl, RegistryValueKind.String);
+
+                    var options = UpdateCheckConfiguration.CreateDefault();
+
+                    Assert.True(options.IsEnabled);
+                    Assert.Equal(manifestUrl, options.ManifestUrl);
+                }
+                finally
+                {
+                    if (hasExistingValue)
+                    {
+                        key.SetValue(valueName, existingValue, existingValueKind);
+                    }
+                    else
+                    {
+                        key.DeleteValue(valueName, throwOnMissingValue: false);
+                    }
+                }
+            }
         }
 
         [Fact]

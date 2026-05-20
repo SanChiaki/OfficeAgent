@@ -123,9 +123,9 @@
 - Confirm the `xISDP AI` group task-pane button shows only its icon and does not display the `Open` label.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
-- Release 安装包更新提醒：配置内部更新 manifest URL，使其返回 `Content-Type: application/octet-stream` 的 JSON 字节流，且 `latestVersion` 高于当前 `VersionInfo.AppVersion`。打开 Excel 后确认 `关于` / `About` 图标显示红点；点击 `关于` 后确认显示当前版本、最新版本、更新摘要和下载入口，且不显示发布说明按钮；点击 `忽略此版本` / `Ignore this version` 后确认红点消失，再次点击 `关于` 仍能看到该版本的更新信息和下载入口；把 manifest 提高到更高版本后确认红点重新出现。
+- 更新提醒：配置内部更新 manifest URL，使其返回 `Content-Type: application/octet-stream` 的 JSON 字节流，且 `latestVersion` 高于当前 `VersionInfo.AppVersion`。Debug 和 Release 均应使用同一套检查逻辑；打开 Excel 后确认 `关于` / `About` 图标显示红点；点击 `关于` 后确认显示当前版本、最新版本、更新摘要和下载入口，且不显示发布说明按钮；点击 `忽略此版本` / `Ignore this version` 后确认红点消失，再次点击 `关于` 仍能看到该版本的更新信息和下载入口；把 manifest 提高到更高版本后确认红点重新出现。
 - 更新检查失败隔离：让更新 manifest URL 断开或返回非法 JSON，重新打开 Excel，确认 Ribbon、任务窗格、登录、下载、上传和模板操作仍可用，且没有更新失败弹窗。
-- Debug 环境隔离：运行 `eng/Dev-RefreshExcelAddIn.ps1 -CloseExcel` 后打开 Excel，确认不会请求更新 manifest URL。
+- 未配置更新源隔离：清空或删除更新 manifest URL 配置后重新打开 Excel，确认不会请求更新 manifest URL，且 Ribbon、任务窗格、登录、下载、上传和模板操作仍可用。
 - In the same project, save two different local templates and confirm `应用配置` / `Apply Setting` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
 - Manually edit `xISDP_Setting` field mapping text after applying a template, click `保存配置` / `Save Setting`, then reapply that template and confirm the edited mapping is preserved.

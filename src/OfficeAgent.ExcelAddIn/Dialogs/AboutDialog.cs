@@ -1,6 +1,6 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
+using System.Text;
 using System.Windows.Forms;
 using OfficeAgent.ExcelAddIn.Localization;
 
@@ -37,156 +37,117 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         public string UpdateSummary { get; set; } = string.Empty;
     }
 
-    internal sealed class AboutDialog : Form
+    internal static class AboutDialog
     {
-        private const int DialogWidth = 460;
-        private const int HorizontalPadding = 18;
-        private const int ButtonHeight = 28;
-        private const int WrappedLineHeight = 96;
-
-        private readonly AboutDialogModel model;
-        private readonly HostLocalizedStrings strings;
-        private AboutDialogAction action = AboutDialogAction.Close;
-
-        private AboutDialog(AboutDialogModel model, HostLocalizedStrings strings)
-        {
-            this.model = model ?? new AboutDialogModel();
-            this.strings = strings ?? HostLocalizedStrings.ForLocale("en");
-            BuildLayout();
-        }
+        private const int DialogWidth = 540;
+        private const int MinimumDialogHeight = 220;
+        private const int MaximumDialogHeight = 380;
+        private const int PromptVerticalPadding = 110;
+        private const int PromptLineHeight = 20;
 
         public static AboutDialogAction ShowDialogForUpdate(AboutDialogModel model, HostLocalizedStrings strings)
         {
+            model = model ?? new AboutDialogModel();
+            strings = strings ?? HostLocalizedStrings.ForLocale("en");
             var owner = ExcelDialogOwner.FromCurrentApplication();
-            using (var dialog = new AboutDialog(model, strings))
-            {
-                if (owner == null)
+            var message = CreateMessage(model, strings);
+            var action = AboutDialogAction.Close;
+            var buttons = CreateButtons(model, strings, result => action = result);
+            TemplatePromptDialog.ShowPrompt(
+                owner,
+                strings.RibbonAboutDialogTitle,
+                message,
+                MessageBoxIcon.Information,
+                new TemplatePromptDialog.PromptOptions
                 {
-                    dialog.ShowDialog();
-                }
-                else
-                {
-                    dialog.ShowDialog(owner);
-                }
-
-                return dialog.action;
-            }
+                    Width = DialogWidth,
+                    Height = EstimatePromptHeight(message),
+                    EnableMessageScroll = true,
+                },
+                buttons);
+            return action;
         }
 
-        private void BuildLayout()
+        private static string CreateMessage(AboutDialogModel model, HostLocalizedStrings strings)
         {
-            Font = SystemFonts.MessageBoxFont;
-            AutoScaleMode = AutoScaleMode.Dpi;
-            Text = strings.RibbonAboutDialogTitle;
-            StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            ShowInTaskbar = false;
+            var builder = new StringBuilder()
+                .AppendLine($"{strings.AboutCurrentVersionLabel}: {model.AppVersion}")
+                .AppendLine($"{strings.AboutAssemblyVersionLabel}: {model.AssemblyVersion}")
+                .AppendLine($"{strings.AboutBuildConfigurationLabel}: {model.BuildConfiguration}")
+                .AppendLine($"{strings.AboutBuildTimeLabel}: {model.BuildTime}")
+                .AppendLine();
 
-            var top = 16;
-            AddLine($"{strings.AboutCurrentVersionLabel}: {model.AppVersion}", FontStyle.Regular, ref top);
-            AddLine($"{strings.AboutAssemblyVersionLabel}: {model.AssemblyVersion}", FontStyle.Regular, ref top);
-            AddLine($"{strings.AboutBuildConfigurationLabel}: {model.BuildConfiguration}", FontStyle.Regular, ref top);
-            AddLine($"{strings.AboutBuildTimeLabel}: {model.BuildTime}", FontStyle.Regular, ref top);
-
-            top += 8;
             if (model.HasNewVersion)
             {
-                AddLine(strings.AboutNewVersionAvailableTitle, FontStyle.Bold, ref top);
-                AddLine($"{strings.AboutLatestVersionLabel}: {model.LatestVersion}", FontStyle.Regular, ref top);
+                builder
+                    .AppendLine(strings.AboutNewVersionAvailableTitle)
+                    .AppendLine($"{strings.AboutLatestVersionLabel}: {model.LatestVersion}");
                 if (model.PublishedAtUtc.HasValue)
                 {
-                    AddLine($"{strings.AboutPublishedAtLabel}: {model.PublishedAtUtc.Value.ToLocalTime():yyyy-MM-dd HH:mm:ss}", FontStyle.Regular, ref top);
+                    builder.AppendLine($"{strings.AboutPublishedAtLabel}: {model.PublishedAtUtc.Value.ToLocalTime():yyyy-MM-dd HH:mm:ss}");
                 }
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateTitle))
                 {
-                    AddLine(model.UpdateTitle, FontStyle.Regular, ref top);
+                    builder.AppendLine(model.UpdateTitle.Trim());
                 }
 
                 if (!string.IsNullOrWhiteSpace(model.UpdateSummary))
                 {
-                    AddWrappedLine(model.UpdateSummary, ref top);
+                    builder.AppendLine(model.UpdateSummary.Trim());
                 }
             }
             else
             {
-                AddLine(strings.AboutNoUpdateAvailableText, FontStyle.Regular, ref top);
+                builder.AppendLine(strings.AboutNoUpdateAvailableText);
             }
 
-            top += 10;
-            AddButtons(top);
-            ClientSize = new Size(DialogWidth, top + ButtonHeight + 18);
+            return builder.ToString().TrimEnd();
         }
 
-        private void AddLine(string text, FontStyle style, ref int top)
+        private static TemplatePromptDialog.DialogButtonSpec[] CreateButtons(
+            AboutDialogModel model,
+            HostLocalizedStrings strings,
+            Action<AboutDialogAction> setAction)
         {
-            var label = new Label
+            if (!model.HasNewVersion)
             {
-                AutoSize = false,
-                Text = text ?? string.Empty,
-                Font = new Font(Font, style),
-                Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), 22),
-            };
-            Controls.Add(label);
-            top += 22;
-        }
-
-        private void AddWrappedLine(string text, ref int top)
-        {
-            var label = new Label
-            {
-                AutoSize = false,
-                Text = text ?? string.Empty,
-                Bounds = new Rectangle(HorizontalPadding, top, DialogWidth - (HorizontalPadding * 2), WrappedLineHeight),
-            };
-            Controls.Add(label);
-            top += WrappedLineHeight + 2;
-        }
-
-        private void AddButtons(int top)
-        {
-            var right = DialogWidth - HorizontalPadding;
-            var closeButton = CreateButton(strings.CloseButtonText, right - 76, top, 76);
-            closeButton.DialogResult = DialogResult.Cancel;
-            closeButton.Click += (sender, e) =>
-            {
-                action = AboutDialogAction.Close;
-                Close();
-            };
-            Controls.Add(closeButton);
-            right -= 84;
-
-            if (model.HasNewVersion)
-            {
-                var ignoreButton = CreateButton(strings.AboutIgnoreVersionButtonText, right - 118, top, 118);
-                ignoreButton.Click += (sender, e) =>
+                return new[]
                 {
-                    action = AboutDialogAction.IgnoreVersion;
-                    Close();
+                    new TemplatePromptDialog.DialogButtonSpec(strings.CloseButtonText, DialogResult.Cancel, isCancel: true),
                 };
-                Controls.Add(ignoreButton);
-                right -= 126;
             }
 
-            if (IsSupportedHttpUrl(model.DownloadUrl))
+            if (!IsSupportedHttpUrl(model.DownloadUrl))
             {
-                var downloadButton = CreateButton(strings.AboutDownloadButtonText, right - 88, top, 88);
-                downloadButton.Click += (sender, e) => OpenUrl(model.DownloadUrl);
-                Controls.Add(downloadButton);
+                return new[]
+                {
+                    new TemplatePromptDialog.DialogButtonSpec(strings.CloseButtonText, DialogResult.Cancel, isCancel: true),
+                    new TemplatePromptDialog.DialogButtonSpec(strings.AboutIgnoreVersionButtonText, DialogResult.OK, action: owner => setAction(AboutDialogAction.IgnoreVersion)),
+                };
             }
 
-            CancelButton = closeButton;
+            return new[]
+            {
+                new TemplatePromptDialog.DialogButtonSpec(strings.CloseButtonText, DialogResult.Cancel, isCancel: true),
+                new TemplatePromptDialog.DialogButtonSpec(strings.AboutIgnoreVersionButtonText, DialogResult.OK, action: owner => setAction(AboutDialogAction.IgnoreVersion)),
+                new TemplatePromptDialog.DialogButtonSpec(strings.AboutDownloadButtonText, DialogResult.None, action: owner => OpenUrl(owner, model.DownloadUrl, strings)),
+            };
         }
 
-        private static Button CreateButton(string text, int left, int top, int width)
+        private static int EstimatePromptHeight(string message)
         {
-            return new Button
+            var lineCount = 1;
+            foreach (var character in message ?? string.Empty)
             {
-                Text = text ?? string.Empty,
-                Bounds = new Rectangle(Math.Max(HorizontalPadding, left), top, width, ButtonHeight),
-            };
+                if (character == '\n')
+                {
+                    lineCount++;
+                }
+            }
+
+            var desiredHeight = PromptVerticalPadding + (lineCount * PromptLineHeight);
+            return Math.Max(MinimumDialogHeight, Math.Min(MaximumDialogHeight, desiredHeight));
         }
 
         private static bool IsSupportedHttpUrl(string url)
@@ -196,11 +157,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
         }
 
-        private void OpenUrl(string url)
+        private static void OpenUrl(IWin32Window owner, string url, HostLocalizedStrings strings)
         {
             if (!IsSupportedHttpUrl(url))
             {
-                MessageBox.Show(this, strings.AboutOpenUrlFailedMessage(url), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(owner, strings.AboutOpenUrlFailedMessage(url), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -214,7 +175,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, strings.AboutOpenUrlFailedMessage(ex.Message), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(owner, strings.AboutOpenUrlFailedMessage(ex.Message), strings.HostWindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }

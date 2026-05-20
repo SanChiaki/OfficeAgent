@@ -6,7 +6,7 @@
 
 - SSO 登录服务：`http://localhost:3100`
 - 业务 API 服务：`http://localhost:3200`
-- Release 更新 manifest：`http://localhost:3200/update-manifest`
+- 更新 manifest：`http://localhost:3200/update-manifest`
 
 服务入口脚本：
 
@@ -46,18 +46,18 @@ node server.js
 - `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
 - `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
 - `Business Base URL` 也是 `/projects` 项目列表接口的基地址
-- `Update Manifest URL` 只用于 Release 安装包更新提醒验证，通过安装包构建参数注入，不显示在任务窗格 Settings UI
+- `Update Manifest URL` 用于更新提醒验证，可通过安装包构建参数或本机注册表配置注入，不显示在任务窗格 Settings UI
 - 埋点 URL 是隐藏配置，完整本地地址为 `http://localhost:3200/insertLog`
 - 业务接口通过 SSO cookie 鉴权，不走 API Key，未登录时会返回 `401`
 - `/insertLog` 会记录请求携带的 cookie，便于验证插件埋点请求是否复用登录态
 
 埋点隐藏配置保存在 `%LocalAppData%\OfficeAgent\settings.json`，字段名为 `AnalyticsUrl`。任务窗格 Settings UI 不展示该字段。
 
-## Release 更新提醒验证接口
+## 更新提醒验证接口
 
 #### `GET /update-manifest`
 
-返回 `Content-Type: application/octet-stream` 的 JSON 字节流，用于验证 Release 安装包的新版本红点提醒。
+返回 `Content-Type: application/octet-stream` 的 JSON 字节流，用于验证新版本红点提醒。
 
 当前示例：
 
@@ -65,14 +65,14 @@ node server.js
 {
   "latestVersion": "9.9.9",
   "title": "xISDP mock release",
-  "summary": "Local mock manifest for Release installer update reminder verification.",
+  "summary": "Local mock manifest for update reminder verification.",
   "downloadUrl": "http://localhost:3200/update-download/xISDP.Setup.exe",
   "releaseNotesUrl": "http://localhost:3200/update-release-notes",
   "publishedAtUtc": "2026-05-19T08:00:00Z"
 }
 ```
 
-用它构建本地 Release 安装包：
+用它构建本地安装包：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.ps1 -UpdateManifestUrl "http://localhost:3200/update-manifest"
