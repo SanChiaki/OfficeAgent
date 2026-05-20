@@ -49,6 +49,7 @@
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLROOT" Name="OfficeAgent">
         <Directory Id="ADDINFOLDER" Name="ExcelAddIn">
+          <Directory Id="RESOURCESFOLDER" Name="Resources" />
           <Directory Id="FRONTENDFOLDER" Name="frontend">
             <Directory Id="FRONTENDASSETSFOLDER" Name="assets" />
           </Directory>
@@ -69,6 +70,7 @@
 
     <Feature Id="OfficeAgentFeature" Title="xISDP" Level="1">
       <ComponentGroupRef Id="AddInPayload" />
+      <ComponentGroupRef Id="AddInResourcePayload" />
       <ComponentGroupRef Id="FrontendPayload" />
       <ComponentGroupRef Id="FrontendAssetPayload" />
       <ComponentGroupRef Id="RuntimePayload" />
@@ -113,6 +115,9 @@
       <Component Id="cmpOfficeAgentInfrastructure" Guid="*">
         <File Source="$(var.PublishRoot)\OfficeAgent.Infrastructure.dll" />
       </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="AddInResourcePayload" Directory="RESOURCESFOLDER">
+      <Files Include="$(var.PublishRoot)\Resources\**" />
     </ComponentGroup>
   </Fragment>
 

@@ -139,6 +139,33 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("yes", registryValue?.Attribute("KeyPath")?.Value);
         }
 
+        [Fact]
+        public void ProductWxsInstallsRibbonImageResourceFiles()
+        {
+            var document = LoadInstallerAuthoring();
+            var feature = document
+                .Descendants(WixNamespace + "Feature")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "OfficeAgentFeature");
+            var resourcesDirectory = document
+                .Descendants(WixNamespace + "Directory")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "RESOURCESFOLDER");
+            var resourcePayload = document
+                .Descendants(WixNamespace + "ComponentGroup")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "AddInResourcePayload");
+            var resourceFiles = resourcePayload?.Element(WixNamespace + "Files");
+
+            Assert.NotNull(feature);
+            Assert.Contains(
+                feature?.Elements(WixNamespace + "ComponentGroupRef") ?? Enumerable.Empty<XElement>(),
+                element => element.Attribute("Id")?.Value == "AddInResourcePayload");
+            Assert.NotNull(resourcesDirectory);
+            Assert.Equal("Resources", resourcesDirectory?.Attribute("Name")?.Value);
+            Assert.NotNull(resourcePayload);
+            Assert.Equal("RESOURCESFOLDER", resourcePayload?.Attribute("Directory")?.Value);
+            Assert.NotNull(resourceFiles);
+            Assert.Equal(@"$(var.PublishRoot)\Resources\**", resourceFiles?.Attribute("Include")?.Value);
+        }
+
         private static XDocument LoadInstallerAuthoring()
         {
             var productWxsPath = Path.GetFullPath(Path.Combine(
