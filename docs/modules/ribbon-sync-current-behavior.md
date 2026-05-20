@@ -63,7 +63,7 @@ Ribbon 分组、按钮和项目下拉框状态文案都会跟随当前宿主 UI 
 - 中文 Excel：`项目`、`配置`、`数据同步`、`账号`、`帮助`、`先选择项目`、`请先登录`
 - 英文 Excel：`Project`、`Setting`、`Data sync`、`Account`、`Help`、`Select project`、`Sign in first`
 
-`关于` / `About` 使用宿主生成的自定义图标，以便在存在新版本时叠加红点；其他 Ribbon 按钮仍使用 Office 内置 `imageMso` 图标。`初始化当前表` / `Initialize sheet`、`AI映射列` / `AI map columns`、`配置` / `Setting` 组内的三个命令按钮以及账号组内的 `登录` / `Login`、`退出` / `Logout` 使用 Office 常规小按钮布局；数据同步、帮助等其余命令按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方。项目下拉框仍然只显示当前项目或状态文本。
+`关于` / `About` 使用项目内自定义 PNG 图片资源：普通态加载 `Resources/about_32.png`，发现新版本时加载 `Resources/about_update_32.png`；其他 Ribbon 按钮仍使用 Office 内置 `imageMso` 图标。`初始化当前表` / `Initialize sheet`、`AI映射列` / `AI map columns`、`配置` / `Setting` 组内的三个命令按钮以及账号组内的 `登录` / `Login`、`退出` / `Logout` 使用 Office 常规小按钮布局；数据同步、帮助等其余命令按钮使用 Office 大按钮布局，图标显示在上方、文字显示在下方。项目下拉框仍然只显示当前项目或状态文本。
 
 中文 UI 下，大按钮里的两个汉字 Ribbon 按钮标签会在文本末尾追加 carriage return no-wrap 提示，等价于 Ribbon XML 中的 `&#13;`，用于避免 Office 把 `下载`、`上传`、`文档`、`关于` 拆成逐字换行显示。账号组的 `登录`、`退出` 是 Office 常规小按钮，不追加该换行提示。该处理只发生在 Ribbon 按钮赋值层，不改变同步结果、确认弹窗等普通本地化文案。
 

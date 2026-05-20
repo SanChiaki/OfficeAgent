@@ -805,12 +805,12 @@ namespace OfficeAgent.ExcelAddIn
 
         private Image GetAboutButtonImage()
         {
-            return aboutButtonImage ?? (aboutButtonImage = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: false));
+            return aboutButtonImage ?? (aboutButtonImage = RibbonAboutIconFactory.LoadAboutIcon(hasUpdate: false));
         }
 
         private Image GetAboutButtonImageWithUpdate()
         {
-            return aboutButtonImageWithUpdate ?? (aboutButtonImageWithUpdate = RibbonAboutIconFactory.CreateAboutIcon(hasUpdate: true));
+            return aboutButtonImageWithUpdate ?? (aboutButtonImageWithUpdate = RibbonAboutIconFactory.LoadAboutIcon(hasUpdate: true));
         }
 
         internal void RefreshTemplateButtonsFromController()

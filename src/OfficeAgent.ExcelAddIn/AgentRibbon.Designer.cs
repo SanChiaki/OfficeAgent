@@ -236,7 +236,6 @@ namespace OfficeAgent.ExcelAddIn
             //
             this.aboutButton.Label = "About";
             this.aboutButton.Name = "aboutButton";
-            this.aboutButton.OfficeImageId = "Info";
             this.aboutButton.ShowImage = true;
             this.aboutButton.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
             this.aboutButton.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.AboutButton_Click);
