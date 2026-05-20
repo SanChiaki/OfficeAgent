@@ -36,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 var entry = Activator.CreateInstance(entryType);
                 SetProperty(entry, "Key", $"row-{index + 1:0000}");
                 SetProperty(entry, "HeaderText", $"表头{index + 1}");
-                SetProperty(entry, "ChangeMode", "下载");
+                SetProperty(entry, "ChangeMode", "Download");
                 SetProperty(entry, "NewValue", $"新值{index + 1}");
                 SetProperty(entry, "OldValue", $"旧值{index + 1}");
                 entries.SetValue(entry, index);
@@ -45,15 +45,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
             storeType.GetMethod("Append").Invoke(store, new object[] { entries });
 
             Assert.Contains("xISDP_Log", grid.WorksheetNames);
-            Assert.Equal("key", grid.GetCell("xISDP_Log", 1, 1));
-            Assert.Equal("表头", grid.GetCell("xISDP_Log", 1, 2));
-            Assert.Equal("修改模式", grid.GetCell("xISDP_Log", 1, 3));
-            Assert.Equal("修改值", grid.GetCell("xISDP_Log", 1, 4));
-            Assert.Equal("原始值", grid.GetCell("xISDP_Log", 1, 5));
-            Assert.Equal("修改时间", grid.GetCell("xISDP_Log", 1, 6));
+            Assert.Equal("Key", grid.GetCell("xISDP_Log", 1, 1));
+            Assert.Equal("Header", grid.GetCell("xISDP_Log", 1, 2));
+            Assert.Equal("Change Mode", grid.GetCell("xISDP_Log", 1, 3));
+            Assert.Equal("New Value", grid.GetCell("xISDP_Log", 1, 4));
+            Assert.Equal("Old Value", grid.GetCell("xISDP_Log", 1, 5));
+            Assert.Equal("Changed At", grid.GetCell("xISDP_Log", 1, 6));
             Assert.Equal("row-0002", grid.GetCell("xISDP_Log", 2, 1));
             Assert.Equal("表头2", grid.GetCell("xISDP_Log", 2, 2));
-            Assert.Equal("下载", grid.GetCell("xISDP_Log", 2, 3));
+            Assert.Equal("Download", grid.GetCell("xISDP_Log", 2, 3));
             Assert.Equal("新值2", grid.GetCell("xISDP_Log", 2, 4));
             Assert.Equal("旧值2", grid.GetCell("xISDP_Log", 2, 5));
             Assert.Equal("2026-04-29 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
@@ -62,7 +62,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void AppendPreservesExistingTimestampReadBackAsExcelValue2DateSerial()
+        public void AppendPreservesExistingTimestampAndNormalizesChineseChangeModes()
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
@@ -98,6 +98,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             storeType.GetMethod("Append").Invoke(store, new object[] { entries });
 
+            Assert.Equal("Download", grid.GetCell("xISDP_Log", 2, 3));
+            Assert.Equal("Upload", grid.GetCell("xISDP_Log", 3, 3));
             Assert.Equal("2026-04-29 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
             Assert.Equal("2026-04-29 10:45:00", grid.GetCell("xISDP_Log", 3, 6));
         }

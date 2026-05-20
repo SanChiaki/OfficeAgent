@@ -478,10 +478,6 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 : $"{rowId} / {apiFieldKey}: Skipped, {reason}";
         }
 
-        public string ChangeModeDownload => Locale == "zh" ? "下载" : "Download";
-
-        public string ChangeModeUpload => Locale == "zh" ? "上传" : "Upload";
-
         public string TaskPaneRuntimeMissingMessage => Locale == "zh"
             ? "需要 WebView2 Runtime 才能显示 ISDP。"
             : "WebView2 Runtime is required to render ISDP.";
