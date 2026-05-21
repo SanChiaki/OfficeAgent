@@ -109,6 +109,8 @@ Recommended development flow:
 ## Coding Style & Naming Conventions
 C# uses 4-space indentation, PascalCase for public members, `I`-prefixed interfaces, camelCase private fields, and new-line braces for namespaces, classes, and methods. Prefer `string.Equals(..., StringComparison.Ordinal)` over `==`. Preserve the UI thread only where COM interop requires it. TypeScript uses 2-space indentation, single quotes, semicolons, trailing commas, type-only imports, and functional components such as `export function App() {}`. Avoid barrel exports, routing libraries, and CSS-in-JS.
 
+When adding a new dialog, all user-facing dialog text must be localized through `src/OfficeAgent.ExcelAddIn/Localization/HostLocalizedStrings.cs`. Do not hardcode new dialog prompt strings directly in dialog or controller code.
+
 ## Testing Guidelines
 Use xUnit for .NET and Vitest plus Testing Library for the frontend. Name .NET tests with descriptive PascalCase behavior names such as `ExecuteReturnsChatFallbackForUnknownUserInput`; frontend tests should live beside the code as `*.test.ts` or `*.test.tsx`. Use `vi.mock()` and `userEvent.setup()` where appropriate. For Excel write flows, SSO, or installer work, run `docs/vsto-manual-test-checklist.md`.
 
