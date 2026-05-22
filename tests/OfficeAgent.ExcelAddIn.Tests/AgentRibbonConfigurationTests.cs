@@ -290,6 +290,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void AccountButtonsFollowServerAuthenticationStateInsteadOfCookieCount()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+            var sessionServiceText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.Infrastructure",
+                "Http",
+                "AccountSessionService.cs"));
+
+            Assert.Contains("AccountSessionService?.IsServerAuthenticated == true", ribbonCodeText, StringComparison.Ordinal);
+            Assert.DoesNotContain("AccountSessionService?.IsLoggedIn() == true", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("public bool IsServerAuthenticated { get; private set; }", sessionServiceText, StringComparison.Ordinal);
+            Assert.Contains("public void MarkServerAuthenticated()", sessionServiceText, StringComparison.Ordinal);
+            Assert.Contains("public void MarkServerAuthenticationRequired()", sessionServiceText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void RibbonUsesDedicatedCustomTabInsteadOfBuiltInAddInsTab()
         {
             var designerText = File.ReadAllText(ResolveRepositoryPath(
@@ -508,6 +528,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.True(guardIndex > catchIndex && guardIndex < promptIndex);
             Assert.True(markShownIndex > catchIndex && markShownIndex < promptIndex);
             Assert.True(resetIndex > 0 && resetIndex < loginRefreshIndex);
+        }
+
+        [Fact]
+        public void ProjectAuthenticationFailureClearsServerSessionAndRefreshesAccountButtons()
+        {
+            var ribbonCodeText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "AgentRibbon.cs"));
+
+            var catchIndex = ribbonCodeText.IndexOf("catch (AuthenticationRequiredException ex)", StringComparison.Ordinal);
+            var handlerIndex = ribbonCodeText.IndexOf("HandleServerAuthenticationRequired();", catchIndex, StringComparison.Ordinal);
+            var promptIndex = ribbonCodeText.IndexOf(
+                "OperationResultDialog.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage)",
+                catchIndex,
+                StringComparison.Ordinal);
+
+            Assert.Contains("private void HandleServerAuthenticationRequired()", ribbonCodeText, StringComparison.Ordinal);
+            Assert.True(catchIndex >= 0);
+            Assert.True(handlerIndex > catchIndex);
+            Assert.True(handlerIndex < promptIndex);
+            Assert.Contains("Globals.ThisAddIn?.HandleAccountAuthenticationRequired();", ribbonCodeText, StringComparison.Ordinal);
+            Assert.Contains("RefreshAccountButtonsFromSession();", ribbonCodeText, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -1119,7 +1162,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("AnalyticsProjectContextProvider);", addInText, StringComparison.Ordinal);
             Assert.Contains("AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)", addInText, StringComparison.Ordinal);
             Assert.Contains("NoopAnalyticsService.Instance", addInText, StringComparison.Ordinal);
-            Assert.Contains("CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);", addInText, StringComparison.Ordinal);
+            Assert.Contains("var currentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);", addInText, StringComparison.Ordinal);
+            Assert.Contains("CurrentBusinessConnector = currentBusinessConnector;", addInText, StringComparison.Ordinal);
             Assert.Contains("new SyncOperationPreviewFactory(), AnalyticsService);", addInText, StringComparison.Ordinal);
         }
 

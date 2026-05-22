@@ -110,7 +110,9 @@ namespace OfficeAgent.ExcelAddIn
                 new PlanExecutor(ExcelCommandExecutor, skillRegistry),
                 fetchClient,
                 () => SettingsStore.Load());
-            CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
+            var currentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
+            CurrentBusinessConnector = currentBusinessConnector;
+            AccountSessionService.ConfigureServerAuthenticationProbe(currentBusinessConnector.HasAuthenticatedSession);
             SystemConnectorRegistry = new SystemConnectorRegistry(new[] { CurrentBusinessConnector });
             WorksheetSyncService = new WorksheetSyncService(
                 SystemConnectorRegistry,
@@ -136,6 +138,7 @@ namespace OfficeAgent.ExcelAddIn
                 WorksheetSyncExecutionService,
                 new Dialogs.RibbonSyncDialogService(),
                 () => Globals.Ribbons.AgentRibbon?.BeginLoginFlow(refreshProjectsAfterSuccess: false),
+                () => Globals.ThisAddIn?.HandleAccountAuthenticationRequired(),
                 AnalyticsService);
             TemplateStore = new LocalJsonTemplateStore(Path.Combine(appDataDirectory, "templates"));
             TemplateCatalog = new WorksheetTemplateCatalog(
@@ -321,6 +324,11 @@ namespace OfficeAgent.ExcelAddIn
         internal void LogoutAccountSession()
         {
             AccountSessionService?.Logout();
+        }
+
+        internal void HandleAccountAuthenticationRequired()
+        {
+            AccountSessionService?.MarkServerAuthenticationRequired();
         }
 
         private static string GetWorksheetName(object sheet)

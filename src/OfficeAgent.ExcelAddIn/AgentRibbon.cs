@@ -216,6 +216,10 @@ namespace OfficeAgent.ExcelAddIn
                     PopulateProjectDropDown();
                     RefreshProjectDropDownFromController();
                 }
+                else
+                {
+                    RefreshServerAuthenticationState();
+                }
 
                 RefreshAccountButtonsFromSession();
                 return true;
@@ -340,6 +344,8 @@ namespace OfficeAgent.ExcelAddIn
                 {
                     var usedLabels = new HashSet<string>(StringComparer.Ordinal);
                     var projects = syncController.GetProjects() ?? Array.Empty<ProjectOption>();
+                    Globals.ThisAddIn?.AccountSessionService?.MarkServerAuthenticated();
+                    RefreshAccountButtonsFromSession();
                     foreach (var project in projects)
                     {
                         var systemKey = project.SystemKey ?? string.Empty;
@@ -380,6 +386,7 @@ namespace OfficeAgent.ExcelAddIn
                     isProjectListAuthenticationRequired = true;
                     SetProjectDropDownStatus(GetStrings().ProjectDropDownLoginRequiredText);
                     OfficeAgentLog.Warn("ribbon", "project_dropdown.login_required", ex.Message);
+                    HandleServerAuthenticationRequired();
                     if (!suppressAuthenticationRequiredPromptAfterLogout &&
                         !hasShownProjectLoadAuthenticationPrompt)
                     {
@@ -605,6 +612,7 @@ namespace OfficeAgent.ExcelAddIn
             TryBindToUpdateNotificationService();
             ApplyLocalizedLabels();
             ApplyAboutButtonImage();
+            RefreshServerAuthenticationState();
             RefreshAccountButtonsFromSession();
             if (TryBindToSyncController())
             {
@@ -980,9 +988,28 @@ namespace OfficeAgent.ExcelAddIn
 
         private void RefreshAccountButtonsFromSession()
         {
-            var isLoggedIn = Globals.ThisAddIn?.AccountSessionService?.IsLoggedIn() == true;
+            var isLoggedIn = Globals.ThisAddIn?.AccountSessionService?.IsServerAuthenticated == true;
             loginButton.Enabled = !isLoggedIn;
             logoutButton.Enabled = isLoggedIn;
+        }
+
+        private void RefreshServerAuthenticationState()
+        {
+            try
+            {
+                Globals.ThisAddIn?.AccountSessionService?.RefreshServerAuthenticationState();
+            }
+            catch (Exception ex)
+            {
+                OfficeAgentLog.Warn("ribbon", "account.session_probe_failed", "Failed to refresh account state from server.", ex.Message);
+            }
+        }
+
+        private void HandleServerAuthenticationRequired()
+        {
+            Globals.ThisAddIn?.HandleAccountAuthenticationRequired();
+            RefreshAccountButtonsFromSession();
+            RefreshTemplateButtonsFromController();
         }
 
         private static string FormatRibbonButtonLabel(string label)

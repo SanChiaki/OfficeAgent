@@ -373,7 +373,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             Assert.Contains("private readonly AccountSessionService accountSessionService;", routerText, StringComparison.Ordinal);
             Assert.Contains("accountSessionService.Logout();", routerText, StringComparison.Ordinal);
-            Assert.Contains("IsLoggedIn = accountSessionService.IsLoggedIn()", routerText, StringComparison.Ordinal);
+            Assert.Contains("IsLoggedIn = accountSessionService.IsServerAuthenticated", routerText, StringComparison.Ordinal);
         }
 
         [Fact]
