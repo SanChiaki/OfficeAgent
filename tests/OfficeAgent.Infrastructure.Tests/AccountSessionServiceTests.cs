@@ -37,6 +37,31 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.False(sessionService.IsLoggedIn());
             Assert.Empty(sharedCookies.Container.GetCookies(new Uri("https://example.com")));
             Assert.False(File.Exists(cookieStorePath));
+            Assert.False(sessionService.IsServerAuthenticated);
+        }
+
+        [Fact]
+        public void ServerAuthenticationStateDoesNotUseCookiePresenceAsLoginTruth()
+        {
+            var sharedCookies = new SharedCookieContainer { SsoDomain = "example.com" };
+            sharedCookies.Container.Add(
+                new Uri("https://example.com"),
+                new Cookie("sso-token", "token-123", "/"));
+            var cookieStore = new FileCookieStore(Path.Combine(tempDirectory, "cookies.json"), new DpapiSecretProtector());
+            var sessionService = new AccountSessionService(sharedCookies, cookieStore);
+
+            Assert.True(sessionService.IsLoggedIn());
+            Assert.False(sessionService.IsServerAuthenticated);
+
+            sessionService.MarkServerAuthenticated();
+
+            Assert.True(sessionService.IsServerAuthenticated);
+
+            sessionService.MarkServerAuthenticationRequired();
+
+            Assert.False(sessionService.IsServerAuthenticated);
+            Assert.False(sessionService.IsLoggedIn());
+            Assert.Empty(sharedCookies.Container.GetCookies(new Uri("https://example.com")));
         }
 
         [Theory]

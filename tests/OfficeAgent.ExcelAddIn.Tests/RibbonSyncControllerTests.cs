@@ -527,6 +527,45 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteInitializeCurrentSheetNotifiesAuthenticationRequiredBeforePrompt()
+        {
+            var connector = new FakeSystemConnector
+            {
+                BuildFieldMappingSeedException = new AuthenticationRequiredException("当前未登录，请先登录"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AuthenticationRequiredResult = false,
+            };
+            var authenticationRequiredCount = 0;
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = "current-business-system",
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 9,
+            };
+
+            var controller = CreateController(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                authenticationLoginAction: null,
+                authenticationRequiredAction: () => authenticationRequiredCount++);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Equal(1, authenticationRequiredCount);
+            Assert.Single(dialogService.AuthenticationRequiredMessages);
+        }
+
+        [Fact]
         public void RefreshActiveProjectFromSheetMetadataLoadsBindingForCurrentSheet()
         {
             var metadataStore = new FakeWorksheetMetadataStore();
@@ -1167,7 +1206,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Func<string> sheetNameProvider,
             IAnalyticsService analyticsService = null)
         {
-            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null, analyticsService);
+            return CreateController(connector, metadataStore, dialogService, sheetNameProvider, null, analyticsService: analyticsService);
         }
 
         private static object CreateController(
@@ -1176,6 +1215,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
             Action authenticationLoginAction,
+            Action authenticationRequiredAction = null,
             IAnalyticsService analyticsService = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
@@ -1197,9 +1237,10 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     executionService.GetType(),
                     dialogInterface,
                     typeof(Action),
+                    typeof(Action),
                     typeof(IAnalyticsService),
                 }
-                : authenticationLoginAction == null
+                : authenticationLoginAction == null && authenticationRequiredAction == null
                     ? new[]
                     {
                         typeof(IWorksheetMetadataStore),
@@ -1216,6 +1257,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         executionService.GetType(),
                         dialogInterface,
                         typeof(Action),
+                        typeof(Action),
                     };
 
             var ctor = controllerType.GetConstructor(
@@ -1231,12 +1273,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             if (analyticsService != null)
             {
-                return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction, analyticsService });
+                return ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction, authenticationRequiredAction, analyticsService });
             }
 
-            return authenticationLoginAction == null
+            return authenticationLoginAction == null && authenticationRequiredAction == null
                 ? ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() })
-                : ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction });
+                : ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), authenticationLoginAction, authenticationRequiredAction });
         }
 
         private static (object Controller, FakeWorksheetGridAdapter Grid) CreateControllerWithGrid(

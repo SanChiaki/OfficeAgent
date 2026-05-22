@@ -57,6 +57,31 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("performance", projects[0].ProjectId);
         }
 
+        [Fact]
+        public void ServerSessionProbeUsesProjectsEndpointAsAuthenticationTruth()
+        {
+            var handler = new RecordingHandler();
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+
+            var isAuthenticated = connector.HasAuthenticatedSession();
+
+            Assert.True(isAuthenticated);
+            Assert.Equal("/projects", handler.LastPath);
+            Assert.Equal("https://api.internal.example/projects", handler.LastUri);
+        }
+
+        [Theory]
+        [InlineData(HttpStatusCode.Unauthorized)]
+        [InlineData(HttpStatusCode.Forbidden)]
+        public void ServerSessionProbeReturnsFalseWhenServerRejectsAuthentication(HttpStatusCode statusCode)
+        {
+            var connector = CurrentBusinessSystemConnector.ForTests(
+                "https://api.internal.example",
+                new AuthRequiredProjectsHandler(statusCode));
+
+            Assert.False(connector.HasAuthenticatedSession());
+        }
+
         [Theory]
         [InlineData(HttpStatusCode.Unauthorized)]
         [InlineData(HttpStatusCode.Forbidden)]

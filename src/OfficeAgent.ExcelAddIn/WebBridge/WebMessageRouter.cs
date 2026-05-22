@@ -516,10 +516,11 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             }
 
             var settings = settingsStore.Load();
+            RefreshAccountSessionFromServer();
 
             return Success(request.Type, request.RequestId, new LoginStatusPayload
             {
-                IsLoggedIn = accountSessionService.IsLoggedIn(),
+                IsLoggedIn = accountSessionService.IsServerAuthenticated,
                 SsoUrl = settings.SsoUrl,
             });
         }
@@ -584,6 +585,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     var result = popup.ShowDialog();
                     if (result == DialogResult.OK)
                     {
+                        RefreshAccountSessionFromServer();
                         return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
                     }
 
@@ -593,6 +595,18 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             catch (Exception error)
             {
                 return Error(request.Type, request.RequestId, "login_failed", error.Message);
+            }
+        }
+
+        private void RefreshAccountSessionFromServer()
+        {
+            try
+            {
+                accountSessionService.RefreshServerAuthenticationState();
+            }
+            catch (Exception error)
+            {
+                OfficeAgentLog.Warn("web_bridge", "account.session_probe_failed", "Failed to refresh account state from server.", error.Message);
             }
         }
 
