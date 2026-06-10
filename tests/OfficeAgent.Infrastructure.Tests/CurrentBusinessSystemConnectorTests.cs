@@ -57,6 +57,31 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal("performance", projects[0].ProjectId);
         }
 
+        [Fact]
+        public void ServerSessionProbeUsesProjectsEndpointAsAuthenticationTruth()
+        {
+            var handler = new RecordingHandler();
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+
+            var isAuthenticated = connector.HasAuthenticatedSession();
+
+            Assert.True(isAuthenticated);
+            Assert.Equal("/projects", handler.LastPath);
+            Assert.Equal("https://api.internal.example/projects", handler.LastUri);
+        }
+
+        [Theory]
+        [InlineData(HttpStatusCode.Unauthorized)]
+        [InlineData(HttpStatusCode.Forbidden)]
+        public void ServerSessionProbeReturnsFalseWhenServerRejectsAuthentication(HttpStatusCode statusCode)
+        {
+            var connector = CurrentBusinessSystemConnector.ForTests(
+                "https://api.internal.example",
+                new AuthRequiredProjectsHandler(statusCode));
+
+            Assert.False(connector.HasAuthenticatedSession());
+        }
+
         [Theory]
         [InlineData(HttpStatusCode.Unauthorized)]
         [InlineData(HttpStatusCode.Forbidden)]
@@ -334,20 +359,35 @@ namespace OfficeAgent.Infrastructure.Tests
         private static LogCaptureResult CaptureLogEntriesAllowingFailure(Action action)
         {
             var entries = new List<OfficeAgentLogEntry>();
-            OfficeAgentLog.Configure(entries.Add);
+            var syncRoot = new object();
+            OfficeAgentLog.Configure(entry =>
+            {
+                lock (syncRoot)
+                {
+                    entries.Add(entry);
+                }
+            });
 
             try
             {
                 action();
-                return new LogCaptureResult(entries, null);
+                return new LogCaptureResult(SnapshotEntries(entries, syncRoot), null);
             }
             catch (Exception ex)
             {
-                return new LogCaptureResult(entries, ex);
+                return new LogCaptureResult(SnapshotEntries(entries, syncRoot), ex);
             }
             finally
             {
                 OfficeAgentLog.Reset();
+            }
+        }
+
+        private static List<OfficeAgentLogEntry> SnapshotEntries(List<OfficeAgentLogEntry> entries, object syncRoot)
+        {
+            lock (syncRoot)
+            {
+                return entries.ToList();
             }
         }
 

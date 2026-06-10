@@ -69,7 +69,7 @@
 - Run the Ribbon Sync checks twice: once under Chinese Excel (`zh-*` UI) and once under English Excel (any non-`zh-*` UI).
 - In Chinese Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in Chinese.
 - In English Excel, confirm the Ribbon group/button labels, project dropdown statuses, login popup, layout dialog, and native confirmation/result dialogs render in English.
-- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
+- For the steps below, use the localized host labels for the current Excel UI. Key pairs: `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, `另存配置` / `Save as Setting`, `下载` / `Download`, `上传` / `Upload`, `登录` / `Login`, `退出` / `Logout`, `先选择项目` / `Select project`, `请先登录` / `Sign in first`, `无可用项目` / `No projects available`.
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
@@ -90,6 +90,10 @@
 - After switching to another project and confirming the dialog, verify old `SheetFieldMappings` are cleared; before clicking `初始化当前表` / `Initialize sheet`, running download/upload should report that the current sheet is not initialized.
 - Enter invalid values in the layout dialog (for example overlaps between header/data regions) and confirm validation error is shown while keeping the dialog open.
 - Start Excel while unauthenticated against a protected project API and confirm the project dropdown shows the localized sign-in-required status (`请先登录` / `Sign in first`).
+- Close the automatic sign-in-required prompt without logging in, then open or activate another workbook in the same Excel process and confirm the prompt is not shown again; the project dropdown should remain at `请先登录` / `Sign in first`.
+- Confirm the account group shows small regular `登录` / `Login` and `退出` / `Logout` buttons; while unauthenticated, `登录` / `Login` is enabled and `退出` / `Logout` is disabled.
+- Complete SSO login from the Ribbon and confirm `登录` / `Login` becomes disabled, `退出` / `Logout` becomes enabled, and the project dropdown can load projects.
+- Click `退出` / `Logout` and confirm the project dropdown switches to `请先登录` / `Sign in first`, `登录` / `Login` becomes enabled, `退出` / `Logout` becomes disabled, and reopening the project dropdown does not automatically show the login prompt or reuse the previous cookie.
 - Configure the project API to return an empty array and confirm the project dropdown shows the localized empty-project status (`无可用项目` / `No projects available`).
 - Click `初始化当前表` / `Initialize sheet` on a sheet that already contains business cells and confirm only `xISDP_Setting` changes; the business area should remain untouched.
 - Configure `Base URL`, `API Key`, `Model`, and `API Format` in the existing Settings UI for an OpenAI-compatible model endpoint, then use `AI映射列` / `AI map columns` and confirm it reuses those settings rather than asking for a separate AI mapping configuration.
@@ -110,15 +114,18 @@
 - Select one or more full worksheet columns that include managed non-ID fields, click `下载` / `Download`, and confirm Excel stays responsive, only rows with `row_id` from `DataStartRow` through the last used row are requested, and only selected managed columns are refreshed.
 - Select the whole worksheet, click `下载` / `Download`, and confirm Excel stays responsive, the ID column is not overwritten, and all recognized non-ID managed fields are refreshed only for rows with `row_id`.
 - Select two non-contiguous areas in different rows and columns, click `下载` / `Download`, and confirm only the exact selected cells are refreshed; cells at the unselected row/column intersections must remain unchanged.
-- Before `下载` / `Download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `key`, `表头`, `修改模式`, `修改值`, `原始值`, `修改时间`; the new row should show `修改模式 = 下载`, `原始值` as the overwritten Excel value, and `修改值` as the downloaded value.
-- Edit one managed non-ID cell, run `上传` / `Upload`, and confirm `xISDP_Log` appends one `修改模式 = 上传` row using the user's pre-edit Excel value as `原始值` and the uploaded cell value as `修改值`.
-- Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `上传` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
+- Before `下载` / `Download`, put an old value in one selected managed non-ID cell, run the download, and confirm `xISDP_Log` is created with columns `Key`, `Header`, `Change Mode`, `New Value`, `Old Value`, `Changed At`; the new row should show `Change Mode = Download`, `Old Value` as the overwritten Excel value, and `New Value` as the downloaded value.
+- Edit one managed non-ID cell, run `上传` / `Upload`, and confirm `xISDP_Log` appends one `Change Mode = Upload` row using the user's pre-edit Excel value as `Old Value` and the uploaded cell value as `New Value`.
+- Force an `上传` / `Upload` failure from the mock server or API, then confirm no new `Upload` row is added to `xISDP_Log`; retry successfully and confirm the original pre-edit value is still used.
 - Add more than 2000 sync log rows through repeated upload/download validation or seeded workbook data, then trigger another logged sync and confirm `xISDP_Log` keeps only the latest 2000 data rows plus the header row.
 - Confirm the Ribbon includes a dedicated `配置` / `Setting` group with `应用配置` / `Apply Setting`, `保存配置` / `Save Setting`, and `另存配置` / `Save as Setting`.
-- Confirm all Ribbon buttons display Office built-in icons that match their action semantics. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, and all buttons in the `配置` / `Setting` group should use the small regular button layout; data sync, account, and help command buttons should remain in the large icon-above-label layout.
+- Confirm all Ribbon buttons display icons that match their action semantics. `关于` / `About` should use the packaged custom PNG icon in both normal and update-reminder states; other Ribbon buttons should display Office built-in icons. `初始化当前表` / `Initialize sheet`, `AI映射列` / `AI map columns`, all buttons in the `配置` / `Setting` group, and the account `登录` / `Login` plus `退出` / `Logout` buttons should use the small regular button layout; data sync and help command buttons should remain in the large icon-above-label layout.
 - Confirm the `xISDP AI` group task-pane button shows only its icon and does not display the `Open` label.
 - Confirm the Ribbon includes one `数据同步` / `Data sync` group containing `下载` / `Download` and `上传` / `Upload`, and that there is no `全量下载`, `全量上传`, or `增量上传` button.
 - Confirm the Ribbon includes a `帮助` / `Help` group with `文档` / `Documentation` and `关于` / `About`; `文档` / `Documentation` opens `https://github.com/SanChiaki/OfficeAgent` in the default browser, and `关于` / `About` shows version and build information.
+- 更新提醒：配置内部更新 manifest URL，使其返回 `Content-Type: application/octet-stream` 的 JSON 字节流，且 `latestVersion` 高于当前 `VersionInfo.AppVersion`。Debug 和 Release 均应使用同一套检查逻辑；打开 Excel 后确认 `关于` / `About` 图标显示红点；点击 `关于` 后确认显示当前版本、最新版本、更新摘要和下载入口，且不显示发布说明按钮；点击 `忽略此版本` / `Ignore this version` 后确认红点消失，再次点击 `关于` 仍能看到该版本的更新信息和下载入口；把 manifest 提高到更高版本后确认红点重新出现。
+- 更新检查失败隔离：让更新 manifest URL 断开或返回非法 JSON，重新打开 Excel，确认 Ribbon、任务窗格、登录、下载、上传和模板操作仍可用，且没有更新失败弹窗。
+- 未配置更新源隔离：清空或删除更新 manifest URL 配置后重新打开 Excel，确认不会请求更新 manifest URL，且 Ribbon、任务窗格、登录、下载、上传和模板操作仍可用。
 - In the same project, save two different local templates and confirm `应用配置` / `Apply Setting` can list both.
 - Apply one template and confirm `TemplateBindings` updates to the selected template while `SheetBindings` / `SheetFieldMappings` are expanded into the current sheet.
 - Manually edit `xISDP_Setting` field mapping text after applying a template, click `保存配置` / `Save Setting`, then reapply that template and confirm the edited mapping is preserved.
@@ -133,7 +140,7 @@
 - Using the same grouped-single metadata and visible grouped headers, edit a grouped-single cell and run `上传` / `Upload`, then confirm the upload resolves that `single` field correctly and does not require converting it to a non-`single` field type.
 - Keep the grouped-single headers already present on the worksheet, run the hidden full-download path, and confirm the plugin reuses that existing grouped layout instead of flattening or rewriting the recognized headers.
 - Clear the worksheet header area, keep the grouped-single metadata in `xISDP_Setting`, then run the hidden full-download path and confirm regenerated headers fall back to flat child-only single headers without any grouped parent header row for that `single` field.
-- Verify the task pane button and login button still work after the Ribbon Sync controls are added.
+- Verify the task pane button and account buttons still work after the Ribbon Sync controls are added.
 
 ## Analytics
 

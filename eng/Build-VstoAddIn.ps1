@@ -11,13 +11,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Select-MsBuildExe {
+    $versions = @("2022", "18")
     $editions = @("Enterprise", "Professional", "Community", "BuildTools", "TestAgent")
-    foreach ($edition in $editions) {
-        $path = "C:\Program Files\Microsoft Visual Studio\2022\$edition\MSBuild\Current\Bin\MSBuild.exe"
-        if (Test-Path $path) { return $path }
+    foreach ($version in $versions) {
+        foreach ($edition in $editions) {
+            $path = "C:\Program Files\Microsoft Visual Studio\$version\$edition\MSBuild\Current\Bin\MSBuild.exe"
+            if (Test-Path $path) { return $path }
 
-        $x86Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\$edition\MSBuild\Current\Bin\MSBuild.exe"
-        if (Test-Path $x86Path) { return $x86Path }
+            $x86Path = "C:\Program Files (x86)\Microsoft Visual Studio\$version\$edition\MSBuild\Current\Bin\MSBuild.exe"
+            if (Test-Path $x86Path) { return $x86Path }
+        }
     }
 
     $vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -33,6 +36,31 @@ function Select-MsBuildExe {
     if (Test-Path $dotnetMsbuild) { return $dotnetMsbuild }
 
     throw "Could not find MSBuild. Please ensure Visual Studio is installed."
+}
+
+function Select-VstoReferencePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MSBuildPath
+    )
+
+    $currentPath = Split-Path -Parent $MSBuildPath
+    while (![string]::IsNullOrWhiteSpace($currentPath)) {
+        $candidate = Join-Path $currentPath "Common7\IDE\ReferenceAssemblies\v4.0"
+        $utilityAssembly = Join-Path $candidate "Microsoft.Office.Tools.Common.v4.0.Utilities.dll"
+        if (Test-Path $utilityAssembly) {
+            return $candidate
+        }
+
+        $parentPath = Split-Path -Parent $currentPath
+        if ($parentPath -eq $currentPath) {
+            break
+        }
+
+        $currentPath = $parentPath
+    }
+
+    return $null
 }
 
 function Invoke-NativeCommand {
@@ -62,6 +90,11 @@ if ([string]::IsNullOrWhiteSpace($VisualStudioMSBuildPath)) {
 Write-Host "Using MSBuild: $VisualStudioMSBuildPath"
 Write-Host "Building signed VSTO project: $resolvedProjectPath"
 
+$vstoReferencePath = Select-VstoReferencePath -MSBuildPath $VisualStudioMSBuildPath
+if (![string]::IsNullOrWhiteSpace($vstoReferencePath)) {
+    Write-Host "Using VSTO reference assemblies: $vstoReferencePath"
+}
+
 $manifestThumbprint = $null
 
 try {
@@ -81,6 +114,10 @@ try {
         "/p:Configuration=$Configuration"
         "/p:ManifestCertificateThumbprint=$manifestThumbprint"
     )
+
+    if (![string]::IsNullOrWhiteSpace($vstoReferencePath)) {
+        $msbuildArgs += "/p:ReferencePath=$vstoReferencePath"
+    }
 
     Invoke-NativeCommand $VisualStudioMSBuildPath @msbuildArgs
 }

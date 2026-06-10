@@ -10,15 +10,16 @@ namespace OfficeAgent.ExcelAddIn.Excel
         private const string LogSheetName = "xISDP_Log";
         private const int MaxEntries = 2000;
         private const string TimestampFormat = "yyyy-MM-dd HH:mm:ss";
+        private const string TextNumberFormat = "@";
 
         private static readonly string[] Headers =
         {
-            "key",
-            "表头",
-            "修改模式",
-            "修改值",
-            "原始值",
-            "修改时间",
+            "Key",
+            "Header",
+            "Change Mode",
+            "New Value",
+            "Old Value",
+            "Changed At",
         };
 
         private readonly IWorksheetGridAdapter gridAdapter;
@@ -70,11 +71,12 @@ namespace OfficeAgent.ExcelAddIn.Excel
             var rows = new List<WorksheetChangeLogEntry>();
             for (var row = 0; row < values.GetLength(0); row++)
             {
-                var key = Convert.ToString(values[row, 0]) ?? string.Empty;
-                var headerText = Convert.ToString(values[row, 1]) ?? string.Empty;
-                var changeMode = Convert.ToString(values[row, 2]) ?? string.Empty;
-                var newValue = Convert.ToString(values[row, 3]) ?? string.Empty;
-                var oldValue = Convert.ToString(values[row, 4]) ?? string.Empty;
+                var worksheetRow = row + 2;
+                var key = ReadStableCellText(values, row, 0, worksheetRow, 1);
+                var headerText = ReadStableCellText(values, row, 1, worksheetRow, 2);
+                var changeMode = ReadStableCellText(values, row, 2, worksheetRow, 3);
+                var newValue = ReadStableCellText(values, row, 3, worksheetRow, 4);
+                var oldValue = ReadStableCellText(values, row, 4, worksheetRow, 5);
                 var changedAtValue = values[row, 5];
                 var changedAtText = Convert.ToString(changedAtValue) ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(key) &&
@@ -91,7 +93,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 {
                     Key = key,
                     HeaderText = headerText,
-                    ChangeMode = changeMode,
+                    ChangeMode = NormalizeChangeMode(changeMode),
                     NewValue = newValue,
                     OldValue = oldValue,
                     ChangedAt = ParseTimestamp(changedAtValue),
@@ -105,6 +107,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             var existingLastRow = Math.Max(1, gridAdapter.GetLastUsedRow(LogSheetName));
             gridAdapter.ClearRange(LogSheetName, 1, Math.Max(existingLastRow, rows.Count + 1), 1, Headers.Length);
+            gridAdapter.SetRangeNumberFormat(LogSheetName, 1, rows.Count + 1, 1, Headers.Length, TextNumberFormat);
             gridAdapter.WriteRangeValues(LogSheetName, 1, 1, BuildMatrix(rows));
         }
 
@@ -122,7 +125,7 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 var entry = rows[row] ?? new WorksheetChangeLogEntry();
                 result[row + 1, 0] = entry.Key ?? string.Empty;
                 result[row + 1, 1] = entry.HeaderText ?? string.Empty;
-                result[row + 1, 2] = entry.ChangeMode ?? string.Empty;
+                result[row + 1, 2] = NormalizeChangeMode(entry.ChangeMode);
                 result[row + 1, 3] = entry.NewValue ?? string.Empty;
                 result[row + 1, 4] = entry.OldValue ?? string.Empty;
                 result[row + 1, 5] = (entry.ChangedAt == default(DateTime) ? now : entry.ChangedAt)
@@ -130,6 +133,41 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
 
             return result;
+        }
+
+        private string ReadStableCellText(object[,] values, int row, int column, int worksheetRow, int worksheetColumn)
+        {
+            var value = values[row, column];
+            if (value is string textValue)
+            {
+                return textValue;
+            }
+
+            var text = gridAdapter.GetCellText(LogSheetName, worksheetRow, worksheetColumn);
+            if (!string.IsNullOrEmpty(text))
+            {
+                return text;
+            }
+
+            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        private static string NormalizeChangeMode(string value)
+        {
+            var text = value ?? string.Empty;
+            if (string.Equals(text, "下载", StringComparison.Ordinal) ||
+                string.Equals(text, "Download", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Download";
+            }
+
+            if (string.Equals(text, "上传", StringComparison.Ordinal) ||
+                string.Equals(text, "Upload", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Upload";
+            }
+
+            return text;
         }
 
         private static DateTime ParseTimestamp(object value)

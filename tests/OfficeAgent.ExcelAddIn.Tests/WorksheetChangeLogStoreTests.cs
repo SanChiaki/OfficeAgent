@@ -36,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 var entry = Activator.CreateInstance(entryType);
                 SetProperty(entry, "Key", $"row-{index + 1:0000}");
                 SetProperty(entry, "HeaderText", $"表头{index + 1}");
-                SetProperty(entry, "ChangeMode", "下载");
+                SetProperty(entry, "ChangeMode", "Download");
                 SetProperty(entry, "NewValue", $"新值{index + 1}");
                 SetProperty(entry, "OldValue", $"旧值{index + 1}");
                 entries.SetValue(entry, index);
@@ -45,15 +45,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
             storeType.GetMethod("Append").Invoke(store, new object[] { entries });
 
             Assert.Contains("xISDP_Log", grid.WorksheetNames);
-            Assert.Equal("key", grid.GetCell("xISDP_Log", 1, 1));
-            Assert.Equal("表头", grid.GetCell("xISDP_Log", 1, 2));
-            Assert.Equal("修改模式", grid.GetCell("xISDP_Log", 1, 3));
-            Assert.Equal("修改值", grid.GetCell("xISDP_Log", 1, 4));
-            Assert.Equal("原始值", grid.GetCell("xISDP_Log", 1, 5));
-            Assert.Equal("修改时间", grid.GetCell("xISDP_Log", 1, 6));
+            Assert.Equal("Key", grid.GetCell("xISDP_Log", 1, 1));
+            Assert.Equal("Header", grid.GetCell("xISDP_Log", 1, 2));
+            Assert.Equal("Change Mode", grid.GetCell("xISDP_Log", 1, 3));
+            Assert.Equal("New Value", grid.GetCell("xISDP_Log", 1, 4));
+            Assert.Equal("Old Value", grid.GetCell("xISDP_Log", 1, 5));
+            Assert.Equal("Changed At", grid.GetCell("xISDP_Log", 1, 6));
             Assert.Equal("row-0002", grid.GetCell("xISDP_Log", 2, 1));
             Assert.Equal("表头2", grid.GetCell("xISDP_Log", 2, 2));
-            Assert.Equal("下载", grid.GetCell("xISDP_Log", 2, 3));
+            Assert.Equal("Download", grid.GetCell("xISDP_Log", 2, 3));
             Assert.Equal("新值2", grid.GetCell("xISDP_Log", 2, 4));
             Assert.Equal("旧值2", grid.GetCell("xISDP_Log", 2, 5));
             Assert.Equal("2026-04-29 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
@@ -62,7 +62,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void AppendPreservesExistingTimestampReadBackAsExcelValue2DateSerial()
+        public void AppendPreservesExistingTimestampAndNormalizesChineseChangeModes()
         {
             var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
@@ -98,8 +98,57 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             storeType.GetMethod("Append").Invoke(store, new object[] { entries });
 
+            Assert.Equal("Download", grid.GetCell("xISDP_Log", 2, 3));
+            Assert.Equal("Upload", grid.GetCell("xISDP_Log", 3, 3));
             Assert.Equal("2026-04-29 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
             Assert.Equal("2026-04-29 10:45:00", grid.GetCell("xISDP_Log", 3, 6));
+        }
+
+        [Fact]
+        public void AppendPreservesExistingBusinessValueDisplayTextWhenRewritingLog()
+        {
+            var assembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
+            var gridInterface = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.IWorksheetGridAdapter", throwOnError: true);
+            var storeType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetChangeLogStore", throwOnError: true);
+            var entryType = assembly.GetType("OfficeAgent.ExcelAddIn.Excel.WorksheetChangeLogEntry", throwOnError: true);
+            var grid = new FakeWorksheetGridAdapter(gridInterface);
+            grid.SetRawCell("xISDP_Log", 2, 1, 1d, "000001");
+            grid.SetRawCell("xISDP_Log", 2, 2, "计划开始日期");
+            grid.SetRawCell("xISDP_Log", 2, 3, "Download");
+            grid.SetRawCell("xISDP_Log", 2, 4, new DateTime(2026, 5, 20).ToOADate(), "2026-05-20");
+            grid.SetRawCell("xISDP_Log", 2, 5, 0.125d, "12.50%");
+            grid.SetRawCell("xISDP_Log", 2, 6, new DateTime(2026, 5, 20, 9, 30, 0).ToOADate());
+
+            var store = Activator.CreateInstance(
+                storeType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[]
+                {
+                    grid.GetTransparentProxy(),
+                    new Func<DateTime>(() => new DateTime(2026, 5, 20, 10, 45, 0)),
+                },
+                culture: null);
+            var entry = Activator.CreateInstance(entryType);
+            SetProperty(entry, "Key", "row-0002");
+            SetProperty(entry, "HeaderText", "计划结束日期");
+            SetProperty(entry, "ChangeMode", "Download");
+            SetProperty(entry, "NewValue", "2026-05-25");
+            SetProperty(entry, "OldValue", "2026-05-24");
+            var entries = Array.CreateInstance(entryType, 1);
+            entries.SetValue(entry, 0);
+
+            storeType.GetMethod("Append").Invoke(store, new object[] { entries });
+
+            Assert.Equal("000001", grid.GetCell("xISDP_Log", 2, 1));
+            Assert.Equal("2026-05-20", grid.GetCell("xISDP_Log", 2, 4));
+            Assert.Equal("12.50%", grid.GetCell("xISDP_Log", 2, 5));
+            Assert.Equal("2026-05-20 09:30:00", grid.GetCell("xISDP_Log", 2, 6));
+            Assert.Equal("2026-05-25", grid.GetCell("xISDP_Log", 3, 4));
+            Assert.Equal("2026-05-24", grid.GetCell("xISDP_Log", 3, 5));
+            Assert.Equal("@", grid.GetNumberFormat("xISDP_Log", 2, 1));
+            Assert.Equal("@", grid.GetNumberFormat("xISDP_Log", 2, 4));
+            Assert.Equal("@", grid.GetNumberFormat("xISDP_Log", 3, 5));
         }
 
         private static void SetProperty(object target, string propertyName, object value)
@@ -130,6 +179,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             private readonly Type interfaceType;
             private readonly Dictionary<string, object> cells = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, string> displayTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, string> numberFormats = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             public FakeWorksheetGridAdapter(Type interfaceType)
                 : base(interfaceType)
@@ -154,6 +205,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     case "EnsureWorksheetExists":
                         WorksheetNames.Add((string)call.InArgs[0]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "GetCellText":
+                        return new ReturnMessage(
+                            GetCellText((string)call.InArgs[0], (int)call.InArgs[1], (int)call.InArgs[2]),
+                            null,
+                            0,
+                            call.LogicalCallContext,
+                            call);
                     case "GetLastUsedRow":
                         return new ReturnMessage(GetLastUsedRow((string)call.InArgs[0]), null, 0, call.LogicalCallContext, call);
                     case "ReadRangeValues":
@@ -175,6 +233,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
                             (int)call.InArgs[2],
                             (int)call.InArgs[3],
                             (int)call.InArgs[4]);
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "SetRangeNumberFormat":
+                        SetRangeNumberFormat(
+                            (string)call.InArgs[0],
+                            (int)call.InArgs[1],
+                            (int)call.InArgs[2],
+                            (int)call.InArgs[3],
+                            (int)call.InArgs[4],
+                            (string)call.InArgs[5]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
                     case "WriteRangeValues":
                         WriteRangeValues(
@@ -202,10 +269,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     : string.Empty;
             }
 
+            public string GetNumberFormat(string sheetName, int row, int column)
+            {
+                return numberFormats.TryGetValue(BuildKey(sheetName, row, column), out var format)
+                    ? format
+                    : string.Empty;
+            }
+
             public void SetRawCell(string sheetName, int row, int column, object value)
             {
                 WorksheetNames.Add(sheetName);
                 cells[BuildKey(sheetName, row, column)] = value;
+            }
+
+            public void SetRawCell(string sheetName, int row, int column, object value, string displayText)
+            {
+                SetRawCell(sheetName, row, column, value);
+                displayTexts[BuildKey(sheetName, row, column)] = displayText ?? string.Empty;
             }
 
             public int GetLastUsedRow(string sheetName)
@@ -259,6 +339,34 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 foreach (var key in keys)
                 {
                     cells.Remove(key);
+                    displayTexts.Remove(key);
+                    numberFormats.Remove(key);
+                }
+            }
+
+            private string GetCellText(string sheetName, int row, int column)
+            {
+                var key = BuildKey(sheetName, row, column);
+                return displayTexts.TryGetValue(key, out var text)
+                    ? text
+                    : GetCell(sheetName, row, column);
+            }
+
+            private void SetRangeNumberFormat(
+                string sheetName,
+                int startRow,
+                int endRow,
+                int startColumn,
+                int endColumn,
+                string numberFormat)
+            {
+                WorksheetNames.Add(sheetName);
+                for (var row = startRow; row <= endRow; row++)
+                {
+                    for (var column = startColumn; column <= endColumn; column++)
+                    {
+                        numberFormats[BuildKey(sheetName, row, column)] = numberFormat ?? string.Empty;
+                    }
                 }
             }
 
@@ -274,8 +382,21 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     for (var columnOffset = 0; columnOffset < values.GetLength(1); columnOffset++)
                     {
-                        cells[BuildKey(sheetName, startRow + rowOffset, startColumn + columnOffset)] =
-                            values[rowOffset, columnOffset] ?? string.Empty;
+                        var row = startRow + rowOffset;
+                        var column = startColumn + columnOffset;
+                        var key = BuildKey(sheetName, row, column);
+                        var value = values[rowOffset, columnOffset] ?? string.Empty;
+                        if (string.Equals(GetNumberFormat(sheetName, row, column), "@", StringComparison.Ordinal))
+                        {
+                            var text = Convert.ToString(value) ?? string.Empty;
+                            cells[key] = text;
+                            displayTexts[key] = text;
+                        }
+                        else
+                        {
+                            cells[key] = value;
+                            displayTexts.Remove(key);
+                        }
                     }
                 }
             }

@@ -49,6 +49,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
         private readonly FileSettingsStore settingsStore;
         private readonly SharedCookieContainer sharedCookies;
         private readonly FileCookieStore cookieStore;
+        private readonly AccountSessionService accountSessionService;
         private readonly Func<AppSettings, string> getResolvedUiLocale;
 
         public WebMessageRouter(
@@ -59,6 +60,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             IAgentOrchestrator agentOrchestrator,
             SharedCookieContainer sharedCookies,
             FileCookieStore cookieStore,
+            AccountSessionService accountSessionService,
             Func<AppSettings, string> getResolvedUiLocale,
             IAnalyticsService analyticsService = null)
         {
@@ -69,6 +71,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             this.agentOrchestrator = agentOrchestrator ?? throw new ArgumentNullException(nameof(agentOrchestrator));
             this.sharedCookies = sharedCookies ?? throw new ArgumentNullException(nameof(sharedCookies));
             this.cookieStore = cookieStore ?? throw new ArgumentNullException(nameof(cookieStore));
+            this.accountSessionService = accountSessionService ?? new AccountSessionService(this.sharedCookies, this.cookieStore);
             this.getResolvedUiLocale = getResolvedUiLocale ?? throw new ArgumentNullException(nameof(getResolvedUiLocale));
             this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
         }
@@ -513,25 +516,11 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             }
 
             var settings = settingsStore.Load();
-            var ssoDomain = sharedCookies.SsoDomain;
-            var isLoggedIn = false;
-
-            if (!string.IsNullOrWhiteSpace(ssoDomain))
-            {
-                try
-                {
-                    var cookies = sharedCookies.Container.GetCookies(new Uri($"https://{ssoDomain}"));
-                    isLoggedIn = cookies.Count > 0;
-                }
-                catch (UriFormatException)
-                {
-                    isLoggedIn = false;
-                }
-            }
+            RefreshAccountSessionFromServer();
 
             return Success(request.Type, request.RequestId, new LoginStatusPayload
             {
-                IsLoggedIn = isLoggedIn,
+                IsLoggedIn = accountSessionService.IsServerAuthenticated,
                 SsoUrl = settings.SsoUrl,
             });
         }
@@ -547,24 +536,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                     message: GetStrings().BridgePayloadNotAcceptedMessage(BridgeMessageTypes.Logout));
             }
 
-            var ssoDomain = sharedCookies.SsoDomain;
-            if (!string.IsNullOrWhiteSpace(ssoDomain))
-            {
-                try
-                {
-                    var cookies = sharedCookies.Container.GetCookies(new Uri($"https://{ssoDomain}"));
-                    foreach (System.Net.Cookie cookie in cookies)
-                    {
-                        cookie.Expired = true;
-                    }
-                }
-                catch (UriFormatException)
-                {
-                    // Ignore invalid domain.
-                }
-            }
-
-            cookieStore.Clear();
+            accountSessionService.Logout();
 
             return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
         }
@@ -606,12 +578,14 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
 
             try
             {
+                accountSessionService.ConfigureSsoDomain(ssoUrl);
                 using (var popup = new SsoLoginPopup(ssoUrl, successPath, sharedCookies, cookieStore))
                 {
                     await popup.InitializeAsync().ConfigureAwait(true);
                     var result = popup.ShowDialog();
                     if (result == DialogResult.OK)
                     {
+                        RefreshAccountSessionFromServer();
                         return Success(request.Type, request.RequestId, new LoginResultPayload { Success = true });
                     }
 
@@ -621,6 +595,18 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
             catch (Exception error)
             {
                 return Error(request.Type, request.RequestId, "login_failed", error.Message);
+            }
+        }
+
+        private void RefreshAccountSessionFromServer()
+        {
+            try
+            {
+                accountSessionService.RefreshServerAuthenticationState();
+            }
+            catch (Exception error)
+            {
+                OfficeAgentLog.Warn("web_bridge", "account.session_probe_failed", "Failed to refresh account state from server.", error.Message);
             }
         }
 
@@ -667,6 +653,7 @@ namespace OfficeAgent.ExcelAddIn.WebBridge
                 var settings = request.Payload.ToObject<AppSettings>() ?? new AppSettings();
                 settings.AnalyticsUrl = (settingsStore.Load() ?? new AppSettings()).AnalyticsUrl;
                 settingsStore.Save(settings);
+                accountSessionService.ConfigureSsoDomain(settings.SsoUrl);
                 return Success(request.Type, request.RequestId, ToUserVisibleSettings(settingsStore.Load()));
             }
             catch (JsonException)

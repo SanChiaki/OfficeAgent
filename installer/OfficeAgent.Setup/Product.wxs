@@ -15,6 +15,9 @@
     <Launch
       Condition="Installed OR SKIPWEBVIEW2CHECK = 1 OR WEBVIEW2RUNTIMEWOW6432 OR WEBVIEW2RUNTIMENATIVE OR WEBVIEW2RUNTIMEUSER"
       Message="xISDP requires the Microsoft Edge WebView2 Runtime. Install the Evergreen Runtime or your offline enterprise package, then run this installer again." />
+    <?if "$(var.UpdateManifestUrl)" != "" ?>
+    <Property Id="UPDATEMANIFESTURL" Value="$(var.UpdateManifestUrl)" Hidden="yes" />
+    <?endif?>
     <InstallUISequence>
       <AppSearch Before="LaunchConditions" />
     </InstallUISequence>
@@ -46,6 +49,7 @@
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLROOT" Name="OfficeAgent">
         <Directory Id="ADDINFOLDER" Name="ExcelAddIn">
+          <Directory Id="RESOURCESFOLDER" Name="Resources" />
           <Directory Id="FRONTENDFOLDER" Name="frontend">
             <Directory Id="FRONTENDASSETSFOLDER" Name="assets" />
           </Directory>
@@ -66,12 +70,16 @@
 
     <Feature Id="OfficeAgentFeature" Title="xISDP" Level="1">
       <ComponentGroupRef Id="AddInPayload" />
+      <ComponentGroupRef Id="AddInResourcePayload" />
       <ComponentGroupRef Id="FrontendPayload" />
       <ComponentGroupRef Id="FrontendAssetPayload" />
       <ComponentGroupRef Id="RuntimePayload" />
       <ComponentGroupRef Id="RuntimePayloadX64" />
       <ComponentGroupRef Id="RuntimePayloadX86" />
       <ComponentRef Id="ExcelAddInRegistry" />
+      <?if "$(var.UpdateManifestUrl)" != "" ?>
+      <ComponentRef Id="UpdateManifestUrlRegistry" />
+      <?endif?>
     </Feature>
   </Package>
 
@@ -107,6 +115,9 @@
       <Component Id="cmpOfficeAgentInfrastructure" Guid="*">
         <File Source="$(var.PublishRoot)\OfficeAgent.Infrastructure.dll" />
       </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="AddInResourcePayload" Directory="RESOURCESFOLDER">
+      <Files Include="$(var.PublishRoot)\Resources\**" />
     </ComponentGroup>
   </Fragment>
 
@@ -152,5 +163,12 @@
         <RegistryValue Name="Manifest" Type="string" Value="file:///[#filOfficeAgentExcelAddInVsto]|vstolocal" />
       </RegistryKey>
     </Component>
+    <?if "$(var.UpdateManifestUrl)" != "" ?>
+    <Component Id="UpdateManifestUrlRegistry" Directory="INSTALLROOT" Guid="*">
+      <RegistryKey Root="HKCU" Key="Software\OfficeAgent">
+        <RegistryValue Name="UpdateManifestUrl" Type="string" Value="[UPDATEMANIFESTURL]" KeyPath="yes" />
+      </RegistryKey>
+    </Component>
+    <?endif?>
   </Fragment>
 </Wix>

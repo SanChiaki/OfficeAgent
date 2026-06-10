@@ -66,6 +66,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "登录", "退出")]
+        [InlineData("en", "Login", "Logout")]
+        public void ForLocaleReturnsExpectedAccountButtonLabels(
+            string locale,
+            string expectedLoginLabel,
+            string expectedLogoutLabel)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedLoginLabel, GetString(strings, "RibbonLoginButtonLabel"));
+            Assert.Equal(expectedLogoutLabel, GetString(strings, "RibbonLogoutButtonLabel"));
+        }
+
+        [Theory]
         [InlineData("zh", "AI映射列")]
         [InlineData("en", "AI map columns")]
         public void ForLocaleReturnsAiColumnMappingRibbonLabel(string locale, string expectedLabel)

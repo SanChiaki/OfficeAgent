@@ -99,6 +99,73 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Contains("VSTORUNTIMEWOW6432INSTALL", condition);
         }
 
+        [Fact]
+        public void ProductWxsWritesConfiguredUpdateManifestUrlToOfficeAgentRegistryKey()
+        {
+            var document = LoadInstallerAuthoring();
+            var package = document.Root?.Element(WixNamespace + "Package");
+
+            Assert.NotNull(package);
+
+            var updateManifestUrlProperty = package
+                ?.Elements(WixNamespace + "Property")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "UPDATEMANIFESTURL");
+            var feature = document
+                .Descendants(WixNamespace + "Feature")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "OfficeAgentFeature");
+            var component = document
+                .Descendants(WixNamespace + "Component")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "UpdateManifestUrlRegistry");
+
+            Assert.NotNull(updateManifestUrlProperty);
+            Assert.Equal("$(var.UpdateManifestUrl)", updateManifestUrlProperty?.Attribute("Value")?.Value);
+            Assert.Equal("yes", updateManifestUrlProperty?.Attribute("Hidden")?.Value);
+            Assert.NotNull(feature);
+            Assert.Contains(
+                feature?.Elements(WixNamespace + "ComponentRef") ?? Enumerable.Empty<XElement>(),
+                element => element.Attribute("Id")?.Value == "UpdateManifestUrlRegistry");
+            Assert.NotNull(component);
+
+            var registryKey = component?.Element(WixNamespace + "RegistryKey");
+            var registryValue = registryKey?.Element(WixNamespace + "RegistryValue");
+
+            Assert.NotNull(registryKey);
+            Assert.Equal("HKCU", registryKey?.Attribute("Root")?.Value);
+            Assert.Equal(@"Software\OfficeAgent", registryKey?.Attribute("Key")?.Value);
+            Assert.NotNull(registryValue);
+            Assert.Equal("UpdateManifestUrl", registryValue?.Attribute("Name")?.Value);
+            Assert.Equal("string", registryValue?.Attribute("Type")?.Value);
+            Assert.Equal("[UPDATEMANIFESTURL]", registryValue?.Attribute("Value")?.Value);
+            Assert.Equal("yes", registryValue?.Attribute("KeyPath")?.Value);
+        }
+
+        [Fact]
+        public void ProductWxsInstallsRibbonImageResourceFiles()
+        {
+            var document = LoadInstallerAuthoring();
+            var feature = document
+                .Descendants(WixNamespace + "Feature")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "OfficeAgentFeature");
+            var resourcesDirectory = document
+                .Descendants(WixNamespace + "Directory")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "RESOURCESFOLDER");
+            var resourcePayload = document
+                .Descendants(WixNamespace + "ComponentGroup")
+                .SingleOrDefault(element => element.Attribute("Id")?.Value == "AddInResourcePayload");
+            var resourceFiles = resourcePayload?.Element(WixNamespace + "Files");
+
+            Assert.NotNull(feature);
+            Assert.Contains(
+                feature?.Elements(WixNamespace + "ComponentGroupRef") ?? Enumerable.Empty<XElement>(),
+                element => element.Attribute("Id")?.Value == "AddInResourcePayload");
+            Assert.NotNull(resourcesDirectory);
+            Assert.Equal("Resources", resourcesDirectory?.Attribute("Name")?.Value);
+            Assert.NotNull(resourcePayload);
+            Assert.Equal("RESOURCESFOLDER", resourcePayload?.Attribute("Directory")?.Value);
+            Assert.NotNull(resourceFiles);
+            Assert.Equal(@"$(var.PublishRoot)\Resources\**", resourceFiles?.Attribute("Include")?.Value);
+        }
+
         private static XDocument LoadInstallerAuthoring()
         {
             var productWxsPath = Path.GetFullPath(Path.Combine(

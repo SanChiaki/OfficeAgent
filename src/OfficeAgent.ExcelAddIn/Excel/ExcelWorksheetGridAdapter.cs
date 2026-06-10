@@ -149,6 +149,25 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 readCellNumberFormat);
         }
 
+        public void SetRangeNumberFormat(string sheetName, int startRow, int endRow, int startColumn, int endColumn, string numberFormat)
+        {
+            if (endRow < startRow || endColumn < startColumn)
+            {
+                return;
+            }
+
+            var worksheet = GetWorksheet(sheetName);
+            var range = worksheet.Range[
+                worksheet.Cells[startRow, startColumn],
+                worksheet.Cells[endRow, endColumn]] as ExcelInterop.Range;
+            if (range == null)
+            {
+                return;
+            }
+
+            range.NumberFormat = numberFormat ?? string.Empty;
+        }
+
         public void ClearRange(string sheetName, int startRow, int endRow, int startColumn, int endColumn)
         {
             if (endRow < startRow || endColumn < startColumn)

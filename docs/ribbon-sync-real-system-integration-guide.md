@@ -430,6 +430,47 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 
 - [src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs](../src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs)
 
+### 4.10 账号按钮服务端登录态同步
+
+账号组的 `登录` / `Login`、`退出` / `Logout` 按钮状态以服务端会话状态为准，不再根据本地 Cookie 数量判断。Cookie 仍然是请求凭据，但不能作为“已登录”的事实来源。
+
+真实系统接入时需要区分两类信号：
+
+- 正向信号：服务端认证接口或轻量业务接口确认当前会话仍有效。当前示例系统使用 `GET /projects` 作为探测入口，因为项目列表必须经过业务端鉴权。
+- 失效信号：任意业务接口返回 `401/403`，连接器把它转换成 `AuthenticationRequiredException`，Ribbon 会把账号按钮刷新为 `登录` 可点、`退出` 禁用，并清理本地会话缓存。
+
+如果只替换当前业务系统，建议新的真实连接器也提供一个轻量探测方法，例如：
+
+```csharp
+public bool HasAuthenticatedSession()
+{
+    try
+    {
+        GetProjects();
+        return true;
+    }
+    catch (AuthenticationRequiredException)
+    {
+        return false;
+    }
+}
+```
+
+然后在宿主初始化时把它注册给 `AccountSessionService.ConfigureServerAuthenticationProbe(...)`。如果真实系统有 `/me`、`/session`、`/profile` 等更轻量且明确表达登录态的接口，优先使用这些接口；没有时可以复用项目列表接口。
+
+探测方法的约定：
+
+- 只在服务端明确返回未登录、登录过期或无权限时返回 `false`
+- 网络错误、服务端 5xx、配置错误等非认证失败不要返回 `false`；应抛出原异常或让外层记录诊断日志，避免把临时故障误判为登出
+- 探测成功后，账号按钮状态为 `登录` 禁用、`退出` 可点
+- 探测失败或业务调用抛出 `AuthenticationRequiredException` 后，账号按钮状态为 `登录` 可点、`退出` 禁用
+
+多系统并存时要先明确账号语义：
+
+- 如果多个系统共用同一套 SSO 会话，可以把各系统的轻量探测组合成一个全局 probe，例如所有必需系统都认证成功才返回 `true`
+- 如果不同系统有独立登录态，不建议直接把所有系统塞进一个全局账号按钮；应先设计按系统区分的登录态展示，否则一个系统过期会把全局按钮切成未登录，影响用户理解
+- 没有接入 probe 的系统仍然必须遵守 `AuthenticationRequiredException` 合同；这样初始化、下载、上传时的登录过期仍能正确刷新按钮并弹出登录引导
+
 ## 5. 当前业务系统的接入模式
 
 当前 mock / 示例系统的合同是：
@@ -458,8 +499,9 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 1. 新增一个实现 `ISystemConnector` 的真实连接器
 2. 在连接器内部封装项目列表、字段头、查询、更新的真实接口差异
 3. 在 `ThisAddIn` 里把该连接器注册到 `SystemConnectorRegistry`
-4. 如果要替换当前系统，就只注册新的连接器
-5. 如果要并存多个系统，就同时注册多个连接器
+4. 在 `ThisAddIn` 里把该连接器的服务端登录态探测注册到 `AccountSessionService.ConfigureServerAuthenticationProbe(...)`
+5. 如果要替换当前系统，就只注册新的连接器
+6. 如果要并存多个系统，就同时注册多个连接器，并按第 4.10 节明确全局账号按钮如何判断多系统登录态
 
 建议新增：
 
@@ -578,10 +620,11 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 3. 新建真实连接器和 DTO
 4. 新建真实系统的 `FieldMappingSeedBuilder`
 5. 让连接器先跑通 `GetProjects -> BuildFieldMappingSeed -> Find -> BatchSave`
-6. 再在 `ThisAddIn` 中注册或切换连接器实例
-7. 在 Excel 中执行一次 `初始化当前表`，确认 `xISDP_Setting` 被按当前标准布局写出
-8. 额外验证未登录场景下，项目下拉框、`初始化当前表`、`部分下载`、`部分上传` 都能弹出当前宿主语言对应的未登录提示
-9. 最后做 Excel 联调和手工回归
+6. 为连接器补一个轻量服务端登录态探测方法，并注册到 `AccountSessionService.ConfigureServerAuthenticationProbe(...)`
+7. 再在 `ThisAddIn` 中注册或切换连接器实例
+8. 在 Excel 中执行一次 `初始化当前表`，确认 `xISDP_Setting` 被按当前标准布局写出
+9. 额外验证未登录场景下，项目下拉框、`初始化当前表`、`部分下载`、`部分上传` 都能弹出当前宿主语言对应的未登录提示，并且账号组按钮变为 `登录` 可点、`退出` 禁用
+10. 最后做 Excel 联调和手工回归
 
 当前注册位置：
 

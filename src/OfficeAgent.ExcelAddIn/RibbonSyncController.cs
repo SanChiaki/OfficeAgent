@@ -22,6 +22,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly WorksheetSyncExecutionService executionService;
         private readonly IRibbonSyncDialogService dialogService;
         private readonly Action authenticationLoginAction;
+        private readonly Action authenticationRequiredAction;
         private readonly IAnalyticsService analyticsService;
         private string lastRefreshedSheetName;
 
@@ -96,6 +97,47 @@ namespace OfficeAgent.ExcelAddIn
             IRibbonSyncDialogService dialogService,
             Action authenticationLoginAction,
             IAnalyticsService analyticsService = null)
+            : this(
+                metadataStore,
+                worksheetSyncService,
+                activeSheetNameProvider,
+                executionService,
+                dialogService,
+                authenticationLoginAction,
+                authenticationRequiredAction: null,
+                analyticsService: analyticsService)
+        {
+        }
+
+        internal RibbonSyncController(
+            IWorksheetMetadataStore metadataStore,
+            WorksheetSyncService worksheetSyncService,
+            Func<string> activeSheetNameProvider,
+            WorksheetSyncExecutionService executionService,
+            IRibbonSyncDialogService dialogService,
+            Action authenticationLoginAction,
+            Action authenticationRequiredAction)
+            : this(
+                metadataStore,
+                worksheetSyncService,
+                activeSheetNameProvider,
+                executionService,
+                dialogService,
+                authenticationLoginAction,
+                authenticationRequiredAction,
+                analyticsService: null)
+        {
+        }
+
+        internal RibbonSyncController(
+            IWorksheetMetadataStore metadataStore,
+            WorksheetSyncService worksheetSyncService,
+            Func<string> activeSheetNameProvider,
+            WorksheetSyncExecutionService executionService,
+            IRibbonSyncDialogService dialogService,
+            Action authenticationLoginAction,
+            Action authenticationRequiredAction,
+            IAnalyticsService analyticsService = null)
         {
             this.metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
             this.worksheetSyncService = worksheetSyncService ?? throw new ArgumentNullException(nameof(worksheetSyncService));
@@ -103,6 +145,7 @@ namespace OfficeAgent.ExcelAddIn
             this.executionService = executionService;
             this.dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             this.authenticationLoginAction = authenticationLoginAction;
+            this.authenticationRequiredAction = authenticationRequiredAction;
             this.analyticsService = analyticsService ?? NoopAnalyticsService.Instance;
 
             ActiveProjectDisplayName = GetStrings().ProjectDropDownPlaceholderText;
@@ -653,6 +696,7 @@ namespace OfficeAgent.ExcelAddIn
 
         private void HandleAuthenticationRequired(AuthenticationRequiredException ex)
         {
+            authenticationRequiredAction?.Invoke();
             if (dialogService.ShowAuthenticationRequired(GetStrings().AuthenticationRequiredDefaultMessage))
             {
                 authenticationLoginAction?.Invoke();

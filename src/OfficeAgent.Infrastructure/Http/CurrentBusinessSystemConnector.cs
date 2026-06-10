@@ -145,6 +145,19 @@ namespace OfficeAgent.Infrastructure.Http
             }
         }
 
+        public bool HasAuthenticatedSession()
+        {
+            try
+            {
+                Get<List<ProjectOption>>("/projects");
+                return true;
+            }
+            catch (AuthenticationRequiredException)
+            {
+                return false;
+            }
+        }
+
         public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
         {
             if (project == null)

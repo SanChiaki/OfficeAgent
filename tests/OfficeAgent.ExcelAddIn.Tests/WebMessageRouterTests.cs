@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
@@ -362,6 +363,20 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void LogoutUsesSharedAccountSessionService()
+        {
+            var routerText = File.ReadAllText(ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "WebBridge",
+                "WebMessageRouter.cs"));
+
+            Assert.Contains("private readonly AccountSessionService accountSessionService;", routerText, StringComparison.Ordinal);
+            Assert.Contains("accountSessionService.Logout();", routerText, StringComparison.Ordinal);
+            Assert.Contains("IsLoggedIn = accountSessionService.IsServerAuthenticated", routerText, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void ExecuteExcelCommandExecutesReadCommandsImmediately()
         {
             var sessionStore = new FileSessionStore(Path.Combine(tempDirectory, "sessions"));
@@ -704,6 +719,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var cookieStore = new FileCookieStore(
                 Path.Combine(Path.GetTempPath(), "OfficeAgent.Router.Tests", "cookies", Guid.NewGuid().ToString("N"), "cookies.json"),
                 new DpapiSecretProtector());
+            var accountSessionService = new AccountSessionService(sharedCookies, cookieStore);
 
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var routerType = addInAssembly.GetType(
@@ -713,7 +729,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 routerType,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, getResolvedUiLocale, analyticsService },
+                args: new object[] { sessionStore, settingsStore, selectionContextService, excelCommandExecutor, agentOrchestrator, sharedCookies, cookieStore, accountSessionService, getResolvedUiLocale, analyticsService },
                 culture: null);
         }
 
@@ -740,6 +756,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 "bin",
                 "Debug",
                 "OfficeAgent.ExcelAddIn.dll"));
+        }
+
+        private static string ResolveRepositoryPath(params string[] segments)
+        {
+            return Path.GetFullPath(Path.Combine(new[]
+            {
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+            }.Concat(segments).ToArray()));
         }
 
         private sealed class FakeExcelContextService : IExcelContextService

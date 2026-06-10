@@ -9,7 +9,10 @@ When integrated into the installer build flow, it produces:
 Required staged prerequisite installers:
 
 - `prereqs/vstor_redist.exe`
-- `prereqs/MicrosoftEdgeWebView2RuntimeInstallerX86.exe`
-- `prereqs/MicrosoftEdgeWebView2RuntimeInstallerX64.exe`
 
 The MSI inputs (`xISDP.Setup-x86.msi` and `xISDP.Setup-x64.msi`) are produced and wired by the installer build pipeline.
+
+To enable release update reminders, pass the private manifest endpoint with
+`installer/OfficeAgent.Setup/build.ps1 -UpdateManifestUrl "<url>"`. The MSI writes
+that value to `HKCU\Software\OfficeAgent\UpdateManifestUrl`; leaving the argument
+empty keeps update checks disabled.

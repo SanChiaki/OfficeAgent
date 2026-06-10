@@ -150,6 +150,8 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonLoginButtonLabel => Locale == "zh" ? "登录" : "Login";
 
+        public string RibbonLogoutButtonLabel => Locale == "zh" ? "退出" : "Logout";
+
         public string RibbonLoginInProgressButtonLabel => Locale == "zh" ? "登录中..." : "Signing in...";
 
         public string ConfigureSsoUrlFirstMessage => Locale == "zh"
@@ -165,22 +167,34 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonAboutDialogTitle => Locale == "zh" ? "关于 xISDP" : "About xISDP";
 
-        public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
+        public string AboutCurrentVersionLabel => Locale == "zh" ? "当前版本" : "Current version";
 
-        public string AboutMessage(string appVersion, string assemblyVersion, string buildConfiguration, string buildTime)
+        public string AboutAssemblyVersionLabel => Locale == "zh" ? "程序集版本" : "Assembly version";
+
+        public string AboutBuildConfigurationLabel => Locale == "zh" ? "构建配置" : "Build configuration";
+
+        public string AboutBuildTimeLabel => Locale == "zh" ? "构建时间" : "Build time";
+
+        public string AboutNewVersionAvailableTitle => Locale == "zh" ? "发现新版本" : "New version available";
+
+        public string AboutLatestVersionLabel => Locale == "zh" ? "最新版本" : "Latest version";
+
+        public string AboutPublishedAtLabel => Locale == "zh" ? "发布时间" : "Published";
+
+        public string AboutNoUpdateAvailableText => Locale == "zh" ? "当前已是最新版本。" : "You are on the latest version.";
+
+        public string AboutDownloadButtonText => Locale == "zh" ? "下载" : "Download";
+
+        public string AboutIgnoreVersionButtonText => Locale == "zh" ? "忽略此版本" : "Ignore this version";
+
+        public string AboutOpenUrlFailedMessage(string details)
         {
             return Locale == "zh"
-                ? "OfficeAgent Excel Add-in\r\n" +
-                    "版本号: " + appVersion + "\r\n" +
-                    "程序集版本: " + assemblyVersion + "\r\n" +
-                    "构建配置: " + buildConfiguration + "\r\n" +
-                    "构建时间: " + buildTime
-                : "OfficeAgent Excel Add-in\r\n" +
-                    "Version: " + appVersion + "\r\n" +
-                    "Assembly version: " + assemblyVersion + "\r\n" +
-                    "Build configuration: " + buildConfiguration + "\r\n" +
-                    "Build time: " + buildTime;
+                ? $"无法打开更新链接。\r\n{details}"
+                : $"Could not open the update link.\r\n{details}";
         }
+
+        public string UnknownText => Locale == "zh" ? "未知" : "Unknown";
 
         public string AuthenticationRequiredDefaultMessage => Locale == "zh"
             ? "当前未登录，请先登录"
@@ -463,10 +477,6 @@ namespace OfficeAgent.ExcelAddIn.Localization
                 ? $"{rowId} / {apiFieldKey}: 已跳过，{reason}"
                 : $"{rowId} / {apiFieldKey}: Skipped, {reason}";
         }
-
-        public string ChangeModeDownload => Locale == "zh" ? "下载" : "Download";
-
-        public string ChangeModeUpload => Locale == "zh" ? "上传" : "Upload";
 
         public string TaskPaneRuntimeMissingMessage => Locale == "zh"
             ? "需要 WebView2 Runtime 才能显示 ISDP。"

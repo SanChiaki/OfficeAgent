@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using Microsoft.Office.Core;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
@@ -14,6 +15,7 @@ using OfficeAgent.Core.Templates;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.Localization;
 using OfficeAgent.ExcelAddIn.TaskPane;
+using OfficeAgent.ExcelAddIn.Updates;
 using OfficeAgent.Infrastructure.Analytics;
 using OfficeAgent.Infrastructure.Diagnostics;
 using OfficeAgent.Infrastructure.Http;
@@ -36,6 +38,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ExcelFocusCoordinator ExcelFocusCoordinator { get; private set; }
         internal SharedCookieContainer SharedCookies { get; private set; }
         internal FileCookieStore CookieStore { get; private set; }
+        internal AccountSessionService AccountSessionService { get; private set; }
         internal ISystemConnector CurrentBusinessConnector { get; private set; }
         internal ISystemConnectorRegistry SystemConnectorRegistry { get; private set; }
         internal IWorksheetMetadataStore WorksheetMetadataStore { get; private set; }
@@ -47,6 +50,7 @@ namespace OfficeAgent.ExcelAddIn
         internal ITemplateStore TemplateStore { get; private set; }
         internal ITemplateCatalog TemplateCatalog { get; private set; }
         internal RibbonTemplateController RibbonTemplateController { get; private set; }
+        internal UpdateNotificationService UpdateNotificationService { get; private set; }
         internal IAnalyticsProjectContextProvider AnalyticsProjectContextProvider { get; private set; }
         internal Func<AppSettings, string> GetResolvedUiLocale { get; private set; }
         internal Localization.HostLocalizedStrings HostLocalizedStrings => GetHostLocalizedStrings();
@@ -69,6 +73,7 @@ namespace OfficeAgent.ExcelAddIn
                 Path.Combine(appDataDirectory, "settings.json"),
                 new DpapiSecretProtector());
             var initialSettings = SettingsStore.Load();
+            var startupSynchronizationContext = SynchronizationContext.Current;
             SharedCookies = new SharedCookieContainer();
             CookieStore = new FileCookieStore(
                 Path.Combine(appDataDirectory, "cookies.json"),
@@ -76,6 +81,7 @@ namespace OfficeAgent.ExcelAddIn
             CookieStore.Load(SharedCookies.Container);
             WorksheetMetadataStore = new WorksheetMetadataStore(new ExcelWorkbookMetadataAdapter(Application));
             AnalyticsProjectContextProvider = new WorkbookAnalyticsProjectContextProvider();
+            AccountSessionService = new AccountSessionService(SharedCookies, CookieStore);
             AnalyticsService = string.IsNullOrWhiteSpace(initialSettings.AnalyticsUrl)
                 ? NoopAnalyticsService.Instance
                 : new OfficeAgent.Core.Analytics.AnalyticsService(
@@ -87,18 +93,8 @@ namespace OfficeAgent.ExcelAddIn
             var uiLocaleResolver = new UiLocaleResolver(GetExcelUiLocale);
             GetResolvedUiLocale = settings => uiLocaleResolver.Resolve(settings ?? SettingsStore.Load());
 
-            // Set SSO domain from settings for login status checks.
-            if (!string.IsNullOrWhiteSpace(initialSettings.SsoUrl))
-            {
-                try
-                {
-                    SharedCookies.SsoDomain = new Uri(initialSettings.SsoUrl).Host;
-                }
-                catch (UriFormatException)
-                {
-                    SharedCookies.SsoDomain = string.Empty;
-                }
-            }
+            AccountSessionService.ConfigureSsoDomain(initialSettings.SsoUrl);
+            InitializeUpdateNotificationService(appDataDirectory);
 
             ExcelContextService = new ExcelSelectionContextService(Application);
             ExcelCommandExecutor = new ExcelInteropAdapter(Application, ExcelContextService);
@@ -114,7 +110,9 @@ namespace OfficeAgent.ExcelAddIn
                 new PlanExecutor(ExcelCommandExecutor, skillRegistry),
                 fetchClient,
                 () => SettingsStore.Load());
-            CurrentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
+            var currentBusinessConnector = new CurrentBusinessSystemConnector(() => SettingsStore.Load(), cookieContainer: SharedCookies.Container, analyticsService: AnalyticsService);
+            CurrentBusinessConnector = currentBusinessConnector;
+            AccountSessionService.ConfigureServerAuthenticationProbe(currentBusinessConnector.HasAuthenticatedSession);
             SystemConnectorRegistry = new SystemConnectorRegistry(new[] { CurrentBusinessConnector });
             WorksheetSyncService = new WorksheetSyncService(
                 SystemConnectorRegistry,
@@ -140,6 +138,7 @@ namespace OfficeAgent.ExcelAddIn
                 WorksheetSyncExecutionService,
                 new Dialogs.RibbonSyncDialogService(),
                 () => Globals.Ribbons.AgentRibbon?.BeginLoginFlow(refreshProjectsAfterSuccess: false),
+                () => Globals.ThisAddIn?.HandleAccountAuthenticationRequired(),
                 AnalyticsService);
             TemplateStore = new LocalJsonTemplateStore(Path.Combine(appDataDirectory, "templates"));
             TemplateCatalog = new WorksheetTemplateCatalog(
@@ -155,8 +154,9 @@ namespace OfficeAgent.ExcelAddIn
             RibbonSyncController.RefreshActiveProjectFromSheetMetadata();
             RibbonTemplateController.RefreshActiveTemplateStateFromSheetMetadata();
             Globals.Ribbons.AgentRibbon?.BindToControllersAndRefresh();
+            UpdateNotificationService?.StartBackgroundCheck(startupSynchronizationContext);
             lastProjectRefreshSheetName = GetActiveWorksheetName();
-            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, GetResolvedUiLocale, AnalyticsService);
+            TaskPaneController = new TaskPaneController(this, SessionStore, SettingsStore, ExcelContextService, ExcelCommandExecutor, AgentOrchestrator, SharedCookies, CookieStore, AccountSessionService, GetResolvedUiLocale, AnalyticsService);
             Application.WorkbookActivate += Application_WorkbookActivate;
             Application.SheetActivate += Application_SheetActivate;
             Application.SheetSelectionChange += Application_SheetSelectionChange;
@@ -178,6 +178,24 @@ namespace OfficeAgent.ExcelAddIn
         {
             Startup += ThisAddIn_Startup;
             Shutdown += ThisAddIn_Shutdown;
+        }
+
+        private void InitializeUpdateNotificationService(string appDataDirectory)
+        {
+            try
+            {
+                UpdateNotificationService = new UpdateNotificationService(
+                    UpdateCheckConfiguration.CreateDefault(),
+                    new UpdateManifestClient(),
+                    new FileUpdateStateStore(Path.Combine(appDataDirectory, "update-state.json")),
+                    VersionInfo.AppVersion);
+                UpdateNotificationService.LoadCachedState();
+            }
+            catch (Exception ex)
+            {
+                UpdateNotificationService = null;
+                OfficeAgentLog.Warn("updates", "update.setup.failed", "Update notification setup failed. Startup will continue without update reminders.", ex.Message);
+            }
         }
 
         private void Application_SheetSelectionChange(object sh, ExcelInterop.Range target)
@@ -301,6 +319,16 @@ namespace OfficeAgent.ExcelAddIn
                 GetActiveWorksheetName,
                 GetActiveWorkbookName,
                 () => HostLocalizedStrings);
+        }
+
+        internal void LogoutAccountSession()
+        {
+            AccountSessionService?.Logout();
+        }
+
+        internal void HandleAccountAuthenticationRequired()
+        {
+            AccountSessionService?.MarkServerAuthenticationRequired();
         }
 
         private static string GetWorksheetName(object sheet)
