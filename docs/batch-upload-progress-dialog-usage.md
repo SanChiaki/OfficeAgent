@@ -211,12 +211,12 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 
     dialog.UploadCanceled += (sender, args) =>
     {
-        dialog.SetStepWarning(4, "数据上传", "用户取消上传");
+        // 做业务清理或取消请求；弹窗会在事件触发后自动关闭。
     };
 
     dialog.Confirmed += (sender, args) =>
     {
-        dialog.Close();
+        // 可在这里刷新外部界面；弹窗会在事件触发后自动关闭。
     };
 
     dialog.Show();
@@ -245,8 +245,8 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | `SetStepError(stepNumber, title, description, details)` | 把步骤更新为失败 |
 | `AppendStepDetails(stepNumber, details)` | 给某一步追加详情日志 |
 | `UploadRequested` | 用户在第 3 步点击底部【上传】按钮时触发 |
-| `UploadCanceled` | 用户在第 1、2、3 步点击底部【取消】按钮时触发 |
-| `Confirmed` | 用户在第 5 步点击底部【确认】按钮时触发 |
+| `UploadCanceled` | 用户在第 1、2、3、4 步点击底部【取消】按钮时触发，触发后弹窗默认关闭 |
+| `Confirmed` | 用户在第 5 步点击底部【确认】按钮时触发，触发后弹窗默认关闭 |
 
 只有 `Active` 步骤会显示右侧动态圆环，其他状态不显示右侧圆环。
 
@@ -257,7 +257,7 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | 第 1 步：数据准备 | 【取消】 |
 | 第 2 步：字段验证 | 【取消】 |
 | 第 3 步：变更预览 | 【上传】【取消】 |
-| 第 4 步：数据上传 | 无按钮 |
+| 第 4 步：数据上传 | 【取消】 |
 | 第 5 步：上传结果 | 【确认】 |
 
 详情框只允许出现在第 3 步和第 5 步。第 3 步的变更预览详情框显示后不会因为进入第 4 步而收起；第 5 步的结果详情框显示后也会保留。第 1、2、4 步不会显示详情框，即使调用方传入了 `details`。上传过程日志如果需要展示，应在第 5 步结果里展示。

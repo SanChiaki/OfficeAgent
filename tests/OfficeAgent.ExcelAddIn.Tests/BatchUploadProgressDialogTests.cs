@@ -90,7 +90,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
 
                     InvokeDialogMethod(dialog, "SetStepActive", 4, "数据上传", "正在上传至服务器", "这个详情不应该显示");
-                    Assert.Empty(VisibleFooterButtons(dialog));
+                    Assert.Single(VisibleFooterButtons(dialog));
+                    Assert.Equal("取消", VisibleFooterButtons(dialog).Single().Text);
                     Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
                     Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox4"));
 
@@ -111,31 +112,106 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 using (var dialog = CreateDialog())
                 {
                     var uploadRequested = 0;
-                    var uploadCanceled = 0;
-                    var confirmed = 0;
                     var uploadRequestedEvent = dialog.GetType().GetEvent("UploadRequested")
                         ?? throw new InvalidOperationException("UploadRequested event was not found.");
-                    var uploadCanceledEvent = dialog.GetType().GetEvent("UploadCanceled")
-                        ?? throw new InvalidOperationException("UploadCanceled event was not found.");
-                    var confirmedEvent = dialog.GetType().GetEvent("Confirmed")
-                        ?? throw new InvalidOperationException("Confirmed event was not found.");
                     uploadRequestedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadRequested++));
-                    uploadCanceledEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadCanceled++));
-                    confirmedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => confirmed++));
 
                     dialog.CreateControl();
                     dialog.PerformLayout();
 
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     FindControl<Button>(dialog, "uploadButton").PerformClick();
+
+                    Assert.Equal(1, uploadRequested);
+                }
+
+                using (var dialog = CreateDialog())
+                {
+                    var uploadCanceled = 0;
+                    var uploadCanceledEvent = dialog.GetType().GetEvent("UploadCanceled")
+                        ?? throw new InvalidOperationException("UploadCanceled event was not found.");
+                    uploadCanceledEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadCanceled++));
+
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
 
+                    Assert.Equal(1, uploadCanceled);
+                }
+
+                using (var dialog = CreateDialog())
+                {
+                    var confirmed = 0;
+                    var confirmedEvent = dialog.GetType().GetEvent("Confirmed")
+                        ?? throw new InvalidOperationException("Confirmed event was not found.");
+                    confirmedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => confirmed++));
+
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
                     InvokeDialogMethod(dialog, "SetStepActive", 5, "上传结果", "上传完成", "成功：48项变更");
                     FindControl<Button>(dialog, "confirmButton").PerformClick();
 
-                    Assert.Equal(1, uploadRequested);
-                    Assert.Equal(1, uploadCanceled);
                     Assert.Equal(1, confirmed);
+                }
+            });
+        }
+
+        [Fact]
+        public void ConfirmButtonClosesDialog()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    var closed = false;
+                    dialog.FormClosed += (sender, args) => closed = true;
+                    ShowOffscreen(dialog);
+
+                    FindControl<Button>(dialog, "confirmButton").PerformClick();
+                    Application.DoEvents();
+
+                    Assert.True(closed);
+                }
+            });
+        }
+
+        [Fact]
+        public void CancelButtonClosesDialogBeforeUploadStarts()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    var closed = false;
+                    dialog.FormClosed += (sender, args) => closed = true;
+                    ShowOffscreen(dialog);
+                    InvokeDialogMethod(dialog, "SetStepActive", 1, "数据准备", "正在读取 Excel 可见选区", null);
+
+                    FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
+                    Application.DoEvents();
+
+                    Assert.True(closed);
+                }
+            });
+        }
+
+        [Fact]
+        public void CancelButtonClosesDialogWhileUploading()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    var closed = false;
+                    dialog.FormClosed += (sender, args) => closed = true;
+                    ShowOffscreen(dialog);
+                    InvokeDialogMethod(dialog, "SetStepActive", 4, "数据上传", "正在上传至服务器", null);
+
+                    FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
+                    Application.DoEvents();
+
+                    Assert.True(closed);
                 }
             });
         }
@@ -297,6 +373,16 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var method = dialog.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)
                 ?? throw new InvalidOperationException($"{methodName} was not found.");
             method.Invoke(dialog, arguments);
+        }
+
+        private static void ShowOffscreen(Form dialog)
+        {
+            dialog.StartPosition = FormStartPosition.Manual;
+            dialog.Location = new Point(-32000, -32000);
+            dialog.Show();
+            Application.DoEvents();
+            dialog.PerformLayout();
+            Application.DoEvents();
         }
 
         private static Button[] VisibleFooterButtons(Form dialog)

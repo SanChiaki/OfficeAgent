@@ -307,6 +307,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             {
                 handler(this, EventArgs.Empty);
             }
+
+            Close();
         }
 
         private void OnConfirmed()
@@ -316,13 +318,15 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             {
                 handler(this, EventArgs.Empty);
             }
+
+            Close();
         }
 
         private void RefreshFooterButtons()
         {
             var activeStep = ResolveActiveStepNumber();
             uploadButton.Visible = activeStep == 3;
-            cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3;
+            cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3 || activeStep == 4;
             confirmButton.Visible = activeStep == 5;
             LayoutFooterButtons(Math.Max(uploadButton.Height, Math.Max(cancelUploadButton.Height, confirmButton.Height)));
         }
