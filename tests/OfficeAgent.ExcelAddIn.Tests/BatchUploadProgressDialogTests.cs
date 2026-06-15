@@ -45,6 +45,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void DialogUsesCompactScreenCenteredLayoutWithLargerWhiteDetailsBox()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    var previewTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox3");
+                    var resultTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox5");
+
+                    Assert.Equal(FormStartPosition.CenterScreen, dialog.StartPosition);
+                    Assert.True(dialog.ClientSize.Width <= 860, $"Dialog width should be compact, actual: {dialog.ClientSize.Width}.");
+                    Assert.True(dialog.ClientSize.Height <= 680, $"Dialog height should stay compact, actual: {dialog.ClientSize.Height}.");
+                    Assert.Equal(Color.White, previewTextBox.BackColor);
+                    Assert.Equal(Color.White, resultTextBox.BackColor);
+                    Assert.True(previewTextBox.Height >= 140, $"Preview details box should be larger, actual: {previewTextBox.Height}.");
+                    Assert.True(resultTextBox.Height >= 140, $"Result details box should be larger, actual: {resultTextBox.Height}.");
+                }
+            });
+        }
+
+        [Fact]
         public void DialogFooterUsesConfirmButtonForResultStep()
         {
             RunInSta(() =>
@@ -60,6 +84,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Null(TryFindControl<Button>(dialog, "uploadButton"));
                     Assert.Null(TryFindControl<Button>(dialog, "cancelUploadButton"));
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
+                }
+            });
+        }
+
+        [Fact]
+        public void DialogFooterUsesConfirmButtonWhenResultStepIsFinished()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    InvokeDialogMethod(dialog, "SetStepCompleted", 5, "上传结果", "上传完成", "成功：48项变更");
+                    var completedButtons = VisibleFooterButtons(dialog);
+                    Assert.Single(completedButtons);
+                    Assert.Equal("确认", completedButtons.Single().Text);
+
+                    InvokeDialogMethod(dialog, "SetStepError", 5, "上传结果", "上传失败", "请查看日志确认失败原因");
+                    var errorButtons = VisibleFooterButtons(dialog);
+                    Assert.Single(errorButtons);
+                    Assert.Equal("确认", errorButtons.Single().Text);
                 }
             });
         }

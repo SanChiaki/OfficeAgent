@@ -8,18 +8,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 {
     internal sealed class BatchUploadProgressDialog : Form
     {
-        private const int InitialDialogWidth = 960;
-        private const int InitialDialogHeight = 700;
-        private const int MinimumDialogWidth = 720;
+        private const int InitialDialogWidth = 840;
+        private const int InitialDialogHeight = 680;
+        private const int MinimumDialogWidth = 680;
         private const int MinimumDialogHeight = 460;
         private const int OuterPadding = 28;
         private const int StepMarkerColumnWidth = 48;
         private const int StepContentGap = 8;
         private const int StepProgressRingSize = 46;
         private const int StepProgressRingGap = 24;
-        private const int StepSpacing = 28;
-        private const int DetailsMaxHeight = 172;
-        private const int DetailsMinHeight = 92;
+        private const int StepSpacing = 24;
+        private const int DetailsMaxHeight = 240;
+        private const int DetailsMinHeight = 142;
         private const int FooterButtonGap = 12;
 
         private readonly Label titleLabel;
@@ -48,7 +48,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Dpi;
             Text = "批量上传";
-            StartPosition = FormStartPosition.CenterParent;
+            StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -327,8 +327,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             var activeStep = ResolveActiveStepNumber();
             uploadButton.Visible = activeStep == 3;
             cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3 || activeStep == 4;
-            confirmButton.Visible = activeStep == 5;
+            confirmButton.Visible = IsResultStepReadyForConfirmation();
             LayoutFooterButtons(Math.Max(uploadButton.Height, Math.Max(cancelUploadButton.Height, confirmButton.Height)));
+        }
+
+        private bool IsResultStepReadyForConfirmation()
+        {
+            if (stepRows.Count < 5)
+            {
+                return false;
+            }
+
+            return stepRows[4].State != BatchUploadStepState.Pending;
         }
 
         private int ResolveActiveStepNumber()
@@ -681,6 +691,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     detailsTextBox = new TextBox
                     {
                         Name = "stepDetailsTextBox" + stepNumber,
+                        BackColor = Color.White,
                         BorderStyle = BorderStyle.FixedSingle,
                         Multiline = true,
                         ReadOnly = true,
