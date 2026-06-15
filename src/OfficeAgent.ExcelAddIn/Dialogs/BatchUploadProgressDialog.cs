@@ -20,14 +20,20 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private const int StepSpacing = 28;
         private const int DetailsMaxHeight = 172;
         private const int DetailsMinHeight = 92;
+        private const int FooterButtonGap = 12;
 
         private readonly Label titleLabel;
-        private readonly Button closeButton;
+        private readonly Button uploadButton;
+        private readonly Button cancelUploadButton;
         private readonly Panel contentPanel;
         private readonly FlowLayoutPanel stepsPanel;
         private readonly Panel footerPanel;
         private readonly Panel headerPanel;
         private readonly List<StepRow> stepRows = new List<StepRow>();
+
+        public event EventHandler UploadRequested;
+
+        public event EventHandler UploadCanceled;
 
         public BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps)
         {
@@ -73,15 +79,26 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Padding = new Padding(OuterPadding, ScaleVertical(10), OuterPadding, ScaleVertical(20)),
             };
 
-            closeButton = new Button
+            uploadButton = new Button
             {
-                Name = "closeButton",
-                Text = "关闭",
+                Name = "uploadButton",
+                Text = "上传",
                 Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
                 MinimumSize = new Size(96, 34),
             };
-            closeButton.Click += (sender, args) => Close();
-            footerPanel.Controls.Add(closeButton);
+            uploadButton.Click += (sender, args) => OnUploadRequested();
+
+            cancelUploadButton = new Button
+            {
+                Name = "cancelUploadButton",
+                Text = "取消",
+                Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+                MinimumSize = new Size(96, 34),
+            };
+            cancelUploadButton.Click += (sender, args) => OnUploadCanceled();
+
+            footerPanel.Controls.Add(uploadButton);
+            footerPanel.Controls.Add(cancelUploadButton);
 
             contentPanel = new Panel
             {
@@ -222,12 +239,21 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 Math.Max(120, ClientSize.Width - (OuterPadding * 2)),
                 titleHeight);
 
-            var closeButtonWidth = Math.Max(110, TextRenderer.MeasureText(closeButton.Text, closeButton.Font).Width + 56);
-            var closeButtonHeight = Math.Max(36, TextRenderer.MeasureText(closeButton.Text, closeButton.Font).Height + 18);
-            closeButton.Size = new Size(closeButtonWidth, closeButtonHeight);
-            closeButton.Location = new Point(
-                Math.Max(OuterPadding, footerPanel.ClientSize.Width - footerPanel.Padding.Right - closeButton.Width),
-                Math.Max(footerPanel.Padding.Top, footerPanel.ClientSize.Height - footerPanel.Padding.Bottom - closeButton.Height));
+            var uploadButtonWidth = Math.Max(110, TextRenderer.MeasureText(uploadButton.Text, uploadButton.Font).Width + 56);
+            var cancelButtonWidth = Math.Max(110, TextRenderer.MeasureText(cancelUploadButton.Text, cancelUploadButton.Font).Width + 56);
+            var footerButtonHeight = Math.Max(
+                36,
+                Math.Max(
+                    TextRenderer.MeasureText(uploadButton.Text, uploadButton.Font).Height,
+                    TextRenderer.MeasureText(cancelUploadButton.Text, cancelUploadButton.Font).Height) + 18);
+            uploadButton.Size = new Size(uploadButtonWidth, footerButtonHeight);
+            cancelUploadButton.Size = new Size(cancelButtonWidth, footerButtonHeight);
+            cancelUploadButton.Location = new Point(
+                Math.Max(OuterPadding, footerPanel.ClientSize.Width - footerPanel.Padding.Right - cancelUploadButton.Width),
+                Math.Max(footerPanel.Padding.Top, footerPanel.ClientSize.Height - footerPanel.Padding.Bottom - cancelUploadButton.Height));
+            uploadButton.Location = new Point(
+                Math.Max(OuterPadding, cancelUploadButton.Left - FooterButtonGap - uploadButton.Width),
+                cancelUploadButton.Top);
 
             var scrollBarAllowance = contentPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
             var availableWidth = Math.Max(
@@ -244,6 +270,24 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private int ScaleVertical(int value)
         {
             return Math.Max(value, (int)Math.Round(value * Font.Height / 15.0));
+        }
+
+        private void OnUploadRequested()
+        {
+            var handler = UploadRequested;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
+
+        private void OnUploadCanceled()
+        {
+            var handler = UploadCanceled;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
         }
 
         private StepRow ResolveStepRow(int stepNumber)

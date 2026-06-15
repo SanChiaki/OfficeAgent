@@ -29,6 +29,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     var previewTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox3");
 
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeGlyphButton", StringComparison.Ordinal));
+                    Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
                     Assert.True(contentPanel.AutoScroll);
                     Assert.Equal(DockStyle.Fill, contentPanel.Dock);
                     Assert.Equal(DockStyle.Bottom, footerPanel.Dock);
@@ -39,6 +40,56 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.True(previewTextBox.Width >= contentPanel.ClientSize.Width - 160);
 
                     AssertNoVisibleTextControlClips(dialog);
+                }
+            });
+        }
+
+        [Fact]
+        public void DialogFooterUsesUploadAndCancelUploadButtons()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    var uploadButton = FindControl<Button>(dialog, "uploadButton");
+                    var cancelUploadButton = FindControl<Button>(dialog, "cancelUploadButton");
+
+                    Assert.Equal("上传", uploadButton.Text);
+                    Assert.Equal("取消", cancelUploadButton.Text);
+                    Assert.True(uploadButton.Left < cancelUploadButton.Left, "Upload button should be placed before the cancel button.");
+                    Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
+                }
+            });
+        }
+
+        [Fact]
+        public void DialogFooterButtonsRaiseUploadEvents()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    var uploadRequested = 0;
+                    var uploadCanceled = 0;
+                    var uploadRequestedEvent = dialog.GetType().GetEvent("UploadRequested")
+                        ?? throw new InvalidOperationException("UploadRequested event was not found.");
+                    var uploadCanceledEvent = dialog.GetType().GetEvent("UploadCanceled")
+                        ?? throw new InvalidOperationException("UploadCanceled event was not found.");
+                    EventHandler uploadRequestedHandler = (sender, args) => uploadRequested++;
+                    EventHandler uploadCanceledHandler = (sender, args) => uploadCanceled++;
+                    uploadRequestedEvent.AddEventHandler(dialog, uploadRequestedHandler);
+                    uploadCanceledEvent.AddEventHandler(dialog, uploadCanceledHandler);
+
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+                    FindControl<Button>(dialog, "uploadButton").PerformClick();
+                    FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
+
+                    Assert.Equal(1, uploadRequested);
+                    Assert.Equal(1, uploadCanceled);
                 }
             });
         }
