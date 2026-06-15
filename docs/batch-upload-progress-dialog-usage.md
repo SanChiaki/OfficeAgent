@@ -214,6 +214,11 @@ using (var dialog = new BatchUploadProgressDialog(steps))
         dialog.SetStepWarning(4, "数据上传", "用户取消上传");
     };
 
+    dialog.Confirmed += (sender, args) =>
+    {
+        dialog.Close();
+    };
+
     dialog.Show();
 
     dialog.SetStepActive(1, "数据准备", "正在读取 Excel 可见选区");
@@ -239,10 +244,23 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | `SetStepWarning(stepNumber, title, description, details)` | 把步骤更新为警告 |
 | `SetStepError(stepNumber, title, description, details)` | 把步骤更新为失败 |
 | `AppendStepDetails(stepNumber, details)` | 给某一步追加详情日志 |
-| `UploadRequested` | 用户点击底部【上传】按钮时触发 |
-| `UploadCanceled` | 用户点击底部【取消】按钮时触发 |
+| `UploadRequested` | 用户在第 3 步点击底部【上传】按钮时触发 |
+| `UploadCanceled` | 用户在第 1、2、3 步点击底部【取消】按钮时触发 |
+| `Confirmed` | 用户在第 5 步点击底部【确认】按钮时触发 |
 
 只有 `Active` 步骤会显示右侧动态圆环，其他状态不显示右侧圆环。
+
+底部按钮根据当前 `Active` 步骤自动变化：
+
+| 当前步骤 | 底部按钮 |
+| --- | --- |
+| 第 1 步：数据准备 | 【取消】 |
+| 第 2 步：字段验证 | 【取消】 |
+| 第 3 步：变更预览 | 【上传】【取消】 |
+| 第 4 步：数据上传 | 无按钮 |
+| 第 5 步：上传结果 | 【确认】 |
+
+详情框只会在当前 `Active` 步骤为第 3 步或第 5 步时显示。进入第 4 步后，第 3 步的变更预览详情框会自动收起；第 4 步“数据上传”不会显示详情框，即使调用方传入了 `details`。上传过程日志如果需要展示，应在第 5 步结果里展示。
 
 ## 8. 失败场景示例
 
@@ -304,7 +322,7 @@ var steps = new[]
 | 中间步骤区 | 使用可滚动内容区，步骤内容按真实文本高度自适应 |
 | 详情区域 | 详情框有最小和最大高度，内容过长时框内滚动 |
 | 右侧圆环 | 只有正在进行的 `Active` 步骤右侧显示动态圆环 |
-| 底部按钮 | 固定显示【上传】和【取消】，不再显示【关闭】按钮 |
+| 底部按钮 | 根据当前步骤显示；第 4 步无按钮，第 5 步只显示【确认】 |
 
 ## 11. 本地化要求
 
@@ -357,7 +375,7 @@ Remove-Item .\RenderBatchUploadProgressDialog.exe
 请先构造 BatchUploadProgressDialog.BatchUploadProgressStep[] 初始步骤，再用 SetStepActive、SetStepCompleted、SetStepError、AppendStepDetails 等方法交互式推进状态。
 步骤状态只能使用 Pending、Active、Completed、Warning、Error。
 长文本放 details，追加日志使用 AppendStepDetails。
-底部按钮只保留【上传】和【取消】，业务代码通过 UploadRequested 和 UploadCanceled 事件处理点击。
+底部按钮根据当前步骤变化：第1/2步【取消】，第3步【上传】【取消】，第4步无按钮，第5步【确认】。业务代码通过 UploadRequested、UploadCanceled、Confirmed 事件处理点击。
 弹窗展示时使用 ExcelDialogOwner.FromCurrentApplication() 绑定 Excel 父窗口。
 不要调用 CreateSample()，它只用于预览。
 所有新增用户可见固定文案必须走 HostLocalizedStrings.cs 本地化。

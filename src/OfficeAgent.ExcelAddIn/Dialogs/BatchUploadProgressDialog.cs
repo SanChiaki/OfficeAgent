@@ -25,6 +25,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly Label titleLabel;
         private readonly Button uploadButton;
         private readonly Button cancelUploadButton;
+        private readonly Button confirmButton;
         private readonly Panel contentPanel;
         private readonly FlowLayoutPanel stepsPanel;
         private readonly Panel footerPanel;
@@ -34,6 +35,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         public event EventHandler UploadRequested;
 
         public event EventHandler UploadCanceled;
+
+        public event EventHandler Confirmed;
 
         public BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps)
         {
@@ -97,8 +100,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             };
             cancelUploadButton.Click += (sender, args) => OnUploadCanceled();
 
+            confirmButton = new Button
+            {
+                Name = "confirmButton",
+                Text = "确认",
+                Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+                MinimumSize = new Size(96, 34),
+            };
+            confirmButton.Click += (sender, args) => OnConfirmed();
+
             footerPanel.Controls.Add(uploadButton);
             footerPanel.Controls.Add(cancelUploadButton);
+            footerPanel.Controls.Add(confirmButton);
 
             contentPanel = new Panel
             {
@@ -128,6 +141,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 stepRows.Add(row);
                 stepsPanel.Controls.Add(row);
             }
+            RefreshFooterButtons();
 
             Controls.Add(contentPanel);
             Controls.Add(footerPanel);
@@ -195,8 +209,14 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         {
             RunOnUiThread(() =>
             {
+                if (state == BatchUploadStepState.Active)
+                {
+                    ClearActiveStepsExcept(stepNumber);
+                }
+
                 var row = ResolveStepRow(stepNumber);
                 row.UpdateStep(new BatchUploadProgressStep(title, description, state, details));
+                RefreshFooterButtons();
                 UpdateResponsiveLayout();
             });
         }
@@ -241,19 +261,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             var uploadButtonWidth = Math.Max(110, TextRenderer.MeasureText(uploadButton.Text, uploadButton.Font).Width + 56);
             var cancelButtonWidth = Math.Max(110, TextRenderer.MeasureText(cancelUploadButton.Text, cancelUploadButton.Font).Width + 56);
+            var confirmButtonWidth = Math.Max(110, TextRenderer.MeasureText(confirmButton.Text, confirmButton.Font).Width + 56);
             var footerButtonHeight = Math.Max(
                 36,
                 Math.Max(
-                    TextRenderer.MeasureText(uploadButton.Text, uploadButton.Font).Height,
-                    TextRenderer.MeasureText(cancelUploadButton.Text, cancelUploadButton.Font).Height) + 18);
+                    Math.Max(
+                        TextRenderer.MeasureText(uploadButton.Text, uploadButton.Font).Height,
+                        TextRenderer.MeasureText(cancelUploadButton.Text, cancelUploadButton.Font).Height),
+                    TextRenderer.MeasureText(confirmButton.Text, confirmButton.Font).Height) + 18);
             uploadButton.Size = new Size(uploadButtonWidth, footerButtonHeight);
             cancelUploadButton.Size = new Size(cancelButtonWidth, footerButtonHeight);
-            cancelUploadButton.Location = new Point(
-                Math.Max(OuterPadding, footerPanel.ClientSize.Width - footerPanel.Padding.Right - cancelUploadButton.Width),
-                Math.Max(footerPanel.Padding.Top, footerPanel.ClientSize.Height - footerPanel.Padding.Bottom - cancelUploadButton.Height));
-            uploadButton.Location = new Point(
-                Math.Max(OuterPadding, cancelUploadButton.Left - FooterButtonGap - uploadButton.Width),
-                cancelUploadButton.Top);
+            confirmButton.Size = new Size(confirmButtonWidth, footerButtonHeight);
+            LayoutFooterButtons(footerButtonHeight);
 
             var scrollBarAllowance = contentPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
             var availableWidth = Math.Max(
@@ -287,6 +306,95 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             if (handler != null)
             {
                 handler(this, EventArgs.Empty);
+            }
+        }
+
+        private void OnConfirmed()
+        {
+            var handler = Confirmed;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
+
+        private void RefreshFooterButtons()
+        {
+            var activeStep = ResolveActiveStepNumber();
+            RefreshStepDetailVisibility(activeStep);
+            uploadButton.Visible = activeStep == 3;
+            cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3;
+            confirmButton.Visible = activeStep == 5;
+            LayoutFooterButtons(Math.Max(uploadButton.Height, Math.Max(cancelUploadButton.Height, confirmButton.Height)));
+        }
+
+        private int ResolveActiveStepNumber()
+        {
+            for (var index = 0; index < stepRows.Count; index++)
+            {
+                if (stepRows[index].State == BatchUploadStepState.Active)
+                {
+                    return index + 1;
+                }
+            }
+
+            return 0;
+        }
+
+        private void ClearActiveStepsExcept(int activeStepNumber)
+        {
+            for (var index = 0; index < stepRows.Count; index++)
+            {
+                var stepNumber = index + 1;
+                var row = stepRows[index];
+                if (stepNumber != activeStepNumber && row.State == BatchUploadStepState.Active)
+                {
+                    row.UpdateStep(new BatchUploadProgressStep(
+                        row.Title,
+                        row.Description,
+                        BatchUploadStepState.Completed,
+                        row.Details));
+                }
+            }
+        }
+
+        private void RefreshStepDetailVisibility(int activeStepNumber)
+        {
+            for (var index = 0; index < stepRows.Count; index++)
+            {
+                var stepNumber = index + 1;
+                var shouldShowDetails = activeStepNumber == stepNumber && (stepNumber == 3 || stepNumber == 5);
+                stepRows[index].SetDetailsVisible(shouldShowDetails);
+            }
+        }
+
+        private void LayoutFooterButtons(int buttonHeight)
+        {
+            var visibleButtons = new List<Button>();
+            if (uploadButton.Visible)
+            {
+                visibleButtons.Add(uploadButton);
+            }
+
+            if (cancelUploadButton.Visible)
+            {
+                visibleButtons.Add(cancelUploadButton);
+            }
+
+            if (confirmButton.Visible)
+            {
+                visibleButtons.Add(confirmButton);
+            }
+
+            var top = Math.Max(
+                footerPanel.Padding.Top,
+                footerPanel.ClientSize.Height - footerPanel.Padding.Bottom - buttonHeight);
+            var right = footerPanel.ClientSize.Width - footerPanel.Padding.Right;
+            for (var index = visibleButtons.Count - 1; index >= 0; index--)
+            {
+                var button = visibleButtons[index];
+                button.Location = new Point(Math.Max(OuterPadding, right - button.Width), top);
+                right = button.Left - FooterButtonGap;
             }
         }
 
@@ -375,6 +483,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             private StepProgressRing progressRing;
             private TextBox detailsTextBox;
             private BatchUploadProgressStep step;
+            private readonly int stepNumber;
+            private bool detailsVisible = true;
 
             public StepRow(int stepNumber, BatchUploadProgressStep step)
             {
@@ -384,6 +494,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 }
 
                 this.step = step;
+                this.stepNumber = stepNumber;
                 Name = "stepRow" + stepNumber;
                 AutoSize = true;
                 AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -456,6 +567,32 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     ? details
                     : step.Details + "\r\n" + details;
                 UpdateStep(new BatchUploadProgressStep(step.Title, step.Description, step.State, mergedDetails));
+            }
+
+            public BatchUploadStepState State
+            {
+                get { return step.State; }
+            }
+
+            public string Title
+            {
+                get { return step.Title; }
+            }
+
+            public string Description
+            {
+                get { return step.Description; }
+            }
+
+            public string Details
+            {
+                get { return step.Details; }
+            }
+
+            public void SetDetailsVisible(bool visible)
+            {
+                detailsVisible = visible;
+                RefreshDetailsTextBox();
             }
 
             public void SetAvailableWidth(int width)
@@ -540,7 +677,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             private void RefreshDetailsTextBox()
             {
-                var hasDetails = !string.IsNullOrWhiteSpace(step.Details);
+                var hasDetails = detailsVisible && stepNumber != 4 && !string.IsNullOrWhiteSpace(step.Details);
                 if (!hasDetails)
                 {
                     if (detailsTextBox != null)
@@ -557,7 +694,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 {
                     detailsTextBox = new TextBox
                     {
-                        Name = "stepDetailsTextBox" + ResolveStepNumber(),
+                        Name = "stepDetailsTextBox" + stepNumber,
                         BorderStyle = BorderStyle.FixedSingle,
                         Multiline = true,
                         ReadOnly = true,
@@ -589,18 +726,12 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 {
                     progressRing = new StepProgressRing(step.State)
                     {
-                        Name = "stepProgressRing" + ResolveStepNumber(),
+                        Name = "stepProgressRing" + stepNumber,
                         Size = new Size(StepProgressRingSize, StepProgressRingSize),
                     };
                     Controls.Add(progressRing);
                     progressRing.BringToFront();
                 }
-            }
-
-            private int ResolveStepNumber()
-            {
-                var suffix = Name.Substring("stepRow".Length);
-                return int.Parse(suffix, System.Globalization.CultureInfo.InvariantCulture);
             }
         }
 

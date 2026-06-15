@@ -26,7 +26,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     var contentPanel = FindControl<Panel>(dialog, "contentPanel");
                     var footerPanel = FindControl<Panel>(dialog, "footerPanel");
                     var stepsPanel = FindControl<FlowLayoutPanel>(dialog, "stepsPanel");
-                    var previewTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox3");
+                    var resultTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox5");
 
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeGlyphButton", StringComparison.Ordinal));
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
@@ -35,9 +35,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Equal(DockStyle.Bottom, footerPanel.Dock);
                     Assert.Equal(FlowDirection.TopDown, stepsPanel.FlowDirection);
                     Assert.True(stepsPanel.AutoSize);
-                    Assert.True(previewTextBox.Multiline);
-                    Assert.Equal(ScrollBars.Vertical, previewTextBox.ScrollBars);
-                    Assert.True(previewTextBox.Width >= contentPanel.ClientSize.Width - 160);
+                    Assert.True(resultTextBox.Multiline);
+                    Assert.Equal(ScrollBars.Vertical, resultTextBox.ScrollBars);
+                    Assert.True(resultTextBox.Width >= contentPanel.ClientSize.Width - 160);
 
                     AssertNoVisibleTextControlClips(dialog);
                 }
@@ -45,7 +45,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void DialogFooterUsesUploadAndCancelUploadButtons()
+        public void DialogFooterUsesConfirmButtonForResultStep()
         {
             RunInSta(() =>
             {
@@ -54,19 +54,52 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     dialog.CreateControl();
                     dialog.PerformLayout();
 
-                    var uploadButton = FindControl<Button>(dialog, "uploadButton");
-                    var cancelUploadButton = FindControl<Button>(dialog, "cancelUploadButton");
+                    var confirmButton = FindControl<Button>(dialog, "confirmButton");
 
-                    Assert.Equal("上传", uploadButton.Text);
-                    Assert.Equal("取消", cancelUploadButton.Text);
-                    Assert.True(uploadButton.Left < cancelUploadButton.Left, "Upload button should be placed before the cancel button.");
+                    Assert.Equal("确认", confirmButton.Text);
+                    Assert.Null(TryFindControl<Button>(dialog, "uploadButton"));
+                    Assert.Null(TryFindControl<Button>(dialog, "cancelUploadButton"));
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
                 }
             });
         }
 
         [Fact]
-        public void DialogFooterButtonsRaiseUploadEvents()
+        public void DialogFooterButtonsChangeWithActiveStep()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 1, "数据准备", "正在读取 Excel 可见选区", null);
+                    Assert.Single(VisibleFooterButtons(dialog));
+                    Assert.Equal("取消", VisibleFooterButtons(dialog).Single().Text);
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 2, "字段验证", "正在验证字段", null);
+                    Assert.Single(VisibleFooterButtons(dialog));
+                    Assert.Equal("取消", VisibleFooterButtons(dialog).Single().Text);
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
+                    var previewButtons = VisibleFooterButtons(dialog);
+                    Assert.Equal(new[] { "上传", "取消" }, previewButtons.Select(button => button.Text).ToArray());
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 4, "数据上传", "正在上传至服务器", "这个详情不应该显示");
+                    Assert.Empty(VisibleFooterButtons(dialog));
+                    Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
+                    Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox4"));
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 5, "上传结果", "上传完成", "成功：48项变更");
+                    Assert.Single(VisibleFooterButtons(dialog));
+                    Assert.Equal("确认", VisibleFooterButtons(dialog).Single().Text);
+                }
+            });
+        }
+
+        [Fact]
+        public void DialogFooterButtonsRaiseActionEvents()
         {
             RunInSta(() =>
             {
@@ -74,22 +107,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 {
                     var uploadRequested = 0;
                     var uploadCanceled = 0;
+                    var confirmed = 0;
                     var uploadRequestedEvent = dialog.GetType().GetEvent("UploadRequested")
                         ?? throw new InvalidOperationException("UploadRequested event was not found.");
                     var uploadCanceledEvent = dialog.GetType().GetEvent("UploadCanceled")
                         ?? throw new InvalidOperationException("UploadCanceled event was not found.");
-                    EventHandler uploadRequestedHandler = (sender, args) => uploadRequested++;
-                    EventHandler uploadCanceledHandler = (sender, args) => uploadCanceled++;
-                    uploadRequestedEvent.AddEventHandler(dialog, uploadRequestedHandler);
-                    uploadCanceledEvent.AddEventHandler(dialog, uploadCanceledHandler);
+                    var confirmedEvent = dialog.GetType().GetEvent("Confirmed")
+                        ?? throw new InvalidOperationException("Confirmed event was not found.");
+                    uploadRequestedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadRequested++));
+                    uploadCanceledEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadCanceled++));
+                    confirmedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => confirmed++));
 
                     dialog.CreateControl();
                     dialog.PerformLayout();
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     FindControl<Button>(dialog, "uploadButton").PerformClick();
                     FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
 
+                    InvokeDialogMethod(dialog, "SetStepActive", 5, "上传结果", "上传完成", "成功：48项变更");
+                    FindControl<Button>(dialog, "confirmButton").PerformClick();
+
                     Assert.Equal(1, uploadRequested);
                     Assert.Equal(1, uploadCanceled);
+                    Assert.Equal(1, confirmed);
                 }
             });
         }
@@ -230,6 +271,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Equal("字段验证", FindControl<Label>(secondRow, "stepTitleLabel2").Text);
                     Assert.Equal("验证通过", FindControl<Label>(secondRow, "stepDescriptionLabel2").Text);
                     Assert.Null(TryFindControl<Control>(secondRow, "stepProgressRing2"));
+                    Assert.Null(TryFindControl<TextBox>(secondRow, "stepDetailsTextBox2"));
                 }
             });
         }
@@ -250,6 +292,17 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var method = dialog.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)
                 ?? throw new InvalidOperationException($"{methodName} was not found.");
             method.Invoke(dialog, arguments);
+        }
+
+        private static Button[] VisibleFooterButtons(Form dialog)
+        {
+            return FindControl<Panel>(dialog, "footerPanel")
+                .Controls
+                .Cast<Control>()
+                .OfType<Button>()
+                .Where(button => button.Visible)
+                .OrderBy(button => button.Left)
+                .ToArray();
         }
 
         private static string ResolveMarkerText(MethodInfo resolveText, Type stateType, string stateName, int stepNumber)
