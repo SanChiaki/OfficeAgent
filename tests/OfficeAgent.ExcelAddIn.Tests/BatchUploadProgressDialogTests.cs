@@ -77,23 +77,28 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     InvokeDialogMethod(dialog, "SetStepActive", 1, "数据准备", "正在读取 Excel 可见选区", null);
                     Assert.Single(VisibleFooterButtons(dialog));
                     Assert.Equal("取消", VisibleFooterButtons(dialog).Single().Text);
+                    Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox1"));
 
-                    InvokeDialogMethod(dialog, "SetStepActive", 2, "字段验证", "正在验证字段", null);
+                    InvokeDialogMethod(dialog, "SetStepActive", 2, "字段验证", "正在验证字段", "第 2 步详情不应该显示");
                     Assert.Single(VisibleFooterButtons(dialog));
                     Assert.Equal("取消", VisibleFooterButtons(dialog).Single().Text);
+                    Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox2"));
 
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     var previewButtons = VisibleFooterButtons(dialog);
                     Assert.Equal(new[] { "上传", "取消" }, previewButtons.Select(button => button.Text).ToArray());
+                    Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
 
                     InvokeDialogMethod(dialog, "SetStepActive", 4, "数据上传", "正在上传至服务器", "这个详情不应该显示");
                     Assert.Empty(VisibleFooterButtons(dialog));
-                    Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
+                    Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
                     Assert.Null(TryFindControl<TextBox>(dialog, "stepDetailsTextBox4"));
 
                     InvokeDialogMethod(dialog, "SetStepActive", 5, "上传结果", "上传完成", "成功：48项变更");
                     Assert.Single(VisibleFooterButtons(dialog));
                     Assert.Equal("确认", VisibleFooterButtons(dialog).Single().Text);
+                    Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
+                    Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox5"));
                 }
             });
         }

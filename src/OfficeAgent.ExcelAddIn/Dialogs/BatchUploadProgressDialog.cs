@@ -321,7 +321,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private void RefreshFooterButtons()
         {
             var activeStep = ResolveActiveStepNumber();
-            RefreshStepDetailVisibility(activeStep);
             uploadButton.Visible = activeStep == 3;
             cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3;
             confirmButton.Visible = activeStep == 5;
@@ -355,16 +354,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                         BatchUploadStepState.Completed,
                         row.Details));
                 }
-            }
-        }
-
-        private void RefreshStepDetailVisibility(int activeStepNumber)
-        {
-            for (var index = 0; index < stepRows.Count; index++)
-            {
-                var stepNumber = index + 1;
-                var shouldShowDetails = activeStepNumber == stepNumber && (stepNumber == 3 || stepNumber == 5);
-                stepRows[index].SetDetailsVisible(shouldShowDetails);
             }
         }
 
@@ -484,7 +473,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             private TextBox detailsTextBox;
             private BatchUploadProgressStep step;
             private readonly int stepNumber;
-            private bool detailsVisible = true;
 
             public StepRow(int stepNumber, BatchUploadProgressStep step)
             {
@@ -589,12 +577,6 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 get { return step.Details; }
             }
 
-            public void SetDetailsVisible(bool visible)
-            {
-                detailsVisible = visible;
-                RefreshDetailsTextBox();
-            }
-
             public void SetAvailableWidth(int width)
             {
                 Width = Math.Max(260, width);
@@ -677,7 +659,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
             private void RefreshDetailsTextBox()
             {
-                var hasDetails = detailsVisible && stepNumber != 4 && !string.IsNullOrWhiteSpace(step.Details);
+                var hasDetails = (stepNumber == 3 || stepNumber == 5) && !string.IsNullOrWhiteSpace(step.Details);
                 if (!hasDetails)
                 {
                     if (detailsTextBox != null)
