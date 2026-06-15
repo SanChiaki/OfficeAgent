@@ -15,6 +15,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private const int OuterPadding = 28;
         private const int StepMarkerColumnWidth = 48;
         private const int StepContentGap = 8;
+        private const int StepProgressRingSize = 46;
+        private const int StepProgressRingGap = 24;
         private const int StepSpacing = 28;
         private const int DetailsMaxHeight = 172;
         private const int DetailsMinHeight = 92;
@@ -147,6 +149,56 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             });
         }
 
+        public void SetStepPending(int stepNumber, string title, string description, string details = null)
+        {
+            UpdateStep(stepNumber, title, description, BatchUploadStepState.Pending, details);
+        }
+
+        public void SetStepActive(int stepNumber, string title, string description, string details = null)
+        {
+            UpdateStep(stepNumber, title, description, BatchUploadStepState.Active, details);
+        }
+
+        public void SetStepCompleted(int stepNumber, string title, string description, string details = null)
+        {
+            UpdateStep(stepNumber, title, description, BatchUploadStepState.Completed, details);
+        }
+
+        public void SetStepWarning(int stepNumber, string title, string description, string details = null)
+        {
+            UpdateStep(stepNumber, title, description, BatchUploadStepState.Warning, details);
+        }
+
+        public void SetStepError(int stepNumber, string title, string description, string details = null)
+        {
+            UpdateStep(stepNumber, title, description, BatchUploadStepState.Error, details);
+        }
+
+        public void UpdateStep(int stepNumber, string title, string description, BatchUploadStepState state, string details = null)
+        {
+            RunOnUiThread(() =>
+            {
+                var row = ResolveStepRow(stepNumber);
+                row.UpdateStep(new BatchUploadProgressStep(title, description, state, details));
+                UpdateResponsiveLayout();
+            });
+        }
+
+        public void AppendStepDetails(int stepNumber, string details)
+        {
+            if (string.IsNullOrEmpty(details))
+            {
+                return;
+            }
+
+            RunOnUiThread(() =>
+            {
+                var row = ResolveStepRow(stepNumber);
+                row.AppendDetails(details);
+                UpdateResponsiveLayout();
+            });
+        }
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -192,6 +244,37 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private int ScaleVertical(int value)
         {
             return Math.Max(value, (int)Math.Round(value * Font.Height / 15.0));
+        }
+
+        private StepRow ResolveStepRow(int stepNumber)
+        {
+            if (stepNumber < 1 || stepNumber > stepRows.Count)
+            {
+                throw new ArgumentOutOfRangeException("stepNumber");
+            }
+
+            return stepRows[stepNumber - 1];
+        }
+
+        private void RunOnUiThread(Action action)
+        {
+            if (action == null)
+            {
+                throw new ArgumentNullException("action");
+            }
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(action);
+                return;
+            }
+
+            action();
         }
 
         internal sealed class BatchUploadProgressStep
@@ -245,7 +328,9 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             private readonly Panel linePanel;
             private readonly Label titleLabel;
             private readonly Label descriptionLabel;
-            private readonly TextBox detailsTextBox;
+            private StepProgressRing progressRing;
+            private TextBox detailsTextBox;
+            private BatchUploadProgressStep step;
 
             public StepRow(int stepNumber, BatchUploadProgressStep step)
             {
@@ -254,6 +339,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     throw new ArgumentNullException("step");
                 }
 
+                this.step = step;
                 Name = "stepRow" + stepNumber;
                 AutoSize = true;
                 AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -293,32 +379,54 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     ForeColor = Color.FromArgb(96, 96, 96),
                 };
 
-                if (!string.IsNullOrWhiteSpace(step.Details))
-                {
-                    detailsTextBox = new TextBox
-                    {
-                        Name = "stepDetailsTextBox" + stepNumber,
-                        BorderStyle = BorderStyle.FixedSingle,
-                        Multiline = true,
-                        ReadOnly = true,
-                        ScrollBars = ScrollBars.Vertical,
-                        Text = step.Details,
-                        WordWrap = false,
-                    };
-                    Controls.Add(detailsTextBox);
-                }
-
                 Controls.Add(marker);
                 Controls.Add(linePanel);
                 Controls.Add(titleLabel);
                 Controls.Add(descriptionLabel);
+
+                RefreshDetailsTextBox();
+                RefreshProgressRing();
+            }
+
+            public void UpdateStep(BatchUploadProgressStep nextStep)
+            {
+                if (nextStep == null)
+                {
+                    throw new ArgumentNullException("nextStep");
+                }
+
+                step = nextStep;
+                marker.State = nextStep.State;
+                linePanel.BackColor = ResolveLineColor(nextStep.State);
+                titleLabel.Text = nextStep.Title;
+                titleLabel.ForeColor = ResolveTitleColor(nextStep.State);
+                descriptionLabel.Text = nextStep.Description;
+                RefreshDetailsTextBox();
+                RefreshProgressRing();
+                Invalidate(true);
+            }
+
+            public void AppendDetails(string details)
+            {
+                var mergedDetails = string.IsNullOrEmpty(step.Details)
+                    ? details
+                    : step.Details + "\r\n" + details;
+                UpdateStep(new BatchUploadProgressStep(step.Title, step.Description, step.State, mergedDetails));
             }
 
             public void SetAvailableWidth(int width)
             {
                 Width = Math.Max(260, width);
 
-                var contentWidth = Math.Max(160, Width - StepMarkerColumnWidth - StepContentGap);
+                var hasProgressRing = progressRing != null;
+                var ringLeft = hasProgressRing
+                    ? Math.Max(
+                        StepMarkerColumnWidth + StepContentGap + 160 + StepProgressRingGap,
+                        Width - StepProgressRingSize)
+                    : Width;
+                var contentWidth = Math.Max(
+                    160,
+                    ringLeft - (hasProgressRing ? StepProgressRingGap : 0) - StepMarkerColumnWidth - StepContentGap);
                 var contentLeft = StepMarkerColumnWidth + StepContentGap;
                 var currentTop = 0;
 
@@ -340,6 +448,12 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
                 Height = Math.Max(marker.Height + 48, currentTop);
                 linePanel.Height = Math.Max(34, Height - marker.Height - 8);
+                if (progressRing != null)
+                {
+                    progressRing.Location = new Point(
+                        Math.Max(contentLeft + contentWidth + StepProgressRingGap, Width - StepProgressRingSize),
+                        Math.Max(0, (Height - progressRing.Height) / 2));
+                }
             }
 
             public override Size GetPreferredSize(Size proposedSize)
@@ -379,12 +493,77 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     ? Color.FromArgb(117, 181, 224)
                     : Color.FromArgb(232, 232, 232);
             }
+
+            private void RefreshDetailsTextBox()
+            {
+                var hasDetails = !string.IsNullOrWhiteSpace(step.Details);
+                if (!hasDetails)
+                {
+                    if (detailsTextBox != null)
+                    {
+                        Controls.Remove(detailsTextBox);
+                        detailsTextBox.Dispose();
+                        detailsTextBox = null;
+                    }
+
+                    return;
+                }
+
+                if (detailsTextBox == null)
+                {
+                    detailsTextBox = new TextBox
+                    {
+                        Name = "stepDetailsTextBox" + ResolveStepNumber(),
+                        BorderStyle = BorderStyle.FixedSingle,
+                        Multiline = true,
+                        ReadOnly = true,
+                        ScrollBars = ScrollBars.Vertical,
+                        WordWrap = false,
+                    };
+                    Controls.Add(detailsTextBox);
+                    detailsTextBox.BringToFront();
+                }
+
+                detailsTextBox.Text = step.Details;
+            }
+
+            private void RefreshProgressRing()
+            {
+                if (step.State != BatchUploadStepState.Active)
+                {
+                    if (progressRing != null)
+                    {
+                        Controls.Remove(progressRing);
+                        progressRing.Dispose();
+                        progressRing = null;
+                    }
+
+                    return;
+                }
+
+                if (progressRing == null)
+                {
+                    progressRing = new StepProgressRing(step.State)
+                    {
+                        Name = "stepProgressRing" + ResolveStepNumber(),
+                        Size = new Size(StepProgressRingSize, StepProgressRingSize),
+                    };
+                    Controls.Add(progressRing);
+                    progressRing.BringToFront();
+                }
+            }
+
+            private int ResolveStepNumber()
+            {
+                var suffix = Name.Substring("stepRow".Length);
+                return int.Parse(suffix, System.Globalization.CultureInfo.InvariantCulture);
+            }
         }
 
         private sealed class StepMarker : Control
         {
             private readonly int stepNumber;
-            private readonly BatchUploadStepState state;
+            private BatchUploadStepState state;
 
             public StepMarker(int stepNumber, BatchUploadStepState state)
             {
@@ -392,6 +571,21 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 this.state = state;
                 DoubleBuffered = true;
                 MinimumSize = new Size(30, 30);
+            }
+
+            public BatchUploadStepState State
+            {
+                get { return state; }
+                set
+                {
+                    if (state == value)
+                    {
+                        return;
+                    }
+
+                    state = value;
+                    Invalidate();
+                }
             }
 
             protected override void OnPaint(PaintEventArgs e)
@@ -461,6 +655,88 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                         return Color.FromArgb(213, 48, 75);
                     default:
                         return Color.FromArgb(204, 204, 204);
+                }
+            }
+        }
+
+        private sealed class StepProgressRing : Control
+        {
+            private readonly BatchUploadStepState state;
+            private readonly Timer animationTimer;
+            private int startAngle = -90;
+
+            public StepProgressRing(BatchUploadStepState state)
+            {
+                this.state = state;
+                DoubleBuffered = true;
+                MinimumSize = new Size(42, 42);
+                animationTimer = new Timer
+                {
+                    Interval = 90,
+                };
+                animationTimer.Tick += (sender, args) => AdvanceAnimationFrame();
+                animationTimer.Start();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                var strokeWidth = Math.Max(2f, Width / 18f);
+                var inset = (int)Math.Ceiling(strokeWidth) + 2;
+                var bounds = new Rectangle(inset, inset, Width - (inset * 2) - 1, Height - (inset * 2) - 1);
+
+                using (var dashedPen = new Pen(Color.FromArgb(197, 214, 232), strokeWidth))
+                using (var progressPen = new Pen(ResolveProgressColor(state), strokeWidth))
+                {
+                    dashedPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
+                    dashedPen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    dashedPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    progressPen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    progressPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+
+                    e.Graphics.DrawEllipse(dashedPen, bounds);
+                    e.Graphics.DrawArc(progressPen, bounds, startAngle, ResolveSweepAngle(state));
+                }
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    animationTimer.Stop();
+                    animationTimer.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+
+            private void AdvanceAnimationFrame()
+            {
+                startAngle = (startAngle + 16) % 360;
+                Invalidate();
+            }
+
+            private static int ResolveSweepAngle(BatchUploadStepState state)
+            {
+                switch (state)
+                {
+                    case BatchUploadStepState.Active:
+                        return 72;
+                    default:
+                        return 48;
+                }
+            }
+
+            private static Color ResolveProgressColor(BatchUploadStepState state)
+            {
+                switch (state)
+                {
+                    case BatchUploadStepState.Active:
+                        return Color.FromArgb(0, 120, 215);
+                    default:
+                        return Color.FromArgb(154, 169, 184);
                 }
             }
         }

@@ -187,7 +187,51 @@ var steps = new[]
 };
 ```
 
-## 7. 失败场景示例
+## 7. 交互式更新示例
+
+弹窗支持打开后继续更新步骤状态。业务代码可以先用 `Pending` 构造 5 个步骤，再随着上传流程推进调用更新方法。
+
+```csharp
+var steps = new[]
+{
+    new BatchUploadProgressDialog.BatchUploadProgressStep("数据准备", "等待开始", BatchUploadProgressDialog.BatchUploadStepState.Pending),
+    new BatchUploadProgressDialog.BatchUploadProgressStep("字段验证", "等待开始", BatchUploadProgressDialog.BatchUploadStepState.Pending),
+    new BatchUploadProgressDialog.BatchUploadProgressStep("变更预览", "等待开始", BatchUploadProgressDialog.BatchUploadStepState.Pending),
+    new BatchUploadProgressDialog.BatchUploadProgressStep("数据上传", "等待开始", BatchUploadProgressDialog.BatchUploadStepState.Pending),
+    new BatchUploadProgressDialog.BatchUploadProgressStep("上传结果", "等待服务器返回结果", BatchUploadProgressDialog.BatchUploadStepState.Pending),
+};
+
+using (var dialog = new BatchUploadProgressDialog(steps))
+{
+    dialog.Show();
+
+    dialog.SetStepActive(1, "数据准备", "正在读取 Excel 可见选区");
+    // 执行业务逻辑...
+    dialog.SetStepCompleted(1, "数据准备", "已读取 Excel 可见选区");
+
+    dialog.SetStepActive(2, "字段验证", "正在验证字段");
+    dialog.AppendStepDetails(2, "SITEOWNER 校验通过");
+    dialog.SetStepCompleted(2, "字段验证", "验证通过");
+
+    dialog.SetStepActive(4, "数据上传", "正在上传至服务器");
+    dialog.AppendStepDetails(4, "分块 1 上传成功");
+}
+```
+
+交互式 API：
+
+| 方法 | 用途 |
+| --- | --- |
+| `SetStepPending(stepNumber, title, description, details)` | 把步骤更新为未开始 |
+| `SetStepActive(stepNumber, title, description, details)` | 把步骤更新为正在进行，右侧显示动态圆环 |
+| `SetStepCompleted(stepNumber, title, description, details)` | 把步骤更新为完成，左侧显示对勾，右侧圆环消失 |
+| `SetStepWarning(stepNumber, title, description, details)` | 把步骤更新为警告 |
+| `SetStepError(stepNumber, title, description, details)` | 把步骤更新为失败 |
+| `AppendStepDetails(stepNumber, details)` | 给某一步追加详情日志 |
+
+只有 `Active` 步骤会显示右侧动态圆环，其他状态不显示右侧圆环。
+
+## 8. 失败场景示例
 
 如果字段验证失败，不应该继续标记后续步骤为完成，可以这样展示：
 
@@ -222,13 +266,13 @@ var steps = new[]
 };
 ```
 
-## 8. 内网 AI 接入规则
+## 9. 内网 AI 接入规则
 
 内网 AI 生成代码时，请遵守下面规则：
 
 | 规则 | 要求 |
 | --- | --- |
-| 只传数据 | 不要修改弹窗内部布局，不要手写新的 WinForms 布局 |
+| 使用交互 API | 不要修改弹窗内部布局，业务流程推进时调用 `SetStepActive`、`SetStepCompleted` 等方法 |
 | 绑定 Excel 父窗口 | 优先使用 `ExcelDialogOwner.FromCurrentApplication()` |
 | 详情文本换行 | 使用 `\r\n` 拼接多行详情 |
 | 长详情放 `details` | 不要把长文本塞进 `description` |
@@ -236,7 +280,7 @@ var steps = new[]
 | 失败流程 | 失败步骤用 `Error`，后续未执行步骤用 `Pending` |
 | 不使用示例入口 | `CreateSample()` 只用于截图和本地预览，不要在业务代码里调用 |
 
-## 9. 缩放适配说明
+## 10. 缩放适配说明
 
 该弹窗按下面方式处理 50% 到 300% 缩放：
 
@@ -246,9 +290,10 @@ var steps = new[]
 | 顶部标题 | 根据字体高度动态计算 header 高度，避免 200% 以上压缩 |
 | 中间步骤区 | 使用可滚动内容区，步骤内容按真实文本高度自适应 |
 | 详情区域 | 详情框有最小和最大高度，内容过长时框内滚动 |
+| 右侧圆环 | 只有正在进行的 `Active` 步骤右侧显示动态圆环 |
 | 底部按钮 | 固定在底部，不被步骤内容挤压 |
 
-## 10. 本地化要求
+## 11. 本地化要求
 
 仓库约定：新增弹窗的用户可见文字必须通过 `HostLocalizedStrings.cs` 本地化。
 
@@ -263,7 +308,7 @@ var steps = new[]
 
 如果正式接入主流程，内网 AI 应先检查 `src/OfficeAgent.ExcelAddIn/Localization/HostLocalizedStrings.cs`，新增或复用对应的本地化属性，再替换弹窗里的固定硬编码文字。
 
-## 11. 本地预览截图
+## 12. 本地预览截图
 
 已有本地预览工具：
 
@@ -289,16 +334,16 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /
 Remove-Item .\RenderBatchUploadProgressDialog.exe
 ```
 
-## 12. 给内网 AI 的最短指令模板
+## 13. 给内网 AI 的最短指令模板
 
 如果要让内网 AI 接入该弹窗，可以直接给它下面这段要求：
 
 ```text
 请使用 src/OfficeAgent.ExcelAddIn/Dialogs/BatchUploadProgressDialog.cs 作为批量上传进度弹窗壳子。
 不要重写 WinForms 布局。
-请根据业务执行结果构造 BatchUploadProgressDialog.BatchUploadProgressStep[]。
+请先构造 BatchUploadProgressDialog.BatchUploadProgressStep[] 初始步骤，再用 SetStepActive、SetStepCompleted、SetStepError、AppendStepDetails 等方法交互式推进状态。
 步骤状态只能使用 Pending、Active、Completed、Warning、Error。
-长文本放 details，使用 \r\n 换行。
+长文本放 details，追加日志使用 AppendStepDetails。
 弹窗展示时使用 ExcelDialogOwner.FromCurrentApplication() 绑定 Excel 父窗口。
 不要调用 CreateSample()，它只用于预览。
 所有新增用户可见固定文案必须走 HostLocalizedStrings.cs 本地化。

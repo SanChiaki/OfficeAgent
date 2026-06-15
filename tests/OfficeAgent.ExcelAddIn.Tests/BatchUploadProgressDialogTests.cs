@@ -83,6 +83,106 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("5", ResolveMarkerText(resolveText, stateType, "Error", 5));
         }
 
+        [Fact]
+        public void StepRowsShowProgressRingOnlyForActiveStep()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    var stepsPanel = FindControl<FlowLayoutPanel>(dialog, "stepsPanel");
+                    var stepRows = stepsPanel.Controls.Cast<Control>()
+                        .Where(control => control.Name.StartsWith("stepRow", StringComparison.Ordinal))
+                        .ToArray();
+
+                    Assert.Equal(5, stepRows.Length);
+                    Assert.Null(TryFindControl<Control>(stepRows[0], "stepProgressRing1"));
+                    Assert.Null(TryFindControl<Control>(stepRows[1], "stepProgressRing2"));
+                    Assert.Null(TryFindControl<Control>(stepRows[2], "stepProgressRing3"));
+                    Assert.Null(TryFindControl<Control>(stepRows[3], "stepProgressRing4"));
+
+                    var activeRing = FindControl<Control>(stepRows[4], "stepProgressRing5");
+                    Assert.True(activeRing.Width >= 42, $"{activeRing.Name} should reserve enough width for the right-side progress ring.");
+                    Assert.True(activeRing.Left > stepRows[4].Width - activeRing.Width - 24, $"{activeRing.Name} should be positioned on the right edge.");
+                    Assert.True(IsProgressRingAnimated(activeRing), $"{activeRing.Name} should be animated while the step is active.");
+                }
+            });
+        }
+
+        [Fact]
+        public void ProgressRingAdvancesAnimationFrame()
+        {
+            var dialogType = LoadAddInAssembly().GetType(
+                "OfficeAgent.ExcelAddIn.Dialogs.BatchUploadProgressDialog",
+                throwOnError: true);
+            var ringType = dialogType.GetNestedType("StepProgressRing", BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("StepProgressRing was not found.");
+            var advanceFrame = ringType.GetMethod("AdvanceAnimationFrame", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("StepProgressRing.AdvanceAnimationFrame was not found.");
+            var startAngle = ringType.GetField("startAngle", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("StepProgressRing.startAngle was not found.");
+            var stateType = dialogType.GetNestedType("BatchUploadStepState", BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("BatchUploadStepState was not found.");
+
+            using (var ring = (Control)Activator.CreateInstance(ringType, Enum.Parse(stateType, "Active")))
+            {
+                var before = (int)startAngle.GetValue(ring);
+                advanceFrame.Invoke(ring, Array.Empty<object>());
+                var after = (int)startAngle.GetValue(ring);
+
+                Assert.NotEqual(before, after);
+            }
+        }
+
+        [Fact]
+        public void DialogCanUpdateStepsAfterItIsCreated()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    InvokeDialogMethod(
+                        dialog,
+                        "SetStepActive",
+                        2,
+                        "字段验证中",
+                        "正在重新验证字段",
+                        "已开始字段验证");
+                    dialog.PerformLayout();
+
+                    var secondRow = FindControl<Control>(dialog, "stepRow2");
+                    var fifthRow = FindControl<Control>(dialog, "stepRow5");
+                    Assert.Equal("字段验证中", FindControl<Label>(secondRow, "stepTitleLabel2").Text);
+                    Assert.Equal("正在重新验证字段", FindControl<Label>(secondRow, "stepDescriptionLabel2").Text);
+                    Assert.Contains("已开始字段验证", FindControl<TextBox>(secondRow, "stepDetailsTextBox2").Text);
+                    Assert.NotNull(TryFindControl<Control>(secondRow, "stepProgressRing2"));
+                    Assert.Null(TryFindControl<Control>(fifthRow, "stepProgressRing5"));
+
+                    InvokeDialogMethod(dialog, "AppendStepDetails", 2, "字段验证完成");
+                    Assert.Contains("字段验证完成", FindControl<TextBox>(secondRow, "stepDetailsTextBox2").Text);
+
+                    InvokeDialogMethod(
+                        dialog,
+                        "SetStepCompleted",
+                        2,
+                        "字段验证",
+                        "验证通过",
+                        "字段验证完成");
+                    dialog.PerformLayout();
+
+                    Assert.Equal("字段验证", FindControl<Label>(secondRow, "stepTitleLabel2").Text);
+                    Assert.Equal("验证通过", FindControl<Label>(secondRow, "stepDescriptionLabel2").Text);
+                    Assert.Null(TryFindControl<Control>(secondRow, "stepProgressRing2"));
+                }
+            });
+        }
+
         private static Form CreateDialog()
         {
             var type = LoadAddInAssembly().GetType(
@@ -94,10 +194,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
             return (Form)createSample.Invoke(null, Array.Empty<object>());
         }
 
+        private static void InvokeDialogMethod(Form dialog, string methodName, params object[] arguments)
+        {
+            var method = dialog.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new InvalidOperationException($"{methodName} was not found.");
+            method.Invoke(dialog, arguments);
+        }
+
         private static string ResolveMarkerText(MethodInfo resolveText, Type stateType, string stateName, int stepNumber)
         {
             var state = Enum.Parse(stateType, stateName);
             return (string)resolveText.Invoke(null, new[] { state, stepNumber });
+        }
+
+        private static bool IsProgressRingAnimated(Control ring)
+        {
+            var animationTimer = ring.GetType().GetField("animationTimer", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("StepProgressRing.animationTimer was not found.");
+            return animationTimer.GetValue(ring) is Timer;
         }
 
         private static T FindControl<T>(Control root, string name)
