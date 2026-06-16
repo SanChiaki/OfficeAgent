@@ -274,10 +274,20 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             confirmButton.Size = new Size(confirmButtonWidth, footerButtonHeight);
             LayoutFooterButtons(footerButtonHeight);
 
-            var scrollBarAllowance = contentPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+            var hadVerticalScroll = contentPanel.VerticalScroll.Visible;
+            LayoutStepRows();
+
+            if (contentPanel.VerticalScroll.Visible != hadVerticalScroll)
+            {
+                LayoutStepRows();
+            }
+        }
+
+        private void LayoutStepRows()
+        {
             var availableWidth = Math.Max(
                 260,
-                contentPanel.ClientSize.Width - contentPanel.Padding.Left - contentPanel.Padding.Right - scrollBarAllowance);
+                contentPanel.ClientSize.Width - contentPanel.Padding.Left - contentPanel.Padding.Right);
             stepsPanel.Width = availableWidth;
 
             foreach (var row in stepRows)

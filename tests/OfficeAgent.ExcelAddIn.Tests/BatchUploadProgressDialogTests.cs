@@ -69,6 +69,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreviewDetailsRelayoutsProgressRingWhenScrollbarAppears()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    ShowOffscreen(dialog);
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "等待生成预览", null);
+                    Application.DoEvents();
+
+                    InvokeDialogMethod(
+                        dialog,
+                        "SetStepActive",
+                        3,
+                        "变更预览",
+                        "请确认本次将上传的内容",
+                        BuildPreviewDetails());
+
+                    var thirdRow = FindControl<Control>(dialog, "stepRow3");
+                    var ring = FindControl<Control>(thirdRow, "stepProgressRing3");
+                    var details = FindControl<TextBox>(thirdRow, "stepDetailsTextBox3");
+
+                    Assert.True(ring.Right <= thirdRow.Width, $"Progress ring should stay inside row bounds. RingRight={ring.Right}, RowWidth={thirdRow.Width}.");
+                    Assert.True(details.Right < ring.Left, $"Details box should not overlap the progress ring. DetailsRight={details.Right}, RingLeft={ring.Left}.");
+                }
+            });
+        }
+
+        [Fact]
         public void DialogFooterUsesConfirmButtonForResultStep()
         {
             RunInSta(() =>
@@ -441,6 +470,23 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 .Where(button => button.Visible)
                 .OrderBy(button => button.Left)
                 .ToArray();
+        }
+
+        private static string BuildPreviewDetails()
+        {
+            return string.Join(
+                "\r\n",
+                new[]
+                {
+                    "部分上传将上传48个单元格，跳过4个单元格。",
+                    "变更内容：",
+                    "0331test / taskFlowNode_13882098334 -> 测试",
+                    "0331test / taskFlowNode_13892195334 -> 1111",
+                    "0331test / taskFlowNode_13883074334 -> 东努沙登加拉",
+                    "0331test1 / SITEOWNER -> 15012344321",
+                    "0331test1 / taskFlowNode_13882098334 -> 1111",
+                    "0331test1 / taskFlowNode_13892195334 -> 1111",
+                });
         }
 
         private static string ResolveMarkerText(MethodInfo resolveText, Type stateType, string stateName, int stepNumber)
