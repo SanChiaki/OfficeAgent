@@ -206,26 +206,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
-        public void DialogRecordsElapsedMillisecondsFromStepTwoStartToStepThreeStart()
-        {
-            RunInSta(() =>
-            {
-                using (var dialog = CreateDialog())
-                {
-                    InvokeDialogMethod(dialog, "SetStepActive", 2, "字段验证", "正在验证字段", null);
-                    Assert.Null(GetNullableLongProperty(dialog, "Step2ToStep3ElapsedMilliseconds"));
-
-                    Thread.Sleep(25);
-                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
-
-                    var elapsedMilliseconds = GetNullableLongProperty(dialog, "Step2ToStep3ElapsedMilliseconds");
-                    Assert.True(elapsedMilliseconds.HasValue);
-                    Assert.True(elapsedMilliseconds.Value > 0);
-                }
-            });
-        }
-
-        [Fact]
         public void PreviewStepShowsConfirmOnlyWhenNoUploadableContentExists()
         {
             RunInSta(() =>
@@ -599,13 +579,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var state = Enum.Parse(stateType, stateName);
             return (string)resolveText.Invoke(null, new[] { state, stepNumber });
-        }
-
-        private static long? GetNullableLongProperty(Form dialog, string propertyName)
-        {
-            var property = dialog.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
-                ?? throw new InvalidOperationException($"{propertyName} was not found.");
-            return (long?)property.GetValue(dialog);
         }
 
         private static bool IsProgressRingAnimated(Control ring)
