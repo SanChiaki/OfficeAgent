@@ -716,7 +716,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                         BorderStyle = BorderStyle.FixedSingle,
                         Multiline = true,
                         ReadOnly = true,
-                        ScrollBars = ScrollBars.Vertical,
+                        ScrollBars = ScrollBars.Both,
                         WordWrap = false,
                     };
                     Controls.Add(detailsTextBox);

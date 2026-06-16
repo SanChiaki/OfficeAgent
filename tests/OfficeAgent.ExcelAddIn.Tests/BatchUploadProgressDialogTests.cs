@@ -36,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Equal(FlowDirection.TopDown, stepsPanel.FlowDirection);
                     Assert.True(stepsPanel.AutoSize);
                     Assert.True(resultTextBox.Multiline);
-                    Assert.Equal(ScrollBars.Vertical, resultTextBox.ScrollBars);
+                    Assert.Equal(ScrollBars.Both, resultTextBox.ScrollBars);
                     Assert.True(resultTextBox.Width >= contentPanel.ClientSize.Width - 160);
 
                     AssertNoVisibleTextControlClips(dialog);
@@ -62,6 +62,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.True(dialog.ClientSize.Height <= 680, $"Dialog height should stay compact, actual: {dialog.ClientSize.Height}.");
                     Assert.Equal(Color.White, previewTextBox.BackColor);
                     Assert.Equal(Color.White, resultTextBox.BackColor);
+                    Assert.Equal(ScrollBars.Both, previewTextBox.ScrollBars);
+                    Assert.Equal(ScrollBars.Both, resultTextBox.ScrollBars);
                     Assert.True(previewTextBox.Height >= 140, $"Preview details box should be larger, actual: {previewTextBox.Height}.");
                     Assert.True(resultTextBox.Height >= 140, $"Result details box should be larger, actual: {resultTextBox.Height}.");
                     Assert.True(previewTextBox.Height >= resultTextBox.Height * 1.45, $"Preview details box should be about 1.5x the result box. Preview={previewTextBox.Height}, Result={resultTextBox.Height}.");
