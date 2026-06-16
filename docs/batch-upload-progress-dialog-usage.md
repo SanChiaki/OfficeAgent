@@ -333,14 +333,16 @@ var steps = new[]
 
 当前弹窗壳子的业务步骤文字由调用方传入，因此调用方应传入已经本地化后的文本。
 
-固定文案也需要本地化，主要包括：
+固定文案已经通过 `HostLocalizedStrings` 本地化，主要包括：
 
-| 文案 | 当前值 | 建议来源 |
-| --- | --- | --- |
-| 弹窗标题 | `批量上传` | `HostLocalizedStrings` |
-| 关闭按钮 | `关闭` | `HostLocalizedStrings` |
+| 文案 | 来源 |
+| --- | --- |
+| 弹窗标题 | `BatchUploadDialogTitle` |
+| 上传按钮 | `BatchUploadUploadButtonText` |
+| 取消按钮 | `BatchUploadCancelButtonText` |
+| 确认按钮 | `BatchUploadConfirmButtonText` |
 
-如果正式接入主流程，内网 AI 应先检查 `src/OfficeAgent.ExcelAddIn/Localization/HostLocalizedStrings.cs`，新增或复用对应的本地化属性，再替换弹窗里的固定硬编码文字。
+如果继续新增固定文案，内网 AI 应先检查 `src/OfficeAgent.ExcelAddIn/Localization/HostLocalizedStrings.cs`，新增或复用对应的本地化属性，不要在弹窗里直接硬编码。
 
 ## 12. 本地预览截图
 
@@ -358,12 +360,14 @@ tools/RenderBatchUploadProgressDialog.cs
 dialog-preview/
 ```
 
-生成截图时可以使用仓库里已有的编译方式：
+生成截图前需要先构建 `src\OfficeAgent.ExcelAddIn\OfficeAgent.ExcelAddIn.csproj`，让 `bin\Debug\OfficeAgent.ExcelAddIn.dll` 存在。预览工具会反射加载已构建的 Add-in DLL，避免绕过项目本地化依赖。
+
+可使用：
 
 ```powershell
 $env:TEMP = (Resolve-Path .).Path
 $env:TMP = (Resolve-Path .).Path
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:RenderBatchUploadProgressDialog.exe /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll src\OfficeAgent.ExcelAddIn\Dialogs\BatchUploadProgressDialog.cs tools\RenderBatchUploadProgressDialog.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:RenderBatchUploadProgressDialog.exe /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll tools\RenderBatchUploadProgressDialog.cs
 .\RenderBatchUploadProgressDialog.exe dialog-preview
 Remove-Item .\RenderBatchUploadProgressDialog.exe
 ```

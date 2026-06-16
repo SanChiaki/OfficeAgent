@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn.Dialogs
 {
@@ -35,6 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly Panel footerPanel;
         private readonly Panel headerPanel;
         private readonly List<StepRow> stepRows = new List<StepRow>();
+        private readonly ILocalizedDialogText strings;
         private bool previewHasUploadableContent = true;
 
         public event EventHandler UploadRequested;
@@ -44,15 +46,27 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         public event EventHandler Confirmed;
 
         public BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps)
+            : this(steps, (ILocalizedDialogText)null)
+        {
+        }
+
+        public BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps, HostLocalizedStrings strings)
+            : this(steps, strings == null ? null : new HostLocalizedDialogText(strings))
+        {
+        }
+
+        private BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps, ILocalizedDialogText strings)
         {
             if (steps == null)
             {
                 throw new ArgumentNullException("steps");
             }
 
+            this.strings = strings ?? ResolveDefaultStrings();
+
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Dpi;
-            Text = "批量上传";
+            Text = this.strings.BatchUploadDialogTitle;
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -65,7 +79,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             {
                 Name = "titleLabel",
                 AutoSize = false,
-                Text = "批量上传",
+                Text = this.strings.BatchUploadDialogTitle,
                 Margin = Padding.Empty,
                 Font = new Font(Font.FontFamily, Font.Size + 3f, FontStyle.Regular),
             };
@@ -90,7 +104,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             uploadButton = new Button
             {
                 Name = "uploadButton",
-                Text = "上传",
+                Text = this.strings.BatchUploadUploadButtonText,
                 Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
                 MinimumSize = new Size(96, 34),
             };
@@ -99,7 +113,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             cancelUploadButton = new Button
             {
                 Name = "cancelUploadButton",
-                Text = "取消",
+                Text = this.strings.BatchUploadCancelButtonText,
                 Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
                 MinimumSize = new Size(96, 34),
             };
@@ -108,7 +122,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             confirmButton = new Button
             {
                 Name = "confirmButton",
-                Text = "确认",
+                Text = this.strings.BatchUploadConfirmButtonText,
                 Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
                 MinimumSize = new Size(96, 34),
             };
@@ -158,6 +172,21 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
         public static BatchUploadProgressDialog CreateSample()
         {
+            return CreateSample(HostLocalizedStrings.ForLocale("zh"));
+        }
+
+        public static BatchUploadProgressDialog CreateSample(string locale)
+        {
+            return CreateSample(new HostLocalizedDialogText(HostLocalizedStrings.ForLocale(locale)));
+        }
+
+        public static BatchUploadProgressDialog CreateSample(HostLocalizedStrings strings)
+        {
+            return CreateSample((ILocalizedDialogText)new HostLocalizedDialogText(strings));
+        }
+
+        private static BatchUploadProgressDialog CreateSample(ILocalizedDialogText strings)
+        {
             return new BatchUploadProgressDialog(new[]
             {
                 new BatchUploadProgressStep(
@@ -182,7 +211,12 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     "上传完成",
                     BatchUploadStepState.Active,
                     "成功：48项变更\r\n上传完成。\r\n已提交单元格：48\r\n分块上传结果：\r\n分块1：成功（48个单元格）"),
-            });
+            }, strings);
+        }
+
+        private static ILocalizedDialogText ResolveDefaultStrings()
+        {
+            return new HostLocalizedDialogText(Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en"));
         }
 
         public void SetStepPending(int stepNumber, string title, string description, string details = null)
@@ -944,5 +978,47 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 }
             }
         }
+
+        private interface ILocalizedDialogText
+        {
+            string BatchUploadDialogTitle { get; }
+
+            string BatchUploadUploadButtonText { get; }
+
+            string BatchUploadCancelButtonText { get; }
+
+            string BatchUploadConfirmButtonText { get; }
+        }
+
+        private sealed class HostLocalizedDialogText : ILocalizedDialogText
+        {
+            private readonly HostLocalizedStrings strings;
+
+            public HostLocalizedDialogText(HostLocalizedStrings strings)
+            {
+                this.strings = strings ?? HostLocalizedStrings.ForLocale("en");
+            }
+
+            public string BatchUploadDialogTitle
+            {
+                get { return strings.BatchUploadDialogTitle; }
+            }
+
+            public string BatchUploadUploadButtonText
+            {
+                get { return strings.BatchUploadUploadButtonText; }
+            }
+
+            public string BatchUploadCancelButtonText
+            {
+                get { return strings.BatchUploadCancelButtonText; }
+            }
+
+            public string BatchUploadConfirmButtonText
+            {
+                get { return strings.BatchUploadConfirmButtonText; }
+            }
+        }
+
     }
 }

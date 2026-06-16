@@ -123,6 +123,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void DialogUsesLocalizedChromeAndFooterButtons()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog("en"))
+                {
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    Assert.Equal("Batch upload", dialog.Text);
+                    Assert.Equal("Batch upload", FindControl<Label>(dialog, "titleLabel").Text);
+                    Assert.Equal("Upload", FindControl<Button>(dialog, "uploadButton").Text);
+                    Assert.Equal("Cancel", FindControl<Button>(dialog, "cancelUploadButton").Text);
+                    Assert.Equal("Confirm", FindControl<Button>(dialog, "confirmButton").Text);
+                }
+            });
+        }
+
+        [Fact]
         public void DialogFooterUsesConfirmButtonWhenResultStepIsFinished()
         {
             RunInSta(() =>
@@ -484,13 +503,26 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private static Form CreateDialog()
         {
+            return CreateDialog(null);
+        }
+
+        private static Form CreateDialog(string locale)
+        {
             var type = LoadAddInAssembly().GetType(
                 "OfficeAgent.ExcelAddIn.Dialogs.BatchUploadProgressDialog",
                 throwOnError: true);
-            var createSample = type.GetMethod("CreateSample", BindingFlags.Public | BindingFlags.Static)
-                ?? throw new InvalidOperationException("BatchUploadProgressDialog.CreateSample was not found.");
+            if (string.IsNullOrEmpty(locale))
+            {
+                var createSample = type.GetMethod("CreateSample", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null)
+                    ?? throw new InvalidOperationException("BatchUploadProgressDialog.CreateSample was not found.");
 
-            return (Form)createSample.Invoke(null, Array.Empty<object>());
+                return (Form)createSample.Invoke(null, Array.Empty<object>());
+            }
+
+            var createSampleWithLocale = type.GetMethod("CreateSample", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null)
+                ?? throw new InvalidOperationException("BatchUploadProgressDialog.CreateSample(locale) was not found.");
+
+            return (Form)createSampleWithLocale.Invoke(null, new object[] { locale });
         }
 
         private static void InvokeDialogMethod(Form dialog, string methodName, params object[] arguments)
