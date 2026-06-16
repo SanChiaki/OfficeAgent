@@ -64,6 +64,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Equal(Color.White, resultTextBox.BackColor);
                     Assert.True(previewTextBox.Height >= 140, $"Preview details box should be larger, actual: {previewTextBox.Height}.");
                     Assert.True(resultTextBox.Height >= 140, $"Result details box should be larger, actual: {resultTextBox.Height}.");
+                    Assert.True(previewTextBox.Height >= resultTextBox.Height * 1.45, $"Preview details box should be about 1.5x the result box. Preview={previewTextBox.Height}, Result={resultTextBox.Height}.");
                 }
             });
         }
@@ -89,10 +90,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
                     var thirdRow = FindControl<Control>(dialog, "stepRow3");
                     var ring = FindControl<Control>(thirdRow, "stepProgressRing3");
+                    var title = FindControl<Label>(thirdRow, "stepTitleLabel3");
                     var details = FindControl<TextBox>(thirdRow, "stepDetailsTextBox3");
 
                     Assert.True(ring.Right <= thirdRow.Width, $"Progress ring should stay inside row bounds. RingRight={ring.Right}, RowWidth={thirdRow.Width}.");
                     Assert.True(details.Right < ring.Left, $"Details box should not overlap the progress ring. DetailsRight={details.Right}, RingLeft={ring.Left}.");
+                    Assert.True(Math.Abs(CenterY(ring) - CenterY(title)) <= 4, $"Progress ring should align with the step title. RingCenter={CenterY(ring)}, TitleCenter={CenterY(title)}.");
                 }
             });
         }
@@ -163,6 +166,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     var previewButtons = VisibleFooterButtons(dialog);
                     Assert.Equal(new[] { "上传", "取消" }, previewButtons.Select(button => button.Text).ToArray());
+                    Assert.DoesNotContain(previewButtons, button => string.Equals(button.Text, "确认", StringComparison.Ordinal));
                     Assert.NotNull(TryFindControl<TextBox>(dialog, "stepDetailsTextBox3"));
 
                     InvokeDialogMethod(dialog, "SetStepActive", 4, "数据上传", "正在上传至服务器", "这个详情不应该显示");
@@ -487,6 +491,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     "0331test1 / taskFlowNode_13882098334 -> 1111",
                     "0331test1 / taskFlowNode_13892195334 -> 1111",
                 });
+        }
+
+        private static int CenterY(Control control)
+        {
+            return control.Top + (control.Height / 2);
         }
 
         private static string ResolveMarkerText(MethodInfo resolveText, Type stateType, string stateName, int stepNumber)

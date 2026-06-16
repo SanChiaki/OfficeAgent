@@ -18,7 +18,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private const int StepProgressRingSize = 46;
         private const int StepProgressRingGap = 24;
         private const int StepSpacing = 24;
+        private const int ActiveProgressRingTopPadding = 14;
+        private const int PreviewDetailsHeightMultiplier = 3;
+        private const int PreviewDetailsHeightDivisor = 2;
         private const int DetailsMaxHeight = 240;
+        private const int PreviewDetailsMaxHeight = 360;
         private const int DetailsMinHeight = 142;
         private const int FooterButtonGap = 12;
 
@@ -337,7 +341,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             var activeStep = ResolveActiveStepNumber();
             uploadButton.Visible = activeStep == 3;
             cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3 || activeStep == 4;
-            confirmButton.Visible = IsResultStepReadyForConfirmation();
+            confirmButton.Visible = (activeStep == 0 || activeStep == 5) && IsResultStepReadyForConfirmation();
             LayoutFooterButtons(Math.Max(uploadButton.Height, Math.Max(cancelUploadButton.Height, confirmButton.Height)));
         }
 
@@ -615,7 +619,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     160,
                     ringLeft - (hasProgressRing ? StepProgressRingGap : 0) - StepMarkerColumnWidth - StepContentGap);
                 var contentLeft = StepMarkerColumnWidth + StepContentGap;
-                var currentTop = 0;
+                var currentTop = hasProgressRing ? ActiveProgressRingTopPadding : 0;
 
                 var titleHeight = MeasureWrappedHeight(titleLabel.Text, titleLabel.Font, contentWidth);
                 titleLabel.SetBounds(contentLeft, currentTop, contentWidth, titleHeight);
@@ -628,7 +632,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 if (detailsTextBox != null)
                 {
                     currentTop += 8;
-                    var detailsHeight = ResolveDetailsHeight(detailsTextBox.Text, detailsTextBox.Font, contentWidth);
+                    var detailsHeight = ResolveDetailsHeight(detailsTextBox.Text, detailsTextBox.Font, contentWidth, stepNumber);
                     detailsTextBox.SetBounds(contentLeft, currentTop, contentWidth, detailsHeight);
                     currentTop += detailsHeight;
                 }
@@ -637,9 +641,10 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 linePanel.Height = Math.Max(34, Height - marker.Height - 8);
                 if (progressRing != null)
                 {
+                    var ringTop = Math.Max(0, titleLabel.Top + ((titleLabel.Height - progressRing.Height) / 2));
                     progressRing.Location = new Point(
                         Math.Max(contentLeft + contentWidth + StepProgressRingGap, Width - StepProgressRingSize),
-                        Math.Max(0, (Height - progressRing.Height) / 2));
+                        ringTop);
                 }
             }
 
@@ -658,12 +663,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 return Math.Max(font.Height, measured.Height);
             }
 
-            private static int ResolveDetailsHeight(string text, Font font, int width)
+            private static int ResolveDetailsHeight(string text, Font font, int width, int stepNumber)
             {
                 var lineCount = string.IsNullOrEmpty(text)
                     ? 1
                     : text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).Length;
                 var desired = (font.Height * Math.Min(7, Math.Max(3, lineCount))) + 18;
+                if (stepNumber == 3)
+                {
+                    desired = desired * PreviewDetailsHeightMultiplier / PreviewDetailsHeightDivisor;
+                    return Math.Max(DetailsMinHeight, Math.Min(PreviewDetailsMaxHeight, desired));
+                }
+
                 return Math.Max(DetailsMinHeight, Math.Min(DetailsMaxHeight, desired));
             }
 
