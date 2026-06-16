@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -37,13 +38,20 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly Panel headerPanel;
         private readonly List<StepRow> stepRows = new List<StepRow>();
         private readonly ILocalizedDialogText strings;
+        private readonly Stopwatch step2ToStep3Stopwatch = new Stopwatch();
         private bool previewHasUploadableContent = true;
+        private long? step2ToStep3ElapsedMilliseconds;
 
         public event EventHandler UploadRequested;
 
         public event EventHandler UploadCanceled;
 
         public event EventHandler Confirmed;
+
+        public long? Step2ToStep3ElapsedMilliseconds
+        {
+            get { return step2ToStep3ElapsedMilliseconds; }
+        }
 
         public BatchUploadProgressDialog(IEnumerable<BatchUploadProgressStep> steps)
             : this(steps, (ILocalizedDialogText)null)
@@ -258,6 +266,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         {
             RunOnUiThread(() =>
             {
+                CaptureStep2ToStep3ElapsedTime(stepNumber, state);
+
                 if (state == BatchUploadStepState.Active)
                 {
                     ClearActiveStepsExcept(stepNumber);
@@ -268,6 +278,27 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 RefreshFooterButtons();
                 UpdateResponsiveLayout();
             });
+        }
+
+        private void CaptureStep2ToStep3ElapsedTime(int stepNumber, BatchUploadStepState state)
+        {
+            if (state != BatchUploadStepState.Active)
+            {
+                return;
+            }
+
+            if (stepNumber == 2)
+            {
+                step2ToStep3ElapsedMilliseconds = null;
+                step2ToStep3Stopwatch.Restart();
+                return;
+            }
+
+            if (stepNumber == 3 && step2ToStep3Stopwatch.IsRunning)
+            {
+                step2ToStep3Stopwatch.Stop();
+                step2ToStep3ElapsedMilliseconds = step2ToStep3Stopwatch.ElapsedMilliseconds;
+            }
         }
 
         public void AppendStepDetails(int stepNumber, string details)

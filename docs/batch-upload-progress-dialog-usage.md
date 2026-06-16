@@ -232,6 +232,7 @@ using (var dialog = new BatchUploadProgressDialog(steps))
     dialog.SetStepCompleted(2, "字段验证", "验证通过");
 
     dialog.SetStepActive(3, "变更预览", hasUploadableContent ? "请确认本次上传内容" : "没有可上传内容", "预览详情...");
+    var validationDurationMs = dialog.Step2ToStep3ElapsedMilliseconds;
 }
 ```
 
@@ -245,6 +246,7 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | `SetStepWarning(stepNumber, title, description, details)` | 把步骤更新为警告 |
 | `SetStepError(stepNumber, title, description, details)` | 把步骤更新为失败 |
 | `SetPreviewUploadAvailability(hasUploadableContent)` | 设置第 3 步是否存在合法可上传内容，通常来自第 2 步校验结果 |
+| `Step2ToStep3ElapsedMilliseconds` | 从第 2 步进入 `Active` 到第 3 步进入 `Active` 开头的耗时毫秒数；未进入第 3 步前为 `null` |
 | `AppendStepDetails(stepNumber, details)` | 给某一步追加详情日志 |
 | `UploadRequested` | 用户在第 3 步点击底部【上传】按钮时触发 |
 | `UploadCanceled` | 用户在第 1、2、3、4 步点击底部【取消】按钮时触发，触发后弹窗默认关闭 |
