@@ -35,6 +35,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly Panel footerPanel;
         private readonly Panel headerPanel;
         private readonly List<StepRow> stepRows = new List<StepRow>();
+        private bool previewHasUploadableContent = true;
 
         public event EventHandler UploadRequested;
 
@@ -209,6 +210,16 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             UpdateStep(stepNumber, title, description, BatchUploadStepState.Error, details);
         }
 
+        public void SetPreviewUploadAvailability(bool hasUploadableContent)
+        {
+            RunOnUiThread(() =>
+            {
+                previewHasUploadableContent = hasUploadableContent;
+                RefreshFooterButtons();
+                UpdateResponsiveLayout();
+            });
+        }
+
         public void UpdateStep(int stepNumber, string title, string description, BatchUploadStepState state, string details = null)
         {
             RunOnUiThread(() =>
@@ -339,9 +350,9 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private void RefreshFooterButtons()
         {
             var activeStep = ResolveActiveStepNumber();
-            uploadButton.Visible = activeStep == 3;
-            cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || activeStep == 3 || activeStep == 4;
-            confirmButton.Visible = (activeStep == 0 || activeStep == 5) && IsResultStepReadyForConfirmation();
+            uploadButton.Visible = activeStep == 3 && previewHasUploadableContent;
+            cancelUploadButton.Visible = activeStep == 1 || activeStep == 2 || (activeStep == 3 && previewHasUploadableContent) || activeStep == 4;
+            confirmButton.Visible = (activeStep == 3 && !previewHasUploadableContent) || ((activeStep == 0 || activeStep == 5) && IsResultStepReadyForConfirmation());
             LayoutFooterButtons(Math.Max(uploadButton.Height, Math.Max(cancelUploadButton.Height, confirmButton.Height)));
         }
 

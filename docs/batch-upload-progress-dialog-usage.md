@@ -227,10 +227,11 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 
     dialog.SetStepActive(2, "字段验证", "正在验证字段");
     dialog.AppendStepDetails(2, "SITEOWNER 校验通过");
+    var hasUploadableContent = true; // 来自第 2 步校验结果，例如 validUploadCount > 0。
+    dialog.SetPreviewUploadAvailability(hasUploadableContent);
     dialog.SetStepCompleted(2, "字段验证", "验证通过");
 
-    dialog.SetStepActive(4, "数据上传", "正在上传至服务器");
-    dialog.AppendStepDetails(4, "分块 1 上传成功");
+    dialog.SetStepActive(3, "变更预览", hasUploadableContent ? "请确认本次上传内容" : "没有可上传内容", "预览详情...");
 }
 ```
 
@@ -243,10 +244,11 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | `SetStepCompleted(stepNumber, title, description, details)` | 把步骤更新为完成，左侧显示对勾，右侧圆环消失 |
 | `SetStepWarning(stepNumber, title, description, details)` | 把步骤更新为警告 |
 | `SetStepError(stepNumber, title, description, details)` | 把步骤更新为失败 |
+| `SetPreviewUploadAvailability(hasUploadableContent)` | 设置第 3 步是否存在合法可上传内容，通常来自第 2 步校验结果 |
 | `AppendStepDetails(stepNumber, details)` | 给某一步追加详情日志 |
 | `UploadRequested` | 用户在第 3 步点击底部【上传】按钮时触发 |
 | `UploadCanceled` | 用户在第 1、2、3、4 步点击底部【取消】按钮时触发，触发后弹窗默认关闭 |
-| `Confirmed` | 用户在第 5 步点击底部【确认】按钮时触发，触发后弹窗默认关闭 |
+| `Confirmed` | 用户在第 3 步无合法可上传内容或第 5 步点击底部【确认】按钮时触发，触发后弹窗默认关闭 |
 
 只有 `Active` 步骤会显示右侧动态圆环，其他状态不显示右侧圆环。
 
@@ -256,7 +258,7 @@ using (var dialog = new BatchUploadProgressDialog(steps))
 | --- | --- |
 | 第 1 步：数据准备 | 【取消】 |
 | 第 2 步：字段验证 | 【取消】 |
-| 第 3 步：变更预览 | 【上传】【取消】 |
+| 第 3 步：变更预览 | 有合法可上传内容时【上传】【取消】；无合法可上传内容时【确认】 |
 | 第 4 步：数据上传 | 【取消】 |
 | 第 5 步：上传结果 | 非 `Pending` 时显示【确认】 |
 

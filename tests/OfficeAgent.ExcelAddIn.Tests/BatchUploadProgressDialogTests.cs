@@ -187,6 +187,49 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void PreviewStepShowsConfirmOnlyWhenNoUploadableContentExists()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    InvokeDialogMethod(dialog, "SetPreviewUploadAvailability", false);
+                    dialog.CreateControl();
+                    dialog.PerformLayout();
+
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "没有可上传内容", "所选内容均不满足上传条件");
+                    var previewButtons = VisibleFooterButtons(dialog);
+
+                    Assert.Single(previewButtons);
+                    Assert.Equal("确认", previewButtons.Single().Text);
+                    Assert.Null(TryFindControl<Button>(dialog, "uploadButton"));
+                    Assert.Null(TryFindControl<Button>(dialog, "cancelUploadButton"));
+                }
+            });
+        }
+
+        [Fact]
+        public void PreviewConfirmButtonClosesDialogWhenNoUploadableContentExists()
+        {
+            RunInSta(() =>
+            {
+                using (var dialog = CreateDialog())
+                {
+                    var closed = false;
+                    dialog.FormClosed += (sender, args) => closed = true;
+                    InvokeDialogMethod(dialog, "SetPreviewUploadAvailability", false);
+                    ShowOffscreen(dialog);
+                    InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "没有可上传内容", "所选内容均不满足上传条件");
+
+                    FindControl<Button>(dialog, "confirmButton").PerformClick();
+                    Application.DoEvents();
+
+                    Assert.True(closed);
+                }
+            });
+        }
+
+        [Fact]
         public void DialogFooterButtonsRaiseActionEvents()
         {
             RunInSta(() =>
