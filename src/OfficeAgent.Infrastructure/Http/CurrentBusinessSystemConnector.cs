@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using OfficeAgent.Core;
 using OfficeAgent.Core.Analytics;
@@ -15,9 +18,12 @@ using OfficeAgent.Core.Services;
 
 namespace OfficeAgent.Infrastructure.Http
 {
-    public sealed class CurrentBusinessSystemConnector : ISystemConnector
+    public sealed class CurrentBusinessSystemConnector : ISystemConnector, IBusinessExportTemplateConnector
     {
         private const string CurrentSystemKey = "current-business-system";
+        private const string TemplatesPath = "/templates";
+        private const string ExportPath = "/export";
+        private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         private const int DefaultHeaderStartRow = 1;
         private const int DefaultHeaderRowCount = 2;
         private const int DefaultDataStartRow = 3;
@@ -155,6 +161,91 @@ namespace OfficeAgent.Infrastructure.Http
             catch (AuthenticationRequiredException)
             {
                 return false;
+            }
+        }
+
+        public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            try
+            {
+                EnsureProjectId(projectId);
+
+                var templates = Post<List<BusinessExportTemplateOption>>(TemplatesPath, new { projectId }) ?? new List<BusinessExportTemplateOption>();
+                var normalizedTemplates = templates
+                    .Where(template => template != null && !string.IsNullOrWhiteSpace(template.TemplateId))
+                    .Select(template =>
+                    {
+                        var templateId = template.TemplateId.Trim();
+                        var templateName = string.IsNullOrWhiteSpace(template.TemplateName)
+                            ? templateId
+                            : template.TemplateName.Trim();
+
+                        return new BusinessExportTemplateOption
+                        {
+                            TemplateId = templateId,
+                            TemplateName = templateName,
+                        };
+                    })
+                    .ToArray();
+
+                properties["templateCount"] = normalizedTemplates.Length;
+                TrackBusinessEvent("business.current.templates.completed", properties, TemplatesPath, "templates", stopwatch);
+                return normalizedTemplates;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.templates.failed", properties, TemplatesPath, "templates", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
+        }
+
+        public async Task<BusinessExportWorkbook> ExportBusinessWorkbookAsync(
+            string projectId,
+            string templateId,
+            CancellationToken cancellationToken)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var properties = BuildBusinessProperties(projectId);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                EnsureProjectId(projectId);
+                EnsureTemplateId(templateId);
+
+                var normalizedTemplateId = templateId.Trim();
+                using var response = await SendPostAsync(
+                    ExportPath,
+                    new { projectId, templateId = normalizedTemplateId },
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken).ConfigureAwait(false);
+                EnsureSuccessStatusCode(response, string.Empty);
+
+                var content = await ReadResponseContentBytesAsync(response, cancellationToken).ConfigureAwait(false);
+                if (content.Length == 0)
+                {
+                    throw new InvalidOperationException("Business export returned an empty workbook.");
+                }
+
+                properties["byteCount"] = content.Length;
+                TrackBusinessEvent("business.current.export.completed", properties, ExportPath, "export", stopwatch);
+                return new BusinessExportWorkbook
+                {
+                    FileName = "business-export.xlsx",
+                    ContentType = GetResponseContentType(response),
+                    Content = content,
+                };
+            }
+            catch (OperationCanceledException ex)
+            {
+                TrackBusinessEvent("business.current.export.canceled", properties, ExportPath, "export", stopwatch, ToAnalyticsError(ex));
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TrackBusinessEvent("business.current.export.failed", properties, ExportPath, "export", stopwatch, ToAnalyticsError(ex));
+                throw;
             }
         }
 
@@ -374,7 +465,28 @@ namespace OfficeAgent.Infrastructure.Http
             return Send(HttpMethod.Post, path, payload);
         }
 
+        private Task<HttpResponseMessage> SendPostAsync(
+            string path,
+            object payload,
+            HttpCompletionOption completionOption,
+            CancellationToken cancellationToken)
+        {
+            return SendAsync(HttpMethod.Post, path, payload, completionOption, cancellationToken);
+        }
+
         private HttpResponseMessage Send(HttpMethod method, string path, object payload)
+        {
+            return SendAsync(method, path, payload, HttpCompletionOption.ResponseContentRead, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        private async Task<HttpResponseMessage> SendAsync(
+            HttpMethod method,
+            string path,
+            object payload,
+            HttpCompletionOption completionOption,
+            CancellationToken cancellationToken)
         {
             var baseUri = ResolveBaseUri();
             using var request = new HttpRequestMessage(method, new Uri(baseUri, path));
@@ -391,7 +503,7 @@ namespace OfficeAgent.Infrastructure.Http
                 BuildRequestDetails(method, path, projectId));
             try
             {
-                var response = httpClient.SendAsync(request).GetAwaiter().GetResult();
+                var response = await httpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
                 OfficeAgentLog.Info(
                     "business_api",
                     "request.completed",
@@ -432,6 +544,59 @@ namespace OfficeAgent.Infrastructure.Http
             return response.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
         }
 
+        private static async Task<byte[]> ReadResponseContentBytesAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        {
+            if (response.Content == null)
+            {
+                return Array.Empty<byte>();
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            using (cancellationToken.Register(stream.Dispose))
+            {
+                try
+                {
+                    return await ReadStreamToByteArrayAsync(stream, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsCanceledStreamReadException(ex))
+                {
+                    throw new OperationCanceledException(cancellationToken);
+                }
+            }
+        }
+
+        private static async Task<byte[]> ReadStreamToByteArrayAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            var buffer = new byte[81920];
+            using var memory = new MemoryStream();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    return memory.ToArray();
+                }
+
+                await memory.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private static bool IsCanceledStreamReadException(Exception error)
+        {
+            return error is ObjectDisposedException ||
+                   error is IOException ||
+                   error is InvalidOperationException;
+        }
+
+        private static string GetResponseContentType(HttpResponseMessage response)
+        {
+            return string.IsNullOrWhiteSpace(response.Content?.Headers?.ContentType?.MediaType)
+                ? XlsxContentType
+                : response.Content.Headers.ContentType.MediaType;
+        }
+
         private static void EnsureSuccessStatusCode(HttpResponseMessage response, string responseBody)
         {
             if (response.IsSuccessStatusCode)
@@ -465,6 +630,14 @@ namespace OfficeAgent.Infrastructure.Http
             if (string.IsNullOrWhiteSpace(projectId))
             {
                 throw new InvalidOperationException("Project id is required for current business system.");
+            }
+        }
+
+        private static void EnsureTemplateId(string templateId)
+        {
+            if (string.IsNullOrWhiteSpace(templateId))
+            {
+                throw new ArgumentException("Template id is required for current business export.", nameof(templateId));
             }
         }
 
