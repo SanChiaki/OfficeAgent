@@ -183,6 +183,8 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
+    <Compile Include="Excel\IBusinessWorkbookImporter.cs" />
+    <Compile Include="Excel\ExcelBusinessWorkbookImporter.cs" />
     <Compile Include="Excel\ExcelFocusCoordinator.cs" />
     <Compile Include="Excel\ExcelInteropAdapter.cs" />
     <Compile Include="Excel\ExcelSelectionContextService.cs" />
