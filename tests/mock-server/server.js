@@ -546,6 +546,10 @@ apiApp.post("/templates", requireAuth, function (req, res) {
 
 apiApp.post("/export", requireAuth, function (req, res) {
   var body = req.body || {};
+  if (!body.templateId) {
+    return res.status(400).json({ code: "bad_request", message: "templateId 字段必填。" });
+  }
+
   var project = resolveConnectorProject(body.projectId, res);
   if (!project) {
     return;
@@ -678,11 +682,10 @@ apiApp.listen(3200, function () {
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
-  console.log("  Template list         = http://localhost:3200/templates");
-  console.log("  Template export       = http://localhost:3200/export");
   console.log("  Update Manifest URL   = http://localhost:3200/update-manifest");
   console.log("  Analytics URL         = http://localhost:3200/insertLog (hidden setting)");
   console.log("  SSO URL               = http://localhost:3100/login");
+  console.log("  Template endpoints    = /templates and /export under Business Base URL");
   console.log("  登录成功路径           = /rest/login");
   console.log("  API Key               = (留空，使用 SSO cookies)");
 });

@@ -274,7 +274,7 @@ Excel 导入语义：
 - 下载取消后不写 Setting、不改当前 sheet、不显示错误。
 - COM 复制开始后第一版不支持安全中止。
 
-真实系统应保证 `Business Data` 是自包含的单 sheet 作业表，并且表头布局与连接器后续写入的 `SheetFieldMappings` 一致。导出 workbook 里可以包含格式、合并单元格、列宽、行高、冻结窗格等用户体验信息；不要依赖插件导入其他 sheet、工作簿级名称、外部连接、宏或跨 sheet 公式。
+插件只校验并导入名为 `Business Data` 的 sheet；不会校验业务表头语义、跨 sheet 依赖或模板字段完整性。为了让导入后的作业表可直接同步，真实系统需要让 `Business Data` 自包含，并让其表头布局与连接器后续写入的 `SheetFieldMappings` 一致。导出 workbook 里可以包含格式、合并单元格、列宽、行高、冻结窗格等用户体验信息；不要依赖插件导入其他 sheet、工作簿级名称、外部连接、宏或跨 sheet 公式。
 
 当前 mock / 示例系统对应 HTTP 约定是：
 

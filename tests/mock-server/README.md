@@ -10,7 +10,7 @@
 
 服务入口脚本：
 
-- [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js)
+- [server.js](server.js)
 
 ## 手工启动
 
@@ -281,7 +281,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.
 
 ## 当前内置数据
 
-Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js) 的内存变量中，主要包括：
+Ribbon Sync mock 数据保存在 [server.js](server.js) 的内存变量中，主要包括：
 
 - `connectorProjectData`
   - 按 `projectId` 组织的项目、字段头和数据行
