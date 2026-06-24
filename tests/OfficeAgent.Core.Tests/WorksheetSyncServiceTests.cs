@@ -132,7 +132,6 @@ namespace OfficeAgent.Core.Tests
                         ProjectId = "performance",
                         DisplayName = "绩效项目",
                     }),
-                FieldMappingDefinition = null,
                 FieldMappings = connector.FieldMappingSeedRows,
             };
 

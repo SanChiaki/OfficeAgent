@@ -7,7 +7,7 @@ namespace OfficeAgent.Core.Models
     {
         public SheetBinding Binding { get; set; } = new SheetBinding();
 
-        public FieldMappingTableDefinition FieldMappingDefinition { get; set; } = new FieldMappingTableDefinition();
+        public FieldMappingTableDefinition FieldMappingDefinition { get; set; }
 
         public IReadOnlyList<SheetFieldMappingRow> FieldMappings { get; set; } = Array.Empty<SheetFieldMappingRow>();
     }
