@@ -395,6 +395,16 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void BusinessExportWorkbookDefaultsToXlsxMetadataAndEmptyContent()
+        {
+            var workbook = new BusinessExportWorkbook();
+
+            Assert.Equal("business-export.xlsx", workbook.FileName);
+            Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", workbook.ContentType);
+            Assert.Empty(workbook.Content);
+        }
+
+        [Fact]
         public void InitializeSheetUsesConnectorMatchingProjectSystemKey()
         {
             var connectorA = new FakeSystemConnector("system-a");
