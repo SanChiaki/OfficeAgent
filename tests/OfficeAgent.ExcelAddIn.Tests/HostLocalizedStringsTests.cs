@@ -66,6 +66,24 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "批量上传", "上传", "取消", "确认")]
+        [InlineData("en", "Batch upload", "Upload", "Cancel", "Confirm")]
+        public void ForLocaleReturnsExpectedBatchUploadDialogText(
+            string locale,
+            string expectedTitle,
+            string expectedUploadButton,
+            string expectedCancelButton,
+            string expectedConfirmButton)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedTitle, GetString(strings, "BatchUploadDialogTitle"));
+            Assert.Equal(expectedUploadButton, GetString(strings, "BatchUploadUploadButtonText"));
+            Assert.Equal(expectedCancelButton, GetString(strings, "BatchUploadCancelButtonText"));
+            Assert.Equal(expectedConfirmButton, GetString(strings, "BatchUploadConfirmButtonText"));
+        }
+
+        [Theory]
         [InlineData("zh", "登录", "退出")]
         [InlineData("en", "Login", "Logout")]
         public void ForLocaleReturnsExpectedAccountButtonLabels(

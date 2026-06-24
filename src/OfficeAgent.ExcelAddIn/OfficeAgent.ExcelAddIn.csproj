@@ -141,6 +141,7 @@
     <Compile Include="Dialogs\AiColumnMappingProgressDialog.cs" />
     <Compile Include="Dialogs\AiColumnMappingPreviewDialog.cs" />
     <Compile Include="Dialogs\AboutDialog.cs" />
+    <Compile Include="Dialogs\BatchUploadProgressDialog.cs" />
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
     <Compile Include="Dialogs\ExcelDialogOwner.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />

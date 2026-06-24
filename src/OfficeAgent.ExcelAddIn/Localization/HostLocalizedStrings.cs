@@ -140,6 +140,14 @@ namespace OfficeAgent.ExcelAddIn.Localization
 
         public string RibbonFullUploadButtonLabel => Locale == "zh" ? "全量上传" : "Full upload";
 
+        public string BatchUploadDialogTitle => Locale == "zh" ? "批量上传" : "Batch upload";
+
+        public string BatchUploadUploadButtonText => Locale == "zh" ? "上传" : "Upload";
+
+        public string BatchUploadCancelButtonText => Locale == "zh" ? "取消" : "Cancel";
+
+        public string BatchUploadConfirmButtonText => Locale == "zh" ? "确认" : "Confirm";
+
         public string RibbonHelpGroupLabel => Locale == "zh" ? "帮助" : "Help";
 
         public string RibbonDocumentationButtonLabel => Locale == "zh" ? "文档" : "Documentation";
