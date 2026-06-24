@@ -144,6 +144,9 @@
     <Compile Include="Dialogs\BatchUploadProgressDialog.cs" />
     <Compile Include="Dialogs\DownloadConfirmDialog.cs" />
     <Compile Include="Dialogs\ExcelDialogOwner.cs" />
+    <Compile Include="Dialogs\InitializeSheetDialog.cs" />
+    <Compile Include="Dialogs\InitializeSheetDialogModels.cs" />
+    <Compile Include="Dialogs\InitializeSheetImportProgressDialog.cs" />
     <Compile Include="Dialogs\OperationResultDialog.cs" />
     <Compile Include="Dialogs\ProjectLayoutDialog.cs" />
     <Compile Include="Dialogs\TemplateDialogService.cs" />

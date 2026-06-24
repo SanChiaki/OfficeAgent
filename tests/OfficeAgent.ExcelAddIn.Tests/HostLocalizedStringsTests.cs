@@ -39,6 +39,46 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData(
+            "zh",
+            "初始化当前表",
+            "从模板创建作业表",
+            "仅初始化配置",
+            "覆盖并初始化",
+            "正在下载模板，请稍候。",
+            "正在导入模板工作表，请稍候。",
+            "正在写入当前表配置，请稍候。")]
+        [InlineData(
+            "en",
+            "Initialize sheet",
+            "Create sheet from template",
+            "Initialize configuration only",
+            "Overwrite and initialize",
+            "Downloading template. Please wait.",
+            "Importing template sheet. Please wait.",
+            "Writing current sheet configuration. Please wait.")]
+        public void ForLocaleReturnsExpectedInitializeSheetDialogText(
+            string locale,
+            string expectedTitle,
+            string expectedTemplateMode,
+            string expectedConfigOnlyMode,
+            string expectedOverwriteButton,
+            string expectedDownloadingProgress,
+            string expectedImportingProgress,
+            string expectedWritingProgress)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedTitle, GetString(strings, "InitializeSheetDialogTitle"));
+            Assert.Equal(expectedTemplateMode, GetString(strings, "InitializeSheetTemplateImportModeText"));
+            Assert.Equal(expectedConfigOnlyMode, GetString(strings, "InitializeSheetConfigOnlyModeText"));
+            Assert.Equal(expectedOverwriteButton, GetString(strings, "InitializeSheetOverwriteButtonText"));
+            Assert.Equal(expectedDownloadingProgress, GetString(strings, "InitializeSheetImportProgressDownloadingText"));
+            Assert.Equal(expectedImportingProgress, GetString(strings, "InitializeSheetImportProgressImportingText"));
+            Assert.Equal(expectedWritingProgress, GetString(strings, "InitializeSheetImportProgressWritingConfigurationText"));
+        }
+
+        [Theory]
         [InlineData("zh")]
         [InlineData("en")]
         public void ForLocaleUsesXisdpAsHostAndRibbonName(string locale)

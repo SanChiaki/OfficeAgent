@@ -8,7 +8,7 @@ using OfficeAgent.ExcelAddIn.Localization;
 
 namespace OfficeAgent.ExcelAddIn.Dialogs
 {
-    public interface IRibbonSyncDialogService
+    internal interface IRibbonSyncDialogService
     {
         bool ConfirmDownload(
             string operationName,
@@ -25,6 +25,13 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             Func<CancellationToken, Task<AiColumnMappingPreview>> operation);
 
         SheetBinding ShowProjectLayoutDialog(SheetBinding suggestedBinding);
+
+        InitializeSheetDialogResult ShowInitializeSheetDialog(
+            InitializeSheetDialogRequest request,
+            Func<InitializeSheetTemplateLoadResult> loadTemplates);
+
+        bool RunInitializeSheetTemplateImportWithProgress(
+            Func<IInitializeSheetImportProgress, CancellationToken, Task> operation);
 
         void ShowInfo(string message);
 
@@ -75,6 +82,27 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                     ? dialog.ResultBinding
                     : null;
             }
+        }
+
+        public InitializeSheetDialogResult ShowInitializeSheetDialog(
+            InitializeSheetDialogRequest request,
+            Func<InitializeSheetTemplateLoadResult> loadTemplates)
+        {
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            using (var dialog = new InitializeSheetDialog(request, loadTemplates))
+            {
+                var result = owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+                return result == DialogResult.OK
+                    ? dialog.Result
+                    : null;
+            }
+        }
+
+        public bool RunInitializeSheetTemplateImportWithProgress(
+            Func<IInitializeSheetImportProgress, CancellationToken, Task> operation)
+        {
+            var owner = ExcelDialogOwner.FromCurrentApplication();
+            return InitializeSheetImportProgressDialog.Run(owner, operation);
         }
 
         public void ShowInfo(string message)
