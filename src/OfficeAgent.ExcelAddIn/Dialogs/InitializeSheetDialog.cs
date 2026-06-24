@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Localization;
 
@@ -21,6 +22,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
         private readonly Button confirmButton;
         private bool templatesLoaded;
         private bool templateModeAvailable;
+        private Exception templateLoadException;
 
         public InitializeSheetDialog(
             InitializeSheetDialogRequest request,
@@ -179,6 +181,8 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
 
         public InitializeSheetDialogResult Result { get; private set; }
 
+        public Exception TemplateLoadException => templateLoadException;
+
         internal static InitializeSheetMode ResolveDefaultMode(bool isBlankSheet, bool canImportTemplate)
         {
             return isBlankSheet && canImportTemplate
@@ -204,6 +208,13 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 loadResult = request.SupportsTemplateImport
                     ? await Task.Run(loadTemplates)
                     : InitializeSheetTemplateLoadResult.Unsupported(strings.InitializeSheetTemplateUnsupportedMessage);
+            }
+            catch (AuthenticationRequiredException ex)
+            {
+                templateLoadException = ex;
+                DialogResult = DialogResult.Abort;
+                Close();
+                return;
             }
             catch
             {

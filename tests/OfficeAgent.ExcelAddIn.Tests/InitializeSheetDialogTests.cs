@@ -91,6 +91,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void TemplateLoadingPropagatesAuthenticationFailuresButKeepsOrdinaryFailuresInline()
+        {
+            var dialogSourcePath = ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "InitializeSheetDialog.cs");
+            var dialogServiceSourcePath = ResolveRepositoryPath(
+                "src",
+                "OfficeAgent.ExcelAddIn",
+                "Dialogs",
+                "OperationResultDialog.cs");
+
+            Assert.True(File.Exists(dialogSourcePath), "InitializeSheetDialog.cs should exist.");
+            Assert.True(File.Exists(dialogServiceSourcePath), "OperationResultDialog.cs should exist.");
+
+            var dialogSource = File.ReadAllText(dialogSourcePath);
+            var dialogServiceSource = File.ReadAllText(dialogServiceSourcePath);
+
+            Assert.Contains("catch (AuthenticationRequiredException ex)", dialogSource, StringComparison.Ordinal);
+            Assert.Contains("templateLoadException = ex;", dialogSource, StringComparison.Ordinal);
+            Assert.Contains("DialogResult = DialogResult.Abort;", dialogSource, StringComparison.Ordinal);
+            Assert.Contains("Close();", dialogSource, StringComparison.Ordinal);
+            Assert.Contains("InitializeSheetTemplateLoadResult.Failed(strings.InitializeSheetTemplateLoadFailedMessage)", dialogSource, StringComparison.Ordinal);
+            Assert.Contains("dialog.TemplateLoadException", dialogServiceSource, StringComparison.Ordinal);
+            Assert.Contains("ExceptionDispatchInfo.Capture(dialog.TemplateLoadException).Throw();", dialogServiceSource, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void ImportProgressTreatsOperationCanceledExceptionAsUserCancelOnlyWhenTokenSourceWasCanceled()
         {
             var dialogSourcePath = ResolveRepositoryPath(

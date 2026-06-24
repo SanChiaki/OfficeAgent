@@ -866,6 +866,44 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Fact]
+        public void ExecuteInitializeCurrentSheetShowsLoginPromptWhenTemplateListRequiresAuthentication()
+        {
+            var connector = new FakeBusinessTemplateConnector
+            {
+                GetBusinessExportTemplatesException = new AuthenticationRequiredException("当前未登录，请先登录"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AuthenticationRequiredResult = true,
+            };
+            var loginTriggered = false;
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+
+            var controller = CreateController(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                () =>
+                {
+                    loginTriggered = true;
+                });
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Single(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Single(dialogService.AuthenticationRequiredMessages);
+            Assert.Equal("You're not signed in. Sign in first.", dialogService.AuthenticationRequiredMessages[0]);
+            Assert.True(loginTriggered);
+            Assert.Empty(dialogService.ErrorMessages);
+            Assert.Empty(dialogService.InfoMessages);
+            Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
+        }
+
+        [Fact]
         public void ExecuteInitializeCurrentSheetNotifiesAuthenticationRequiredBeforePrompt()
         {
             var connector = new FakeSystemConnector
@@ -2263,6 +2301,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public Exception ExportException { get; set; }
 
+            public Exception GetBusinessExportTemplatesException { get; set; }
+
             public string LastGetBusinessExportTemplatesProjectId { get; private set; }
 
             public string LastExportProjectId { get; private set; }
@@ -2272,6 +2312,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId)
             {
                 LastGetBusinessExportTemplatesProjectId = projectId;
+                if (GetBusinessExportTemplatesException != null)
+                {
+                    throw GetBusinessExportTemplatesException;
+                }
+
                 return TemplateOptions;
             }
 
@@ -2684,9 +2729,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             private static InitializeSheetTemplateLoadResult InvokeLoadTemplates(object loadTemplates)
             {
-                var loadResult = loadTemplates.GetType()
-                    .GetMethod("Invoke")
-                    .Invoke(loadTemplates, null);
+                object loadResult;
+                try
+                {
+                    loadResult = loadTemplates.GetType()
+                        .GetMethod("Invoke")
+                        .Invoke(loadTemplates, null);
+                }
+                catch (TargetInvocationException ex) when (ex.InnerException != null)
+                {
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                    throw;
+                }
+
                 return InitializeSheetTemplateLoadResult.Success(
                     ((IEnumerable<BusinessExportTemplateOption>)ReadProperty<object>(loadResult, "Templates"))
                     .Select(CloneTemplate));

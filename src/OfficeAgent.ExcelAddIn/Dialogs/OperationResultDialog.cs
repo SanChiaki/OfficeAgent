@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -92,6 +93,11 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             using (var dialog = new InitializeSheetDialog(request, loadTemplates))
             {
                 var result = owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+                if (dialog.TemplateLoadException != null)
+                {
+                    ExceptionDispatchInfo.Capture(dialog.TemplateLoadException).Throw();
+                }
+
                 return result == DialogResult.OK
                     ? dialog.Result
                     : null;

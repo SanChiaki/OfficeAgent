@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using OfficeAgent.Core;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -205,6 +206,10 @@ namespace OfficeAgent.ExcelAddIn
                 }
 
                 return InitializeSheetTemplateLoadResult.Success(templates);
+            }
+            catch (AuthenticationRequiredException)
+            {
+                throw;
             }
             catch
             {
