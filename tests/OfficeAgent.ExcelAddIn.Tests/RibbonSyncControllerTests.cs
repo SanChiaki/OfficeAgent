@@ -412,7 +412,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(5, metadataStore.LastSavedBinding.HeaderStartRow);
             Assert.Equal(2, metadataStore.LastSavedBinding.HeaderRowCount);
             Assert.Equal(9, metadataStore.LastSavedBinding.DataStartRow);
-            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Configuration initialized.", StringComparison.Ordinal) >= 0);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("current sheet content was not changed", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         [Fact]
@@ -486,7 +486,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(0, grid.WriteRangeValuesCallCount);
             Assert.Equal("performance", connector.LastBuildFieldMappingSeedProjectId);
             Assert.Equal(5, metadataStore.LastSavedBinding.HeaderStartRow);
-            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Configuration initialized", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("current sheet content was not changed", StringComparison.OrdinalIgnoreCase) >= 0);
             Assert.DoesNotContain(dialogService.InfoMessages, message => message.IndexOf("template", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
@@ -525,7 +525,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Contains("writingConfiguration", dialogService.InitializeTemplateImportProgressCalls);
             Assert.Equal("performance", connector.LastExportProjectId);
             Assert.Equal("standard", connector.LastExportTemplateId);
-            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Template imported", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("created from the template", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         [Theory]
@@ -564,6 +564,29 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var warning = Assert.Single(dialogService.WarningMessages);
             Assert.Contains("xISDP_Setting", warning, StringComparison.Ordinal);
             Assert.Contains("xISDP_Log", warning, StringComparison.Ordinal);
+            Assert.Null(metadataStore.LastSavedBinding);
+            Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
+        }
+
+        [Theory]
+        [InlineData("xISDP_Setting")]
+        [InlineData("xISDP_Log")]
+        public void ExecuteInitializeCurrentSheetBlocksManagedSheetsBeforeProjectSelectionWarning(string sheetName)
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            var controller = CreateController(connector, metadataStore, dialogService, () => sheetName);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Empty(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Empty(dialogService.InfoMessages);
+            var warning = Assert.Single(dialogService.WarningMessages);
+            Assert.Contains("xISDP_Setting", warning, StringComparison.Ordinal);
+            Assert.Contains("xISDP_Log", warning, StringComparison.Ordinal);
+            Assert.DoesNotContain("Select a project first.", dialogService.WarningMessages);
             Assert.Null(metadataStore.LastSavedBinding);
             Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
         }

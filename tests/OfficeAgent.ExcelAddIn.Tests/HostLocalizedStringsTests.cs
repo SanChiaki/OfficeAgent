@@ -99,13 +99,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
         [Theory]
         [InlineData(
             "zh",
-            "配置初始化完成。",
-            "模板导入完成。",
+            "初始化完成，当前表内容未修改。你可以继续上传或下载数据。",
+            "初始化完成，已从模板创建当前作业表。你可以编辑数据后上传，或全选需要刷新的区域后点击下载。",
             "不能在 xISDP_Setting 或 xISDP_Log 上初始化当前表。请选择业务工作表后重试。")]
         [InlineData(
             "en",
-            "Configuration initialized.",
-            "Template imported.",
+            "Initialization completed. The current sheet content was not changed. You can continue uploading or downloading data.",
+            "Initialization completed. The current worksheet was created from the template. You can edit data and upload, or select the area to refresh and click Download.",
             "You cannot initialize xISDP_Setting or xISDP_Log. Select a business worksheet and try again.")]
         public void ForLocaleReturnsInitializeSheetCompletionAndManagedSheetMessages(
             string locale,

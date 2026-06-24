@@ -333,12 +333,28 @@ namespace OfficeAgent.ExcelAddIn
 
         public void ExecuteInitializeCurrentSheet()
         {
+            var sheetName = string.Empty;
+            try
+            {
+                sheetName = GetRequiredSheetName();
+                if (IsBlockedInitializationSheet(sheetName))
+                {
+                    dialogService.ShowWarning(GetStrings().InitializeSheetManagedSheetBlockedMessage);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                TrackRibbonEvent("ribbon.initialize.failed", error: CreateOperationFailedError(ex));
+                dialogService.ShowError(ex.Message);
+                return;
+            }
+
             if (!EnsureProjectSelected())
             {
                 return;
             }
 
-            var sheetName = string.Empty;
             var project = new ProjectOption
             {
                 SystemKey = ActiveSystemKey,
@@ -350,13 +366,6 @@ namespace OfficeAgent.ExcelAddIn
             var isBlankSheet = false;
             try
             {
-                sheetName = GetRequiredSheetName();
-                if (IsBlockedInitializationSheet(sheetName))
-                {
-                    dialogService.ShowWarning(GetStrings().InitializeSheetManagedSheetBlockedMessage);
-                    return;
-                }
-
                 var service = EnsureExecutionService();
                 isBlankSheet = service.IsWorkSheetContentBlank(sheetName);
                 var supportsTemplateImport = service.SupportsBusinessExportTemplates(project.SystemKey);
