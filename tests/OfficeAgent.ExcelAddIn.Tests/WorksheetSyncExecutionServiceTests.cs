@@ -1902,7 +1902,9 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     null,
                     null,
                     aiClient ?? new FakeAiColumnMappingClient(),
-                    businessWorkbookImporter,
+                    new FakeBusinessWorkbookImporterProxy(
+                        fullCtor.GetParameters().Last().ParameterType,
+                        businessWorkbookImporter).GetTransparentProxy(),
                 });
 
                 return (templateService, grid);
@@ -2215,7 +2217,6 @@ namespace OfficeAgent.ExcelAddIn.Tests
             ProjectOption project,
             BusinessExportTemplateOption template)
         {
-            var progress = new FakeInitializeSheetImportProgress();
             var method = service.GetType().GetMethod(
                 "InitializeCurrentSheetFromBusinessTemplateAsync",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -2230,7 +2231,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 sheetName,
                 project,
                 template,
-                progress,
+                null,
                 CancellationToken.None,
             });
 
@@ -2935,18 +2936,47 @@ namespace OfficeAgent.ExcelAddIn.Tests
             }
         }
 
-        private sealed class FakeInitializeSheetImportProgress : IInitializeSheetImportProgress
+        private sealed class FakeBusinessWorkbookImporterProxy : RealProxy
         {
-            public void SetDownloading()
+            private readonly FakeBusinessWorkbookImporter importer;
+
+            public FakeBusinessWorkbookImporterProxy(Type interfaceType, IBusinessWorkbookImporter importer)
+                : base(interfaceType)
             {
+                this.importer = (FakeBusinessWorkbookImporter)importer;
             }
 
-            public void SetImporting()
+            public override IMessage Invoke(IMessage msg)
             {
-            }
-
-            public void SetWritingConfiguration()
-            {
+                var call = (IMethodCallMessage)msg;
+                try
+                {
+                    switch (call.MethodName)
+                    {
+                        case nameof(IBusinessWorkbookImporter.IsWorkSheetContentBlank):
+                            return new ReturnMessage(
+                                importer.IsWorkSheetContentBlank((string)call.Args[0]),
+                                null,
+                                0,
+                                call.LogicalCallContext,
+                                call);
+                        case nameof(IBusinessWorkbookImporter.EnsureCanWriteToWorkSheet):
+                            importer.EnsureCanWriteToWorkSheet((string)call.Args[0]);
+                            return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                        case nameof(IBusinessWorkbookImporter.ImportBusinessDataSheet):
+                            importer.ImportBusinessDataSheet((byte[])call.Args[0], (string)call.Args[1]);
+                            return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                        case nameof(IBusinessWorkbookImporter.ActivateWorkSheetAtA1):
+                            importer.ActivateWorkSheetAtA1((string)call.Args[0]);
+                            return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                        default:
+                            throw new MissingMethodException(call.MethodName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return new ReturnMessage(ex, call);
+                }
             }
         }
 
