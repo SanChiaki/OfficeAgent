@@ -307,6 +307,17 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void GetBusinessExportTemplatesReturnsEmptyWhenConnectorDoesNotImplementExtension()
+        {
+            var connector = new FakeSystemConnector();
+            var service = CreateService(connector);
+
+            var templates = service.GetBusinessExportTemplates(connector.SystemKey, "performance");
+
+            Assert.Empty(templates);
+        }
+
+        [Fact]
         public void GetBusinessExportTemplatesReturnsSanitizedOptions()
         {
             var connector = new FakeBusinessTemplateConnector

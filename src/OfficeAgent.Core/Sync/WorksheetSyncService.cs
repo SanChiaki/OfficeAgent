@@ -282,7 +282,7 @@ namespace OfficeAgent.Core.Sync
         {
             if (!(GetRequiredConnector(systemKey) is IBusinessExportTemplateConnector connector))
             {
-                throw new NotSupportedException("The connector does not support business export templates.");
+                return Array.Empty<BusinessExportTemplateOption>();
             }
 
             return (connector.GetBusinessExportTemplates(projectId) ?? Array.Empty<BusinessExportTemplateOption>())
