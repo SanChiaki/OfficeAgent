@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -42,6 +44,115 @@ namespace OfficeAgent.Core.Tests
             var service = CreateService(new FakeSystemConnector(), new FakeWorksheetMetadataStore());
 
             Assert.Throws<ArgumentNullException>(() => service.InitializeSheet("Sheet1", null));
+        }
+
+        [Fact]
+        public void PrepareSheetInitializationBuildsPlanWithoutWritingMetadata()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = connector.SystemKey,
+                ProjectId = "old-project",
+                ProjectName = "旧项目",
+                HeaderStartRow = 4,
+                HeaderRowCount = 1,
+                DataStartRow = 5,
+            };
+            var service = CreateService(connector, metadataStore);
+            var project = new ProjectOption
+            {
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            };
+
+            var plan = service.PrepareSheetInitialization("Sheet1", project);
+
+            Assert.Equal("Sheet1", connector.LastCreateBindingSeedSheetName);
+            Assert.Same(project, connector.LastCreateBindingSeedProject);
+            Assert.Equal("performance", connector.LastFieldMappingDefinitionProjectId);
+            Assert.Equal("Sheet1", connector.LastBuildFieldMappingSeedSheetName);
+            Assert.Equal("performance", connector.LastBuildFieldMappingSeedProjectId);
+            Assert.Equal("Sheet1", plan.Binding.SheetName);
+            Assert.Equal("performance", plan.Binding.ProjectId);
+            Assert.Equal("绩效项目", plan.Binding.ProjectName);
+            Assert.Equal(4, plan.Binding.HeaderStartRow);
+            Assert.Equal(1, plan.Binding.HeaderRowCount);
+            Assert.Equal(5, plan.Binding.DataStartRow);
+            Assert.Same(connector.FieldMappingDefinition, plan.FieldMappingDefinition);
+            Assert.Equal(connector.FieldMappingSeedRows.Select(row => row.Values["ApiFieldKey"]), plan.FieldMappings.Select(row => row.Values["ApiFieldKey"]));
+            Assert.Null(metadataStore.LastSavedBinding);
+            Assert.Null(metadataStore.LastSavedFieldMappingDefinition);
+            Assert.Empty(metadataStore.LastSavedFieldMappings);
+        }
+
+        [Fact]
+        public void SaveSheetInitializationWritesPreparedBindingAndMappings()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = CreateService(connector, metadataStore);
+            var plan = new SheetInitializationPlan
+            {
+                Binding = connector.CreateBindingSeed(
+                    "Sheet1",
+                    new ProjectOption
+                    {
+                        SystemKey = connector.SystemKey,
+                        ProjectId = "performance",
+                        DisplayName = "绩效项目",
+                    }),
+                FieldMappingDefinition = connector.FieldMappingDefinition,
+                FieldMappings = connector.FieldMappingSeedRows,
+            };
+
+            service.SaveSheetInitialization(plan);
+
+            Assert.Same(plan.Binding, metadataStore.LastSavedBinding);
+            Assert.Same(connector.FieldMappingDefinition, metadataStore.LastSavedFieldMappingDefinition);
+            Assert.Equal(connector.FieldMappingSeedRows.Select(row => row.Values["ApiFieldKey"]), metadataStore.LastSavedFieldMappings.Select(row => row.Values["ApiFieldKey"]));
+        }
+
+        [Fact]
+        public void InitializeSheetUsesDeferredPlanAndPreservesExistingBehavior()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 3,
+                HeaderRowCount = 1,
+                DataStartRow = 4,
+            };
+            var service = CreateService(connector, metadataStore);
+            var project = new ProjectOption
+            {
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                DisplayName = "绩效项目",
+            };
+
+            service.InitializeSheet("Sheet1", project);
+
+            Assert.Equal("Sheet1", connector.LastCreateBindingSeedSheetName);
+            Assert.Same(project, connector.LastCreateBindingSeedProject);
+            Assert.Equal("performance", connector.LastFieldMappingDefinitionProjectId);
+            Assert.Equal("Sheet1", connector.LastBuildFieldMappingSeedSheetName);
+            Assert.Equal("performance", connector.LastBuildFieldMappingSeedProjectId);
+            Assert.Equal("Sheet1", metadataStore.LastSavedBinding.SheetName);
+            Assert.Equal("performance", metadataStore.LastSavedBinding.ProjectId);
+            Assert.Equal(3, metadataStore.LastSavedBinding.HeaderStartRow);
+            Assert.Equal(1, metadataStore.LastSavedBinding.HeaderRowCount);
+            Assert.Equal(4, metadataStore.LastSavedBinding.DataStartRow);
+            Assert.Same(connector.FieldMappingDefinition, metadataStore.LastSavedFieldMappingDefinition);
+            Assert.Equal(connector.FieldMappingSeedRows.Select(row => row.Values["ApiFieldKey"]), metadataStore.LastSavedFieldMappings.Select(row => row.Values["ApiFieldKey"]));
         }
 
         [Fact]
@@ -185,6 +296,94 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void SupportsBusinessExportTemplatesReturnsFalseWhenConnectorDoesNotImplementExtension()
+        {
+            var connector = new FakeSystemConnector();
+            var service = CreateService(connector);
+
+            var supportsTemplates = service.SupportsBusinessExportTemplates(connector.SystemKey);
+
+            Assert.False(supportsTemplates);
+        }
+
+        [Fact]
+        public void GetBusinessExportTemplatesReturnsSanitizedOptions()
+        {
+            var connector = new FakeBusinessTemplateConnector
+            {
+                TemplateOptions = new[]
+                {
+                    new BusinessExportTemplateOption { TemplateId = "template-a", TemplateName = "Template A" },
+                    new BusinessExportTemplateOption { TemplateId = "template-b", TemplateName = " " },
+                    new BusinessExportTemplateOption { TemplateId = " " },
+                    null,
+                },
+            };
+            var service = CreateService(connector);
+
+            var templates = service.GetBusinessExportTemplates(connector.SystemKey, "performance");
+
+            Assert.Equal("performance", connector.LastGetBusinessExportTemplatesProjectId);
+            Assert.Collection(
+                templates,
+                template =>
+                {
+                    Assert.Equal("template-a", template.TemplateId);
+                    Assert.Equal("Template A", template.TemplateName);
+                },
+                template =>
+                {
+                    Assert.Equal("template-b", template.TemplateId);
+                    Assert.Equal("template-b", template.TemplateName);
+                });
+        }
+
+        [Fact]
+        public async Task ExportBusinessWorkbookAsyncUsesOptionalConnector()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var service = CreateService(connector);
+
+            var workbook = await service.ExportBusinessWorkbookAsync(
+                connector.SystemKey,
+                "performance",
+                "template-a",
+                CancellationToken.None);
+
+            Assert.Same(connector.Workbook, workbook);
+            Assert.Equal("performance", connector.LastExportBusinessWorkbookProjectId);
+            Assert.Equal("template-a", connector.LastExportBusinessWorkbookTemplateId);
+        }
+
+        [Fact]
+        public async Task ExportBusinessWorkbookAsyncThrowsWhenTemplateIdIsBlank()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var service = CreateService(connector);
+
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                service.ExportBusinessWorkbookAsync(
+                    connector.SystemKey,
+                    "performance",
+                    " ",
+                    CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task ExportBusinessWorkbookAsyncThrowsWhenConnectorDoesNotImplementExtension()
+        {
+            var connector = new FakeSystemConnector();
+            var service = CreateService(connector);
+
+            await Assert.ThrowsAsync<NotSupportedException>(() =>
+                service.ExportBusinessWorkbookAsync(
+                    connector.SystemKey,
+                    "performance",
+                    "template-a",
+                    CancellationToken.None));
+        }
+
+        [Fact]
         public void InitializeSheetUsesConnectorMatchingProjectSystemKey()
         {
             var connectorA = new FakeSystemConnector("system-a");
@@ -251,7 +450,7 @@ namespace OfficeAgent.Core.Tests
             }
         }
 
-        private sealed class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
+        private class FakeSystemConnector : ISystemConnector, IUploadChangeFilter
         {
             public FakeSystemConnector(string systemKey = "current-business-system")
             {
@@ -435,6 +634,47 @@ namespace OfficeAgent.Core.Tests
                         ["CurrentChildDisplayName"] = currentChild,
                     },
                 };
+            }
+        }
+
+        private sealed class FakeBusinessTemplateConnector : FakeSystemConnector, IBusinessExportTemplateConnector
+        {
+            public IReadOnlyList<BusinessExportTemplateOption> TemplateOptions { get; set; } = new[]
+            {
+                new BusinessExportTemplateOption
+                {
+                    TemplateId = "template-a",
+                    TemplateName = "Template A",
+                },
+            };
+
+            public BusinessExportWorkbook Workbook { get; } = new BusinessExportWorkbook
+            {
+                FileName = "template-a.xlsx",
+                ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Content = new byte[] { 1, 2, 3 },
+            };
+
+            public string LastGetBusinessExportTemplatesProjectId { get; private set; }
+
+            public string LastExportBusinessWorkbookProjectId { get; private set; }
+
+            public string LastExportBusinessWorkbookTemplateId { get; private set; }
+
+            public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId)
+            {
+                LastGetBusinessExportTemplatesProjectId = projectId;
+                return TemplateOptions;
+            }
+
+            public Task<BusinessExportWorkbook> ExportBusinessWorkbookAsync(
+                string projectId,
+                string templateId,
+                CancellationToken cancellationToken)
+            {
+                LastExportBusinessWorkbookProjectId = projectId;
+                LastExportBusinessWorkbookTemplateId = templateId;
+                return Task.FromResult(Workbook);
             }
         }
 
