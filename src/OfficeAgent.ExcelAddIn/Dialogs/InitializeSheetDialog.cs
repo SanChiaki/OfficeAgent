@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using OfficeAgent.Core.Models;
 using OfficeAgent.ExcelAddIn.Localization;
@@ -185,13 +186,13 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 : InitializeSheetMode.ConfigOnly;
         }
 
-        protected override void OnShown(EventArgs e)
+        protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            LoadTemplates();
+            await LoadTemplatesAsync();
         }
 
-        private void LoadTemplates()
+        private async Task LoadTemplatesAsync()
         {
             templateStatusLabel.Text = strings.InitializeSheetTemplateLoadingText;
             confirmButton.Enabled = false;
@@ -201,12 +202,17 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             try
             {
                 loadResult = request.SupportsTemplateImport
-                    ? loadTemplates()
+                    ? await Task.Run(loadTemplates)
                     : InitializeSheetTemplateLoadResult.Unsupported(strings.InitializeSheetTemplateUnsupportedMessage);
             }
             catch
             {
                 loadResult = InitializeSheetTemplateLoadResult.Failed(strings.InitializeSheetTemplateLoadFailedMessage);
+            }
+
+            if (IsDisposed)
+            {
+                return;
             }
 
             ApplyTemplateLoadResult(loadResult);
@@ -246,7 +252,7 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
             }
             else
             {
-                templateStatusLabel.Text = strings.TemplateNoAvailableMessage;
+                templateStatusLabel.Text = strings.InitializeSheetTemplateEmptyMessage;
             }
 
             var defaultMode = ResolveDefaultMode(request.IsBlankSheet, templateModeAvailable);

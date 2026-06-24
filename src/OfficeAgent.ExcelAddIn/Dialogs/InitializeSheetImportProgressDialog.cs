@@ -136,10 +136,18 @@ namespace OfficeAgent.ExcelAddIn.Dialogs
                 completed = true;
                 DialogResult = DialogResult.OK;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                canceled = true;
-                DialogResult = DialogResult.Cancel;
+                if (cancellationTokenSource.IsCancellationRequested)
+                {
+                    canceled = true;
+                    DialogResult = DialogResult.Cancel;
+                }
+                else
+                {
+                    error = ex;
+                    DialogResult = DialogResult.Abort;
+                }
             }
             catch (Exception ex)
             {

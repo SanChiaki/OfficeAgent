@@ -97,6 +97,10 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "模板加载失败。"
             : "Failed to load templates.";
 
+        public string InitializeSheetTemplateEmptyMessage => Locale == "zh"
+            ? "当前项目没有可用的业务模板。你仍可选择“仅初始化配置”。"
+            : "No business templates are available for the current project. You can still initialize configuration only.";
+
         public string InitializeSheetOverwriteRiskMessage => Locale == "zh"
             ? "从模板创建作业表会覆盖当前表中的现有内容。请确认后继续。"
             : "Creating the sheet from a template will overwrite existing content on the current sheet. Continue only if this is expected.";

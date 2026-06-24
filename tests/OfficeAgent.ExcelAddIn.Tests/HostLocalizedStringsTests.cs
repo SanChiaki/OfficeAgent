@@ -79,6 +79,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData("zh", "当前项目没有可用的业务模板。你仍可选择“仅初始化配置”。")]
+        [InlineData("en", "No business templates are available for the current project. You can still initialize configuration only.")]
+        public void ForLocaleReturnsInitializeSheetTemplateEmptyMessage(
+            string locale,
+            string expectedMessage)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedMessage, GetString(strings, "InitializeSheetTemplateEmptyMessage"));
+            Assert.NotEqual(GetString(strings, "TemplateNoAvailableMessage"), GetString(strings, "InitializeSheetTemplateEmptyMessage"));
+        }
+
+        [Theory]
         [InlineData("zh")]
         [InlineData("en")]
         public void ForLocaleUsesXisdpAsHostAndRibbonName(string locale)
