@@ -97,6 +97,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
         }
 
         [Theory]
+        [InlineData(
+            "zh",
+            "配置初始化完成。",
+            "模板导入完成。",
+            "不能在 xISDP_Setting 或 xISDP_Log 上初始化当前表。请选择业务工作表后重试。")]
+        [InlineData(
+            "en",
+            "Configuration initialized.",
+            "Template imported.",
+            "You cannot initialize xISDP_Setting or xISDP_Log. Select a business worksheet and try again.")]
+        public void ForLocaleReturnsInitializeSheetCompletionAndManagedSheetMessages(
+            string locale,
+            string expectedConfigOnlyCompleted,
+            string expectedTemplateImportCompleted,
+            string expectedManagedSheetBlocked)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedConfigOnlyCompleted, GetString(strings, "InitializeSheetConfigOnlyCompletedMessage"));
+            Assert.Equal(expectedTemplateImportCompleted, GetString(strings, "InitializeSheetTemplateImportCompletedMessage"));
+            Assert.Equal(expectedManagedSheetBlocked, GetString(strings, "InitializeSheetManagedSheetBlockedMessage"));
+        }
+
+        [Theory]
         [InlineData("zh")]
         [InlineData("en")]
         public void ForLocaleUsesXisdpAsHostAndRibbonName(string locale)

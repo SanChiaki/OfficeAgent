@@ -54,6 +54,18 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "初始化当前表完成。"
             : "Initialize sheet completed.";
 
+        public string InitializeSheetConfigOnlyCompletedMessage => Locale == "zh"
+            ? "配置初始化完成。"
+            : "Configuration initialized.";
+
+        public string InitializeSheetTemplateImportCompletedMessage => Locale == "zh"
+            ? "模板导入完成。"
+            : "Template imported.";
+
+        public string InitializeSheetManagedSheetBlockedMessage => Locale == "zh"
+            ? "不能在 xISDP_Setting 或 xISDP_Log 上初始化当前表。请选择业务工作表后重试。"
+            : "You cannot initialize xISDP_Setting or xISDP_Log. Select a business worksheet and try again.";
+
         public string InitializeSheetDialogTitle => Locale == "zh" ? "初始化当前表" : "Initialize sheet";
 
         public string InitializeSheetInstructionText => Locale == "zh"

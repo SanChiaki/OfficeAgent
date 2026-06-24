@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using OfficeAgent.Core;
@@ -344,26 +345,101 @@ namespace OfficeAgent.ExcelAddIn
                 ProjectId = ActiveProjectId,
                 DisplayName = ActiveProjectDisplayName,
             };
+            var importStopwatch = new Stopwatch();
+            BusinessExportTemplateOption selectedTemplate = null;
+            var isBlankSheet = false;
             try
             {
                 sheetName = GetRequiredSheetName();
+                if (IsBlockedInitializationSheet(sheetName))
+                {
+                    dialogService.ShowWarning(GetStrings().InitializeSheetManagedSheetBlockedMessage);
+                    return;
+                }
+
+                var service = EnsureExecutionService();
+                isBlankSheet = service.IsWorkSheetContentBlank(sheetName);
+                var supportsTemplateImport = service.SupportsBusinessExportTemplates(project.SystemKey);
+                var dialogResult = dialogService.ShowInitializeSheetDialog(
+                    new InitializeSheetDialogRequest
+                    {
+                        ProjectDisplayName = project.DisplayName ?? string.Empty,
+                        IsBlankSheet = isBlankSheet,
+                        SupportsTemplateImport = supportsTemplateImport,
+                    },
+                    () => service.LoadBusinessExportTemplates(project));
+
+                if (dialogResult == null)
+                {
+                    TrackRibbonEvent("ribbon.initialize.canceled");
+                    return;
+                }
+
                 OfficeAgentLog.Info(
                     "ribbon_sync",
                     "initialize_sheet.begin",
                     "Initializing current worksheet.",
                     BuildInitializeSheetDetails(sheetName, project));
-                EnsureExecutionService().InitializeCurrentSheet(sheetName, project);
+
+                if (dialogResult.Mode == InitializeSheetMode.TemplateImport)
+                {
+                    selectedTemplate = dialogResult.SelectedTemplate;
+                    importStopwatch.Start();
+                    TrackRibbonEvent(
+                        "ribbon.initialize_template_import.started",
+                        BuildTemplateImportProperties(selectedTemplate, isBlankSheet, importStopwatch));
+
+                    var completed = dialogService.RunInitializeSheetTemplateImportWithProgress(
+                        (progress, cancellationToken) => service.InitializeCurrentSheetFromBusinessTemplateAsync(
+                            sheetName,
+                            project,
+                            selectedTemplate,
+                            progress,
+                            cancellationToken));
+
+                    if (!completed)
+                    {
+                        TrackRibbonEvent(
+                            "ribbon.initialize_template_import.canceled",
+                            BuildTemplateImportProperties(selectedTemplate, isBlankSheet, importStopwatch));
+                        return;
+                    }
+
+                    OfficeAgentLog.Info(
+                        "ribbon_sync",
+                        "initialize_sheet.completed",
+                        "Current worksheet initialized from business template.",
+                        BuildInitializeSheetDetails(sheetName, project));
+                    TrackRibbonEvent(
+                        "ribbon.initialize_template_import.completed",
+                        BuildTemplateImportProperties(selectedTemplate, isBlankSheet, importStopwatch));
+                    dialogService.ShowInfo(GetStrings().InitializeSheetTemplateImportCompletedMessage);
+                    return;
+                }
+
+                service.InitializeCurrentSheet(sheetName, project);
                 OfficeAgentLog.Info(
                     "ribbon_sync",
                     "initialize_sheet.completed",
                     "Current worksheet initialized.",
                     BuildInitializeSheetDetails(sheetName, project));
                 TrackRibbonEvent("ribbon.initialize.completed");
-                dialogService.ShowInfo(GetStrings().InitializeCurrentSheetCompletedMessage);
+                dialogService.ShowInfo(GetStrings().InitializeSheetConfigOnlyCompletedMessage);
             }
             catch (AuthenticationRequiredException ex)
             {
-                TrackRibbonEvent("ribbon.initialize.failed", error: CreateOperationFailedError(ex));
+                if (selectedTemplate != null)
+                {
+                    TrackRibbonEvent(
+                        "ribbon.initialize_template_import.failed",
+                        BuildTemplateImportProperties(selectedTemplate, isBlankSheet, importStopwatch, ex),
+                        error: CreateOperationFailedError(ex));
+                }
+                else
+                {
+                    TrackRibbonEvent("ribbon.initialize.failed", error: CreateOperationFailedError(ex));
+                }
+
                 OfficeAgentLog.Warn(
                     "ribbon_sync",
                     "initialize_sheet.authentication_required",
@@ -373,7 +449,18 @@ namespace OfficeAgent.ExcelAddIn
             }
             catch (Exception ex)
             {
-                TrackRibbonEvent("ribbon.initialize.failed", error: CreateOperationFailedError(ex));
+                if (selectedTemplate != null)
+                {
+                    TrackRibbonEvent(
+                        "ribbon.initialize_template_import.failed",
+                        BuildTemplateImportProperties(selectedTemplate, isBlankSheet, importStopwatch, ex),
+                        error: CreateOperationFailedError(ex));
+                }
+                else
+                {
+                    TrackRibbonEvent("ribbon.initialize.failed", error: CreateOperationFailedError(ex));
+                }
+
                 OfficeAgentLog.Error(
                     "ribbon_sync",
                     "initialize_sheet.failed",
@@ -682,6 +769,12 @@ namespace OfficeAgent.ExcelAddIn
                    string.Equals(existingBinding.ProjectId, project.ProjectId, StringComparison.Ordinal);
         }
 
+        private static bool IsBlockedInitializationSheet(string sheetName)
+        {
+            return MetadataWorksheetNames.IsMetadataWorksheet(sheetName) ||
+                   string.Equals(sheetName, "xISDP_Log", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void RestoreBindingState(SheetBinding binding, string sheetName)
         {
             lastRefreshedSheetName = sheetName;
@@ -755,6 +848,29 @@ namespace OfficeAgent.ExcelAddIn
                 Message = ex?.Message ?? string.Empty,
                 ExceptionType = ex?.GetType().Name ?? string.Empty,
             };
+        }
+
+        private static IDictionary<string, object> BuildTemplateImportProperties(
+            BusinessExportTemplateOption template,
+            bool isBlankSheet,
+            Stopwatch stopwatch,
+            Exception exception = null)
+        {
+            var properties = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["templateId"] = template?.TemplateId ?? string.Empty,
+                ["templateName"] = template?.TemplateName ?? string.Empty,
+                ["isBlankSheet"] = isBlankSheet,
+                ["durationMs"] = stopwatch?.ElapsedMilliseconds ?? 0L,
+            };
+
+            if (exception != null)
+            {
+                properties["failedStage"] = "initialize_template_import";
+                properties["exceptionType"] = exception.GetType().Name;
+            }
+
+            return properties;
         }
 
         private static IDictionary<string, object> BuildDownloadProperties(
