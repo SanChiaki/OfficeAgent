@@ -130,7 +130,8 @@ namespace OfficeAgent.ExcelAddIn
                 new SyncOperationPreviewFactory(),
                 WorksheetChangeLogStore,
                 WorksheetPendingEditTracker,
-                new AiColumnMappingClient(SettingsStore));
+                new AiColumnMappingClient(SettingsStore),
+                new ExcelBusinessWorkbookImporter(Application));
             RibbonSyncController = new RibbonSyncController(
                 WorksheetMetadataStore,
                 WorksheetSyncService,

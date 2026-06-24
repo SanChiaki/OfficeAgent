@@ -7,6 +7,7 @@ using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
+using OfficeAgent.ExcelAddIn.Dialogs;
 using OfficeAgent.ExcelAddIn.Excel;
 using OfficeAgent.ExcelAddIn.Localization;
 
@@ -53,6 +54,7 @@ namespace OfficeAgent.ExcelAddIn
         private readonly ExcelUploadValueNormalizer uploadValueNormalizer;
         private readonly IWorksheetChangeLogStore changeLogStore;
         private readonly WorksheetPendingEditTracker pendingEditTracker;
+        private readonly IBusinessWorkbookImporter businessWorkbookImporter;
         private const int RowIdReadBatchSize = 5000;
 
         public WorksheetSyncExecutionService(
@@ -96,6 +98,7 @@ namespace OfficeAgent.ExcelAddIn
             headerScanner = new WorksheetHeaderScanner();
             aiColumnMappingService = new AiColumnMappingService();
             uploadValueNormalizer = new ExcelUploadValueNormalizer();
+            businessWorkbookImporter = null;
         }
 
         public WorksheetSyncExecutionService(
@@ -136,9 +139,122 @@ namespace OfficeAgent.ExcelAddIn
             this.aiColumnMappingClient = aiColumnMappingClient ?? throw new ArgumentNullException(nameof(aiColumnMappingClient));
         }
 
+        public WorksheetSyncExecutionService(
+            WorksheetSyncService worksheetSyncService,
+            IWorksheetMetadataStore metadataStore,
+            IWorksheetSelectionReader selectionReader,
+            IWorksheetGridAdapter gridAdapter,
+            SyncOperationPreviewFactory previewFactory,
+            IWorksheetChangeLogStore changeLogStore,
+            WorksheetPendingEditTracker pendingEditTracker,
+            IAiColumnMappingClient aiColumnMappingClient,
+            IBusinessWorkbookImporter businessWorkbookImporter)
+            : this(
+                worksheetSyncService,
+                metadataStore,
+                selectionReader,
+                gridAdapter,
+                previewFactory,
+                changeLogStore,
+                pendingEditTracker,
+                aiColumnMappingClient)
+        {
+            this.businessWorkbookImporter = businessWorkbookImporter ?? throw new ArgumentNullException(nameof(businessWorkbookImporter));
+        }
+
         public void InitializeCurrentSheet(string sheetName, ProjectOption project)
         {
             worksheetSyncService.InitializeSheet(sheetName, project);
+        }
+
+        public bool IsWorkSheetContentBlank(string sheetName)
+        {
+            return businessWorkbookImporter != null &&
+                   businessWorkbookImporter.IsWorkSheetContentBlank(sheetName);
+        }
+
+        public bool SupportsBusinessExportTemplates(string systemKey)
+        {
+            return worksheetSyncService.SupportsBusinessExportTemplates(systemKey);
+        }
+
+        public InitializeSheetTemplateLoadResult LoadBusinessExportTemplates(ProjectOption project)
+        {
+            var strings = GetStrings();
+            if (project == null || string.IsNullOrWhiteSpace(project.SystemKey))
+            {
+                return InitializeSheetTemplateLoadResult.Unsupported(strings.InitializeSheetTemplateUnsupportedMessage);
+            }
+
+            if (businessWorkbookImporter == null)
+            {
+                return InitializeSheetTemplateLoadResult.Unsupported(strings.InitializeSheetTemplateUnsupportedMessage);
+            }
+
+            if (!worksheetSyncService.SupportsBusinessExportTemplates(project.SystemKey))
+            {
+                return InitializeSheetTemplateLoadResult.Unsupported(strings.InitializeSheetTemplateUnsupportedMessage);
+            }
+
+            try
+            {
+                var templates = worksheetSyncService.GetBusinessExportTemplates(project.SystemKey, project.ProjectId);
+                if (templates == null || templates.Count == 0)
+                {
+                    return InitializeSheetTemplateLoadResult.Failed(strings.InitializeSheetTemplateEmptyMessage);
+                }
+
+                return InitializeSheetTemplateLoadResult.Success(templates);
+            }
+            catch
+            {
+                return InitializeSheetTemplateLoadResult.Failed(strings.InitializeSheetTemplateLoadFailedMessage);
+            }
+        }
+
+        public async Task InitializeCurrentSheetFromBusinessTemplateAsync(
+            string sheetName,
+            ProjectOption project,
+            BusinessExportTemplateOption template,
+            IInitializeSheetImportProgress progress,
+            CancellationToken cancellationToken)
+        {
+            if (businessWorkbookImporter == null)
+            {
+                throw new InvalidOperationException(GetStrings().InitializeSheetTemplateUnsupportedMessage);
+            }
+
+            if (template == null || string.IsNullOrWhiteSpace(template.TemplateId))
+            {
+                throw new InvalidOperationException(GetStrings().TemplatePickerSelectionRequiredMessage);
+            }
+
+            businessWorkbookImporter.EnsureCanWriteToWorkSheet(sheetName);
+
+            progress?.SetDownloading();
+            var workbook = await worksheetSyncService.ExportBusinessWorkbookAsync(
+                project.SystemKey,
+                project.ProjectId,
+                template.TemplateId,
+                cancellationToken).ConfigureAwait(true);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var initializationPlan = worksheetSyncService.PrepareSheetInitialization(sheetName, project);
+
+            progress?.SetImporting();
+            businessWorkbookImporter.ImportBusinessDataSheet(workbook.Content, sheetName);
+
+            try
+            {
+                progress?.SetWritingConfiguration();
+                worksheetSyncService.SaveSheetInitialization(initializationPlan);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(GetInitializeSheetMetadataIncompleteMessage(), ex);
+            }
+
+            businessWorkbookImporter.ActivateWorkSheetAtA1(sheetName);
         }
 
         public AiColumnMappingPreview PrepareAiColumnMappingPreview(string sheetName)
@@ -1851,6 +1967,21 @@ namespace OfficeAgent.ExcelAddIn
         private static HostLocalizedStrings GetStrings()
         {
             return Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
+        }
+
+        private static string GetInitializeSheetMetadataIncompleteMessage()
+        {
+            var strings = GetStrings();
+            var property = strings.GetType().GetProperty("InitializeSheetMetadataIncompleteMessage");
+            var localizedMessage = property?.GetValue(strings) as string;
+            if (!string.IsNullOrWhiteSpace(localizedMessage))
+            {
+                return localizedMessage;
+            }
+
+            return string.Equals(strings.Locale, "zh", StringComparison.OrdinalIgnoreCase)
+                ? "表格内容已导入，但同步配置未完成。请重新初始化当前表。"
+                : "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.";
         }
 
         private static string NormalizeHeaderType(string headerType)
