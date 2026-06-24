@@ -127,6 +127,10 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "正在写入当前表配置，请稍候。"
             : "Writing current sheet configuration. Please wait.";
 
+        public string InitializeSheetMetadataIncompleteMessage => Locale == "zh"
+            ? "表内容已导入，但同步配置未完成。请重新初始化当前表。"
+            : "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.";
+
         public string InitializationRequiredMessage => Locale == "zh"
             ? "当前 sheet 未初始化，请先执行初始化当前表。"
             : "The current sheet is not initialized. Initialize the current sheet first.";

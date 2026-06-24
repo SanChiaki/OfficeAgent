@@ -251,7 +251,7 @@ namespace OfficeAgent.ExcelAddIn
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(GetInitializeSheetMetadataIncompleteMessage(), ex);
+                throw new InvalidOperationException(GetStrings().InitializeSheetMetadataIncompleteMessage, ex);
             }
 
             businessWorkbookImporter.ActivateWorkSheetAtA1(sheetName);
@@ -1967,21 +1967,6 @@ namespace OfficeAgent.ExcelAddIn
         private static HostLocalizedStrings GetStrings()
         {
             return Globals.ThisAddIn?.HostLocalizedStrings ?? HostLocalizedStrings.ForLocale("en");
-        }
-
-        private static string GetInitializeSheetMetadataIncompleteMessage()
-        {
-            var strings = GetStrings();
-            var property = strings.GetType().GetProperty("InitializeSheetMetadataIncompleteMessage");
-            var localizedMessage = property?.GetValue(strings) as string;
-            if (!string.IsNullOrWhiteSpace(localizedMessage))
-            {
-                return localizedMessage;
-            }
-
-            return string.Equals(strings.Locale, "zh", StringComparison.OrdinalIgnoreCase)
-                ? "表格内容已导入，但同步配置未完成。请重新初始化当前表。"
-                : "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.";
         }
 
         private static string NormalizeHeaderType(string headerType)

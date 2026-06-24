@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using OfficeAgent.ExcelAddIn.Localization;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
@@ -47,7 +48,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             "覆盖并初始化",
             "正在下载模板，请稍候。",
             "正在导入模板工作表，请稍候。",
-            "正在写入当前表配置，请稍候。")]
+            "正在写入当前表配置，请稍候。",
+            "表内容已导入，但同步配置未完成。请重新初始化当前表。")]
         [InlineData(
             "en",
             "Initialize sheet",
@@ -56,7 +58,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             "Overwrite and initialize",
             "Downloading template. Please wait.",
             "Importing template sheet. Please wait.",
-            "Writing current sheet configuration. Please wait.")]
+            "Writing current sheet configuration. Please wait.",
+            "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.")]
         public void ForLocaleReturnsExpectedInitializeSheetDialogText(
             string locale,
             string expectedTitle,
@@ -65,7 +68,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             string expectedOverwriteButton,
             string expectedDownloadingProgress,
             string expectedImportingProgress,
-            string expectedWritingProgress)
+            string expectedWritingProgress,
+            string expectedMetadataIncompleteMessage)
         {
             var strings = CreateStrings(locale);
 
@@ -76,6 +80,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(expectedDownloadingProgress, GetString(strings, "InitializeSheetImportProgressDownloadingText"));
             Assert.Equal(expectedImportingProgress, GetString(strings, "InitializeSheetImportProgressImportingText"));
             Assert.Equal(expectedWritingProgress, GetString(strings, "InitializeSheetImportProgressWritingConfigurationText"));
+            Assert.Equal(expectedMetadataIncompleteMessage, GetString(strings, "InitializeSheetMetadataIncompleteMessage"));
         }
 
         [Theory]
@@ -324,12 +329,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private static Assembly LoadAddInAssembly()
         {
-            return Assembly.LoadFrom(ResolveRepositoryPath(
-                "src",
-                "OfficeAgent.ExcelAddIn",
-                "bin",
-                "Debug",
-                "OfficeAgent.ExcelAddIn.dll"));
+            return typeof(HostLocalizedStrings).Assembly;
         }
 
         private static string ResolveRepositoryPath(params string[] segments)
