@@ -117,6 +117,31 @@ namespace OfficeAgent.Core.Tests
         }
 
         [Fact]
+        public void SaveSheetInitializationThrowsWhenFieldMappingDefinitionIsMissing()
+        {
+            var connector = new FakeSystemConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var service = CreateService(connector, metadataStore);
+            var plan = new SheetInitializationPlan
+            {
+                Binding = connector.CreateBindingSeed(
+                    "Sheet1",
+                    new ProjectOption
+                    {
+                        SystemKey = connector.SystemKey,
+                        ProjectId = "performance",
+                        DisplayName = "绩效项目",
+                    }),
+                FieldMappingDefinition = null,
+                FieldMappings = connector.FieldMappingSeedRows,
+            };
+
+            Assert.Throws<ArgumentException>(() => service.SaveSheetInitialization(plan));
+            Assert.Null(metadataStore.LastSavedBinding);
+            Assert.Null(metadataStore.LastSavedFieldMappingDefinition);
+        }
+
+        [Fact]
         public void InitializeSheetUsesDeferredPlanAndPreservesExistingBehavior()
         {
             var connector = new FakeSystemConnector();
@@ -354,16 +379,21 @@ namespace OfficeAgent.Core.Tests
         {
             var connector = new FakeBusinessTemplateConnector();
             var service = CreateService(connector);
+            using (var cancellationSource = new CancellationTokenSource())
+            {
+                var cancellationToken = cancellationSource.Token;
 
-            var workbook = await service.ExportBusinessWorkbookAsync(
-                connector.SystemKey,
-                "performance",
-                "template-a",
-                CancellationToken.None);
+                var workbook = await service.ExportBusinessWorkbookAsync(
+                    connector.SystemKey,
+                    "performance",
+                    "template-a",
+                    cancellationToken);
 
-            Assert.Same(connector.Workbook, workbook);
-            Assert.Equal("performance", connector.LastExportBusinessWorkbookProjectId);
-            Assert.Equal("template-a", connector.LastExportBusinessWorkbookTemplateId);
+                Assert.Same(connector.Workbook, workbook);
+                Assert.Equal("performance", connector.LastExportBusinessWorkbookProjectId);
+                Assert.Equal("template-a", connector.LastExportBusinessWorkbookTemplateId);
+                Assert.Equal(cancellationToken, connector.LastExportBusinessWorkbookCancellationToken);
+            }
         }
 
         [Fact]
@@ -682,6 +712,8 @@ namespace OfficeAgent.Core.Tests
 
             public string LastExportBusinessWorkbookTemplateId { get; private set; }
 
+            public CancellationToken LastExportBusinessWorkbookCancellationToken { get; private set; }
+
             public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId)
             {
                 LastGetBusinessExportTemplatesProjectId = projectId;
@@ -695,6 +727,7 @@ namespace OfficeAgent.Core.Tests
             {
                 LastExportBusinessWorkbookProjectId = projectId;
                 LastExportBusinessWorkbookTemplateId = templateId;
+                LastExportBusinessWorkbookCancellationToken = cancellationToken;
                 return Task.FromResult(Workbook);
             }
         }

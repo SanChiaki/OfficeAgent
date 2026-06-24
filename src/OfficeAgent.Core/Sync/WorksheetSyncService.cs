@@ -91,7 +91,7 @@ namespace OfficeAgent.Core.Sync
             return new SheetInitializationPlan
             {
                 Binding = binding,
-                FieldMappingDefinition = definition ?? new FieldMappingTableDefinition(),
+                FieldMappingDefinition = definition,
                 FieldMappings = seedRows ?? Array.Empty<SheetFieldMappingRow>(),
             };
         }
@@ -113,10 +113,15 @@ namespace OfficeAgent.Core.Sync
                 throw new ArgumentException("Sheet name is required.", nameof(plan));
             }
 
+            if (plan.FieldMappingDefinition == null)
+            {
+                throw new ArgumentException("Field mapping definition is required.", nameof(plan));
+            }
+
             metadataStore.SaveBinding(plan.Binding);
             metadataStore.SaveFieldMappings(
                 plan.Binding.SheetName,
-                plan.FieldMappingDefinition ?? new FieldMappingTableDefinition(),
+                plan.FieldMappingDefinition,
                 plan.FieldMappings ?? Array.Empty<SheetFieldMappingRow>());
         }
 
