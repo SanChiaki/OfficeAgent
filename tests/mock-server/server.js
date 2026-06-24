@@ -13,6 +13,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
 const path = require("path");
+const XLSX = require("xlsx");
 
 const performances = [
   { name: "张三", department: "销售部", score: 85, period: "2025-Q4" },
@@ -79,6 +80,14 @@ const connectorProjects = Object.keys(connectorProjectData).map(function (projec
     displayName: project.displayName,
   };
 });
+
+const connectorProjectTemplates = Object.keys(connectorProjectData).reduce(function (acc, projectId) {
+  acc[projectId] = [
+    { templateId: "standard", templateName: "标准作业表" },
+    { templateId: "review", templateName: "评审作业表" },
+  ];
+  return acc;
+}, {});
 
 function createConnectorProject(projectId, displayName, activityId, activityName, rows) {
   return {
@@ -192,6 +201,139 @@ function resolveConnectorProject(projectId, res) {
   }
 
   return project;
+}
+
+function createBusinessExportWorkbook(project, templateId) {
+  var workbook = XLSX.utils.book_new();
+  var columns = createBusinessExportColumns(project);
+  var headerRow1 = columns.map(function (column) { return column.parentHeader; });
+  var headerRow2 = columns.map(function (column) { return column.childHeader; });
+  var dataRows = project.rows.slice(0, 20).map(function (row) {
+    return columns.map(function (column) {
+      return row[column.fieldKey] != null ? row[column.fieldKey] : "";
+    });
+  });
+
+  var sheet = XLSX.utils.aoa_to_sheet([headerRow1, headerRow2].concat(dataRows));
+  sheet["!cols"] = columns.map(function (column) {
+    return { wch: column.width };
+  });
+  sheet["!merges"] = createBusinessExportMerges(columns);
+  sheet["!freeze"] = { xSplit: 0, ySplit: 2 };
+
+  XLSX.utils.book_append_sheet(workbook, sheet, "Business Data");
+  workbook.Props = {
+    Title: "OfficeAgent mock business export " + templateId,
+    Subject: project.displayName,
+    CreatedDate: new Date(Date.UTC(2026, 5, 25)),
+  };
+
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+function createBusinessExportColumns(project) {
+  var columns = [];
+  var activityHeads = [];
+
+  project.headList.forEach(function (head) {
+    if (!head) {
+      return;
+    }
+
+    if (stringEquals(head.headType, "activity")) {
+      activityHeads.push(head);
+      return;
+    }
+
+    if (!head.fieldKey) {
+      return;
+    }
+
+    columns.push({
+      fieldKey: head.fieldKey,
+      parentHeader: head.headerText || head.fieldKey,
+      childHeader: "",
+      width: Math.max(12, (head.headerText || head.fieldKey).length + 8),
+      mergeDown: true,
+    });
+  });
+
+  activityHeads.forEach(function (activity) {
+    createActivityExportProperties(project.rows, activity.activityId).forEach(function (property) {
+      columns.push({
+        fieldKey: property.fieldKey,
+        parentHeader: activity.activityName || activity.activityId,
+        childHeader: property.headerText,
+        width: 16,
+        mergeDown: false,
+      });
+    });
+  });
+
+  return columns;
+}
+
+function createActivityExportProperties(rows, activityId) {
+  var candidates = [
+    { propertyId: "name", headerText: "名称" },
+    { propertyId: "start", headerText: "开始时间" },
+    { propertyId: "end", headerText: "结束时间" },
+  ];
+
+  return candidates
+    .map(function (candidate) {
+      return {
+        fieldKey: candidate.propertyId + "_" + activityId,
+        headerText: candidate.headerText,
+      };
+    })
+    .filter(function (candidate) {
+      return rows.some(function (row) {
+        return Object.prototype.hasOwnProperty.call(row, candidate.fieldKey);
+      });
+    });
+}
+
+function createBusinessExportMerges(columns) {
+  var merges = [];
+  var activityStart = -1;
+  var activityName = null;
+
+  columns.forEach(function (column, index) {
+    if (column.mergeDown) {
+      merges.push({ s: { r: 0, c: index }, e: { r: 1, c: index } });
+    }
+
+    if (column.mergeDown) {
+      if (activityStart >= 0 && index - activityStart > 1) {
+        merges.push({ s: { r: 0, c: activityStart }, e: { r: 0, c: index - 1 } });
+      }
+      activityStart = -1;
+      activityName = null;
+      return;
+    }
+
+    if (activityName === column.parentHeader) {
+      return;
+    }
+
+    if (activityStart >= 0 && index - activityStart > 1) {
+      merges.push({ s: { r: 0, c: activityStart }, e: { r: 0, c: index - 1 } });
+    }
+
+    activityStart = index;
+    activityName = column.parentHeader;
+  });
+
+  if (activityStart >= 0 && columns.length - activityStart > 1) {
+    merges.push({ s: { r: 0, c: activityStart }, e: { r: 0, c: columns.length - 1 } });
+  }
+
+  return merges;
+}
+
+function stringEquals(left, right) {
+  return String(left || "").toLowerCase() === String(right || "").toLowerCase();
 }
 
 function getBatchSaveItems(body) {
@@ -393,6 +535,35 @@ apiApp.get("/projects", requireAuth, function (_req, res) {
   res.json(connectorProjects);
 });
 
+apiApp.post("/templates", requireAuth, function (req, res) {
+  var project = resolveConnectorProject((req.body || {}).projectId, res);
+  if (!project) {
+    return;
+  }
+
+  res.json(connectorProjectTemplates[project.projectId] || []);
+});
+
+apiApp.post("/export", requireAuth, function (req, res) {
+  var body = req.body || {};
+  var project = resolveConnectorProject(body.projectId, res);
+  if (!project) {
+    return;
+  }
+
+  var templates = connectorProjectTemplates[project.projectId] || [];
+  var template = templates.find(function (item) { return item.templateId === body.templateId; });
+  if (!template) {
+    return res.status(404).json({ code: "not_found", message: "未找到模板。" });
+  }
+
+  var buffer = createBusinessExportWorkbook(project, template.templateId);
+  res
+    .type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    .set("Content-Disposition", "attachment; filename=\"business-export.xlsx\"")
+    .send(buffer);
+});
+
 apiApp.post("/head", requireAuth, function (req, res) {
   var project = resolveConnectorProject((req.body || {}).projectId, res);
   if (!project) {
@@ -501,10 +672,14 @@ apiApp.listen(3200, function () {
   console.log("[Business] http://localhost:3200/api/download/:project");
   console.log("[Business] http://localhost:3200/upload_data");
   console.log("[Business] http://localhost:3200/projects");
+  console.log("[Business] http://localhost:3200/templates");
+  console.log("[Business] http://localhost:3200/export");
   console.log("[Update]   http://localhost:3200/update-manifest");
   console.log("\nReady. Configure the add-in with:");
   console.log("  Base URL              = <LLM service URL>");
   console.log("  Business Base URL     = http://localhost:3200");
+  console.log("  Template list         = http://localhost:3200/templates");
+  console.log("  Template export       = http://localhost:3200/export");
   console.log("  Update Manifest URL   = http://localhost:3200/update-manifest");
   console.log("  Analytics URL         = http://localhost:3200/insertLog (hidden setting)");
   console.log("  SSO URL               = http://localhost:3100/login");
