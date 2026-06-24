@@ -585,7 +585,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var animationTimer = ring.GetType().GetField("animationTimer", BindingFlags.NonPublic | BindingFlags.Instance)
                 ?? throw new InvalidOperationException("StepProgressRing.animationTimer was not found.");
-            return animationTimer.GetValue(ring) is Timer;
+            return animationTimer.GetValue(ring) is System.Windows.Forms.Timer;
         }
 
         private static T FindControl<T>(Control root, string name)
