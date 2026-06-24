@@ -87,9 +87,16 @@ namespace OfficeAgent.ExcelAddIn.Excel
                     // Preserve the original import failure, if any.
                 }
 
-                if (File.Exists(tempPath))
+                try
                 {
-                    File.Delete(tempPath);
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch
+                {
+                    // Temp cleanup is best-effort and must not mask import results.
                 }
             }
         }
@@ -197,6 +204,17 @@ namespace OfficeAgent.ExcelAddIn.Excel
             catch
             {
                 // Freeze panes are best-effort; preserve the imported sheet content.
+            }
+            finally
+            {
+                try
+                {
+                    targetWorksheet.Activate();
+                }
+                catch
+                {
+                    // Preserve the imported sheet content even if focus restoration fails.
+                }
             }
         }
 
