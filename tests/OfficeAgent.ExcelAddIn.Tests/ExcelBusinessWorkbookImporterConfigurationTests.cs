@@ -41,15 +41,27 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var text = ReadSource("src", "OfficeAgent.ExcelAddIn", "Excel", "ExcelBusinessWorkbookImporter.cs");
             var methodBody = ExtractMethodBody(text, "TryCopyFreezePaneState");
-            var sourceActivateIndex = methodBody.IndexOf("sourceWorksheet.Activate();", StringComparison.Ordinal);
-            Assert.True(sourceActivateIndex >= 0, "Freeze pane copy should activate the source worksheet before reading pane state.");
+            Assert.DoesNotContain("sourceWorksheet.Activate();", methodBody, StringComparison.Ordinal);
             var finallyBlock = ExtractBlockAfterKeyword(methodBody, "finally");
             var targetActivateIndex = finallyBlock.IndexOf("targetWorksheet.Activate();", StringComparison.Ordinal);
 
             Assert.True(targetActivateIndex >= 0, "Freeze pane copy should restore the target worksheet in finally.");
-            Assert.True(
-                methodBody.IndexOf("finally", StringComparison.Ordinal) > sourceActivateIndex,
-                "Target worksheet restoration should occur after source worksheet activation.");
+        }
+
+        [Fact]
+        public void ImporterSuppressesTemporaryWorkbookWindowWhileImporting()
+        {
+            var text = ReadSource("src", "OfficeAgent.ExcelAddIn", "Excel", "ExcelBusinessWorkbookImporter.cs");
+            var methodBody = ExtractMethodBody(text, "ImportBusinessDataSheet");
+            var openIndex = methodBody.IndexOf("application.Workbooks.Open(", StringComparison.Ordinal);
+            var hideIndex = methodBody.IndexOf("TryHideWorkbookWindows(sourceWorkbook);", StringComparison.Ordinal);
+            var finallyBlock = ExtractBlockAfterKeyword(methodBody, "finally");
+
+            Assert.Contains("var previousScreenUpdating = application.ScreenUpdating;", methodBody, StringComparison.Ordinal);
+            Assert.Contains("application.ScreenUpdating = false;", methodBody, StringComparison.Ordinal);
+            Assert.True(openIndex >= 0, "Source workbook open call was not found.");
+            Assert.True(hideIndex > openIndex, "Source workbook windows should be hidden immediately after opening.");
+            Assert.Contains("application.ScreenUpdating = previousScreenUpdating;", finallyBlock, StringComparison.Ordinal);
         }
 
         [Fact]

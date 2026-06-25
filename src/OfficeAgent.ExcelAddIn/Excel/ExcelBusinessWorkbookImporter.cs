@@ -58,14 +58,17 @@ namespace OfficeAgent.ExcelAddIn.Excel
                 Path.GetTempPath(),
                 "OfficeAgent-BusinessExport-" + Guid.NewGuid().ToString("N") + ".xlsx");
             ExcelInterop.Workbook sourceWorkbook = null;
+            var previousScreenUpdating = application.ScreenUpdating;
             try
             {
+                application.ScreenUpdating = false;
                 File.WriteAllBytes(tempPath, workbookBytes);
                 sourceWorkbook = application.Workbooks.Open(
                     tempPath,
                     UpdateLinks: 0,
                     ReadOnly: true,
                     AddToMru: false);
+                TryHideWorkbookWindows(sourceWorkbook);
 
                 var sourceWorksheet = FindWorksheet(sourceWorkbook, BusinessDataSheetName, StringComparison.Ordinal);
                 if (sourceWorksheet == null)
@@ -78,6 +81,15 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
             finally
             {
+                try
+                {
+                    application.ScreenUpdating = previousScreenUpdating;
+                }
+                catch
+                {
+                    // Preserve the original import failure, if any.
+                }
+
                 try
                 {
                     sourceWorkbook?.Close(SaveChanges: false);
@@ -174,6 +186,30 @@ namespace OfficeAgent.ExcelAddIn.Excel
             }
         }
 
+        private static void TryHideWorkbookWindows(ExcelInterop.Workbook workbook)
+        {
+            try
+            {
+                if (workbook == null)
+                {
+                    return;
+                }
+
+                for (var index = 1; index <= workbook.Windows.Count; index++)
+                {
+                    var window = workbook.Windows[index] as ExcelInterop.Window;
+                    if (window != null)
+                    {
+                        window.Visible = false;
+                    }
+                }
+            }
+            catch
+            {
+                // Window hiding is best-effort; import correctness is more important.
+            }
+        }
+
         private void TryCopyFreezePaneState(
             ExcelInterop.Workbook sourceWorkbook,
             ExcelInterop.Worksheet sourceWorksheet,
@@ -181,7 +217,6 @@ namespace OfficeAgent.ExcelAddIn.Excel
         {
             try
             {
-                sourceWorksheet.Activate();
                 var sourceWindow = sourceWorkbook.Windows.Count > 0
                     ? sourceWorkbook.Windows[1] as ExcelInterop.Window
                     : null;
