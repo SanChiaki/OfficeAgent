@@ -10,7 +10,7 @@
 
 服务入口脚本：
 
-- [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js)
+- [server.js](server.js)
 
 ## 手工启动
 
@@ -44,7 +44,7 @@ node server.js
 说明：
 
 - `Base URL` 只用于大模型 / Agent，不用于 Ribbon Sync 业务接口
-- `Business Base URL` 才是 `/head`、`/find`、`/batchSave` 和 `upload_data` 等业务接口的基地址
+- `Business Base URL` 才是 `/head`、`/find`、`/batchSave`、`/templates`、`/export` 和 `upload_data` 等业务接口的基地址
 - `Business Base URL` 也是 `/projects` 项目列表接口的基地址
 - `Update Manifest URL` 用于更新提醒验证，可通过安装包构建参数或本机注册表配置注入，不显示在任务窗格 Settings UI
 - 埋点 URL 是隐藏配置，完整本地地址为 `http://localhost:3200/insertLog`
@@ -183,6 +183,49 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.
 }
 ```
 
+#### `POST /templates`
+
+用于：
+
+- 初始化当前表时加载业务系统导出模板列表
+
+请求体：
+
+```json
+{ "projectId": "performance" }
+```
+
+返回：
+
+```json
+[
+  { "templateId": "standard", "templateName": "标准作业表" },
+  { "templateId": "review", "templateName": "评审作业表" }
+]
+```
+
+当前所有内置项目都会返回同一组模板 ID：`standard` 和 `review`。模板展示名为中文业务文案，插件调用导出接口时使用稳定的 `templateId`。
+
+#### `POST /export`
+
+用于：
+
+- 按 `projectId + templateId` 导出可用于初始化当前表的业务系统 `.xlsx`
+
+请求体：
+
+```json
+{ "projectId": "performance", "templateId": "standard" }
+```
+
+返回：
+
+- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- `Content-Disposition: attachment; filename="business-export.xlsx"`
+- workbook 中包含名为 `Business Data` 的 worksheet
+
+当前 mock 导出会基于项目的字段头和最多 20 条内置数据生成两行表头。普通字段纵向合并，活动字段按活动名称横向合并，并包含列宽设置，便于验证模板导入会保留业务系统导出的作业表布局。
+
 #### `POST /find`
 
 同时用于：
@@ -238,7 +281,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File installer/OfficeAgent.Setup/build.
 
 ## 当前内置数据
 
-Ribbon Sync mock 数据保存在 [server.js](/D:/Workspace/demos/office-agent/.worktrees/ribbon-sync/tests/mock-server/server.js) 的内存变量中，主要包括：
+Ribbon Sync mock 数据保存在 [server.js](server.js) 的内存变量中，主要包括：
 
 - `connectorProjectData`
   - 按 `projectId` 组织的项目、字段头和数据行

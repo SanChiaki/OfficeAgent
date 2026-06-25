@@ -73,6 +73,12 @@
 - Bind a blank worksheet through the Ribbon project dropdown and confirm the layout dialog appears with defaults `HeaderStartRow = 1`, `HeaderRowCount = 2`, `DataStartRow = 3`.
 - Confirm the layout dialog and enter custom values, then verify `xISDP_Setting` writes one `SheetBindings` row with the user-entered layout values.
 - Confirming project selection should still not auto-initialize the current sheet; `SheetFieldMappings` remains unchanged until `初始化当前表` / `Initialize sheet` is clicked.
+- 新建空白 workbook，选择项目并确认布局，点击 `初始化当前表` / `Initialize sheet`，确认初始化对话框默认选中 `从模板创建作业表` / template import path when the mock server returns templates.
+- Confirm the blank-sheet template import path keeps the current worksheet name, copies content from the exported workbook's `Business Data` sheet, selects `A1`, and then writes the current sheet's `SheetBindings + SheetFieldMappings` to `xISDP_Setting`.
+- On a nonblank worksheet, click `初始化当前表` / `Initialize sheet` and confirm the initialization dialog defaults to `仅初始化配置` / config-only initialization without changing business cells.
+- On that nonblank worksheet, manually switch to `从模板创建作业表` / template import and confirm the dialog shows an overwrite-risk warning and the primary button changes to `覆盖并初始化` / `Overwrite and initialize`.
+- During the template download stage, click cancel and confirm the current worksheet content is unchanged and `xISDP_Setting` does not add or rewrite configuration for that sheet.
+- Switch to `xISDP_Setting` or `xISDP_Log`, click `初始化当前表` / `Initialize sheet`, and confirm a managed-sheet guard message appears instead of the initialization dialog.
 - Open `xISDP_Setting` and confirm it uses one worksheet with three readable sections: `TemplateBindings` on top, `SheetBindings` in the middle, `SheetFieldMappings` below, each with a title row, a header row, and data rows.
 - Confirm `SheetFieldMappings` displays headers in this order: `HeaderType`, `ISDP L1`, `ISDP L2`, `Excel L1`, `Excel L2`, `HeaderId`, `ApiFieldKey`, `IsIdColumn`, `ActivityId`, `PropertyId`.
 - Confirm there are two blank separator rows between each adjacent metadata section, and that metadata is no longer stored as flattened `tableName + values` rows.

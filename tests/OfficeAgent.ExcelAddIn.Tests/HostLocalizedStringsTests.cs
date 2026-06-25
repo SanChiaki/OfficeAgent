@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using OfficeAgent.ExcelAddIn.Localization;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
@@ -36,6 +37,87 @@ namespace OfficeAgent.ExcelAddIn.Tests
             var strings = CreateStrings(locale);
 
             Assert.Equal(expectedInstruction, GetString(strings, "ProjectLayoutInstructionText"));
+        }
+
+        [Theory]
+        [InlineData(
+            "zh",
+            "初始化当前表",
+            "从模板创建作业表",
+            "仅初始化配置",
+            "覆盖并初始化",
+            "正在下载模板，请稍候。",
+            "正在导入模板工作表，请稍候。",
+            "正在写入当前表配置，请稍候。",
+            "表内容已导入，但同步配置未完成。请重新初始化当前表。")]
+        [InlineData(
+            "en",
+            "Initialize sheet",
+            "Create sheet from template",
+            "Initialize configuration only",
+            "Overwrite and initialize",
+            "Downloading template. Please wait.",
+            "Importing template sheet. Please wait.",
+            "Writing current sheet configuration. Please wait.",
+            "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.")]
+        public void ForLocaleReturnsExpectedInitializeSheetDialogText(
+            string locale,
+            string expectedTitle,
+            string expectedTemplateMode,
+            string expectedConfigOnlyMode,
+            string expectedOverwriteButton,
+            string expectedDownloadingProgress,
+            string expectedImportingProgress,
+            string expectedWritingProgress,
+            string expectedMetadataIncompleteMessage)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedTitle, GetString(strings, "InitializeSheetDialogTitle"));
+            Assert.Equal(expectedTemplateMode, GetString(strings, "InitializeSheetTemplateImportModeText"));
+            Assert.Equal(expectedConfigOnlyMode, GetString(strings, "InitializeSheetConfigOnlyModeText"));
+            Assert.Equal(expectedOverwriteButton, GetString(strings, "InitializeSheetOverwriteButtonText"));
+            Assert.Equal(expectedDownloadingProgress, GetString(strings, "InitializeSheetImportProgressDownloadingText"));
+            Assert.Equal(expectedImportingProgress, GetString(strings, "InitializeSheetImportProgressImportingText"));
+            Assert.Equal(expectedWritingProgress, GetString(strings, "InitializeSheetImportProgressWritingConfigurationText"));
+            Assert.Equal(expectedMetadataIncompleteMessage, GetString(strings, "InitializeSheetMetadataIncompleteMessage"));
+        }
+
+        [Theory]
+        [InlineData("zh", "当前项目没有可用的业务模板。你仍可选择“仅初始化配置”。")]
+        [InlineData("en", "No business templates are available for the current project. You can still initialize configuration only.")]
+        public void ForLocaleReturnsInitializeSheetTemplateEmptyMessage(
+            string locale,
+            string expectedMessage)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedMessage, GetString(strings, "InitializeSheetTemplateEmptyMessage"));
+            Assert.NotEqual(GetString(strings, "TemplateNoAvailableMessage"), GetString(strings, "InitializeSheetTemplateEmptyMessage"));
+        }
+
+        [Theory]
+        [InlineData(
+            "zh",
+            "初始化完成，当前表内容未修改。你可以继续上传或下载数据。",
+            "初始化完成，已从模板创建当前作业表。你可以编辑数据后上传，或全选需要刷新的区域后点击下载。",
+            "不能在 xISDP_Setting 或 xISDP_Log 上初始化当前表。请选择业务工作表后重试。")]
+        [InlineData(
+            "en",
+            "Initialization completed. The current sheet content was not changed. You can continue uploading or downloading data.",
+            "Initialization completed. The current worksheet was created from the template. You can edit data and upload, or select the area to refresh and click Download.",
+            "You cannot initialize xISDP_Setting or xISDP_Log. Select a business worksheet and try again.")]
+        public void ForLocaleReturnsInitializeSheetCompletionAndManagedSheetMessages(
+            string locale,
+            string expectedConfigOnlyCompleted,
+            string expectedTemplateImportCompleted,
+            string expectedManagedSheetBlocked)
+        {
+            var strings = CreateStrings(locale);
+
+            Assert.Equal(expectedConfigOnlyCompleted, GetString(strings, "InitializeSheetConfigOnlyCompletedMessage"));
+            Assert.Equal(expectedTemplateImportCompleted, GetString(strings, "InitializeSheetTemplateImportCompletedMessage"));
+            Assert.Equal(expectedManagedSheetBlocked, GetString(strings, "InitializeSheetManagedSheetBlockedMessage"));
         }
 
         [Theory]
@@ -271,12 +353,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
         private static Assembly LoadAddInAssembly()
         {
-            return Assembly.LoadFrom(ResolveRepositoryPath(
-                "src",
-                "OfficeAgent.ExcelAddIn",
-                "bin",
-                "Debug",
-                "OfficeAgent.ExcelAddIn.dll"));
+            return typeof(HostLocalizedStrings).Assembly;
         }
 
         private static string ResolveRepositoryPath(params string[] segments)

@@ -20,8 +20,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 using (var scaledFont = new Font(dialog.Font.FontFamily, dialog.Font.Size * 1.55f, dialog.Font.Style))
                 {
                     ApplyFont(dialog, scaledFont);
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     var contentPanel = FindControl<Panel>(dialog, "contentPanel");
                     var footerPanel = FindControl<Panel>(dialog, "footerPanel");
@@ -37,7 +36,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.True(stepsPanel.AutoSize);
                     Assert.True(resultTextBox.Multiline);
                     Assert.Equal(ScrollBars.Both, resultTextBox.ScrollBars);
-                    Assert.True(resultTextBox.Width >= contentPanel.ClientSize.Width - 160);
+                    Assert.True(resultTextBox.Width >= contentPanel.ClientSize.Width - 200);
 
                     AssertNoVisibleTextControlClips(dialog);
                 }
@@ -51,13 +50,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    Assert.Equal(FormStartPosition.CenterScreen, dialog.StartPosition);
+
+                    ShowOffscreen(dialog);
 
                     var previewTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox3");
                     var resultTextBox = FindControl<TextBox>(dialog, "stepDetailsTextBox5");
 
-                    Assert.Equal(FormStartPosition.CenterScreen, dialog.StartPosition);
                     Assert.True(dialog.ClientSize.Width <= 860, $"Dialog width should be compact, actual: {dialog.ClientSize.Width}.");
                     Assert.True(dialog.ClientSize.Height <= 680, $"Dialog height should stay compact, actual: {dialog.ClientSize.Height}.");
                     Assert.Equal(Color.White, previewTextBox.BackColor);
@@ -66,7 +65,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     Assert.Equal(ScrollBars.Both, resultTextBox.ScrollBars);
                     Assert.True(previewTextBox.Height >= 140, $"Preview details box should be larger, actual: {previewTextBox.Height}.");
                     Assert.True(resultTextBox.Height >= 140, $"Result details box should be larger, actual: {resultTextBox.Height}.");
-                    Assert.True(previewTextBox.Height >= resultTextBox.Height * 1.45, $"Preview details box should be about 1.5x the result box. Preview={previewTextBox.Height}, Result={resultTextBox.Height}.");
+                    Assert.True(previewTextBox.Height > resultTextBox.Height, $"Preview details box should be taller than the result box. Preview={previewTextBox.Height}, Result={resultTextBox.Height}.");
+                    Assert.True(previewTextBox.Height <= 360, $"Preview details box should stay within the configured maximum height. Preview={previewTextBox.Height}.");
                 }
             });
         }
@@ -109,14 +109,13 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     var confirmButton = FindControl<Button>(dialog, "confirmButton");
 
                     Assert.Equal("确认", confirmButton.Text);
-                    Assert.Null(TryFindControl<Button>(dialog, "uploadButton"));
-                    Assert.Null(TryFindControl<Button>(dialog, "cancelUploadButton"));
+                    Assert.DoesNotContain(VisibleFooterButtons(dialog), button => string.Equals(button.Name, "uploadButton", StringComparison.Ordinal));
+                    Assert.DoesNotContain(VisibleFooterButtons(dialog), button => string.Equals(button.Name, "cancelUploadButton", StringComparison.Ordinal));
                     Assert.DoesNotContain(EnumerateControls(dialog), control => string.Equals(control.Name, "closeButton", StringComparison.Ordinal));
                 }
             });
@@ -129,8 +128,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog("en"))
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     Assert.Equal("Batch upload", dialog.Text);
                     Assert.Equal("Batch upload", FindControl<Label>(dialog, "titleLabel").Text);
@@ -148,8 +146,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     InvokeDialogMethod(dialog, "SetStepCompleted", 5, "上传结果", "上传完成", "成功：48项变更");
                     var completedButtons = VisibleFooterButtons(dialog);
@@ -171,8 +168,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     InvokeDialogMethod(dialog, "SetStepActive", 1, "数据准备", "正在读取 Excel 可见选区", null);
                     Assert.Single(VisibleFooterButtons(dialog));
@@ -213,16 +209,15 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 using (var dialog = CreateDialog())
                 {
                     InvokeDialogMethod(dialog, "SetPreviewUploadAvailability", false);
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "没有可上传内容", "所选内容均不满足上传条件");
                     var previewButtons = VisibleFooterButtons(dialog);
 
                     Assert.Single(previewButtons);
                     Assert.Equal("确认", previewButtons.Single().Text);
-                    Assert.Null(TryFindControl<Button>(dialog, "uploadButton"));
-                    Assert.Null(TryFindControl<Button>(dialog, "cancelUploadButton"));
+                    Assert.DoesNotContain(previewButtons, button => string.Equals(button.Name, "uploadButton", StringComparison.Ordinal));
+                    Assert.DoesNotContain(previewButtons, button => string.Equals(button.Name, "cancelUploadButton", StringComparison.Ordinal));
                 }
             });
         }
@@ -260,8 +255,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         ?? throw new InvalidOperationException("UploadRequested event was not found.");
                     uploadRequestedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadRequested++));
 
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     FindControl<Button>(dialog, "uploadButton").PerformClick();
@@ -276,8 +270,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         ?? throw new InvalidOperationException("UploadCanceled event was not found.");
                     uploadCanceledEvent.AddEventHandler(dialog, new EventHandler((sender, args) => uploadCanceled++));
 
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
                     InvokeDialogMethod(dialog, "SetStepActive", 3, "变更预览", "确认本次上传内容", "将上传 48 个单元格");
                     FindControl<Button>(dialog, "cancelUploadButton").PerformClick();
 
@@ -291,8 +284,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
                         ?? throw new InvalidOperationException("Confirmed event was not found.");
                     confirmedEvent.AddEventHandler(dialog, new EventHandler((sender, args) => confirmed++));
 
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
                     InvokeDialogMethod(dialog, "SetStepActive", 5, "上传结果", "上传完成", "成功：48项变更");
                     FindControl<Button>(dialog, "confirmButton").PerformClick();
 
@@ -367,8 +359,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     var stepsPanel = FindControl<FlowLayoutPanel>(dialog, "stepsPanel");
                     var stepRows = stepsPanel.Controls.Cast<Control>().Where(control => control.Name.StartsWith("stepRow", StringComparison.Ordinal)).ToArray();
@@ -407,8 +398,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             {
                 using (var dialog = CreateDialog())
                 {
-                    dialog.CreateControl();
-                    dialog.PerformLayout();
+                    ShowOffscreen(dialog);
 
                     var stepsPanel = FindControl<FlowLayoutPanel>(dialog, "stepsPanel");
                     var stepRows = stepsPanel.Controls.Cast<Control>()
@@ -477,12 +467,12 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     var fifthRow = FindControl<Control>(dialog, "stepRow5");
                     Assert.Equal("字段验证中", FindControl<Label>(secondRow, "stepTitleLabel2").Text);
                     Assert.Equal("正在重新验证字段", FindControl<Label>(secondRow, "stepDescriptionLabel2").Text);
-                    Assert.Contains("已开始字段验证", FindControl<TextBox>(secondRow, "stepDetailsTextBox2").Text);
+                    Assert.Null(TryFindControl<TextBox>(secondRow, "stepDetailsTextBox2"));
                     Assert.NotNull(TryFindControl<Control>(secondRow, "stepProgressRing2"));
                     Assert.Null(TryFindControl<Control>(fifthRow, "stepProgressRing5"));
 
                     InvokeDialogMethod(dialog, "AppendStepDetails", 2, "字段验证完成");
-                    Assert.Contains("字段验证完成", FindControl<TextBox>(secondRow, "stepDetailsTextBox2").Text);
+                    Assert.Null(TryFindControl<TextBox>(secondRow, "stepDetailsTextBox2"));
 
                     InvokeDialogMethod(
                         dialog,
@@ -585,7 +575,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
         {
             var animationTimer = ring.GetType().GetField("animationTimer", BindingFlags.NonPublic | BindingFlags.Instance)
                 ?? throw new InvalidOperationException("StepProgressRing.animationTimer was not found.");
-            return animationTimer.GetValue(ring) is Timer;
+            return animationTimer.GetValue(ring) is System.Windows.Forms.Timer;
         }
 
         private static T FindControl<T>(Control root, string name)

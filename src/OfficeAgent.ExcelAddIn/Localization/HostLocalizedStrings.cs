@@ -54,6 +54,95 @@ namespace OfficeAgent.ExcelAddIn.Localization
             ? "初始化当前表完成。"
             : "Initialize sheet completed.";
 
+        public string InitializeSheetConfigOnlyCompletedMessage => Locale == "zh"
+            ? "初始化完成，当前表内容未修改。你可以继续上传或下载数据。"
+            : "Initialization completed. The current sheet content was not changed. You can continue uploading or downloading data.";
+
+        public string InitializeSheetTemplateImportCompletedMessage => Locale == "zh"
+            ? "初始化完成，已从模板创建当前作业表。你可以编辑数据后上传，或全选需要刷新的区域后点击下载。"
+            : "Initialization completed. The current worksheet was created from the template. You can edit data and upload, or select the area to refresh and click Download.";
+
+        public string InitializeSheetManagedSheetBlockedMessage => Locale == "zh"
+            ? "不能在 xISDP_Setting 或 xISDP_Log 上初始化当前表。请选择业务工作表后重试。"
+            : "You cannot initialize xISDP_Setting or xISDP_Log. Select a business worksheet and try again.";
+
+        public string InitializeSheetDialogTitle => Locale == "zh" ? "初始化当前表" : "Initialize sheet";
+
+        public string InitializeSheetInstructionText => Locale == "zh"
+            ? "请选择当前表的初始化方式。"
+            : "Choose how to initialize the current sheet.";
+
+        public string InitializeSheetCurrentProjectText(string projectDisplayName)
+        {
+            return Locale == "zh"
+                ? $"当前项目：{projectDisplayName}"
+                : $"Current project: {projectDisplayName}";
+        }
+
+        public string InitializeSheetTemplateImportModeText => Locale == "zh"
+            ? "从模板创建作业表"
+            : "Create sheet from template";
+
+        public string InitializeSheetTemplateImportDescription => Locale == "zh"
+            ? "使用业务系统模板创建当前作业表，并写入当前表配置。"
+            : "Create the current sheet from a business template and write the sheet configuration.";
+
+        public string InitializeSheetConfigOnlyModeText => Locale == "zh"
+            ? "仅初始化配置"
+            : "Initialize configuration only";
+
+        public string InitializeSheetConfigOnlyDescription => Locale == "zh"
+            ? "只写入当前表配置，不修改业务单元格。"
+            : "Write only the current sheet configuration without changing business cells.";
+
+        public string InitializeSheetTemplateLabel => Locale == "zh" ? "模板" : "Template";
+
+        public string InitializeSheetTemplateLoadingText => Locale == "zh"
+            ? "正在加载模板..."
+            : "Loading templates...";
+
+        public string InitializeSheetTemplateUnsupportedMessage => Locale == "zh"
+            ? "当前业务系统不支持模板初始化。"
+            : "The current business system does not support template initialization.";
+
+        public string InitializeSheetTemplateLoadFailedMessage => Locale == "zh"
+            ? "模板加载失败。"
+            : "Failed to load templates.";
+
+        public string InitializeSheetTemplateEmptyMessage => Locale == "zh"
+            ? "当前项目没有可用的业务模板。你仍可选择“仅初始化配置”。"
+            : "No business templates are available for the current project. You can still initialize configuration only.";
+
+        public string InitializeSheetOverwriteRiskMessage => Locale == "zh"
+            ? "从模板创建作业表会覆盖当前表中的现有内容。请确认后继续。"
+            : "Creating the sheet from a template will overwrite existing content on the current sheet. Continue only if this is expected.";
+
+        public string InitializeSheetConfirmButtonText => Locale == "zh" ? "初始化" : "Initialize";
+
+        public string InitializeSheetOverwriteButtonText => Locale == "zh"
+            ? "覆盖并初始化"
+            : "Overwrite and initialize";
+
+        public string InitializeSheetImportProgressDialogTitle => Locale == "zh"
+            ? "导入模板"
+            : "Import template";
+
+        public string InitializeSheetImportProgressDownloadingText => Locale == "zh"
+            ? "正在下载模板，请稍候。"
+            : "Downloading template. Please wait.";
+
+        public string InitializeSheetImportProgressImportingText => Locale == "zh"
+            ? "正在导入模板工作表，请稍候。"
+            : "Importing template sheet. Please wait.";
+
+        public string InitializeSheetImportProgressWritingConfigurationText => Locale == "zh"
+            ? "正在写入当前表配置，请稍候。"
+            : "Writing current sheet configuration. Please wait.";
+
+        public string InitializeSheetMetadataIncompleteMessage => Locale == "zh"
+            ? "表内容已导入，但同步配置未完成。请重新初始化当前表。"
+            : "Sheet content was imported, but sync configuration was not completed. Reinitialize the current sheet.";
+
         public string InitializationRequiredMessage => Locale == "zh"
             ? "当前 sheet 未初始化，请先执行初始化当前表。"
             : "The current sheet is not initialized. Initialize the current sheet first.";

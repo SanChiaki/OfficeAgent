@@ -11,6 +11,7 @@ using OfficeAgent.Core;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
+using OfficeAgent.Core.Services;
 using OfficeAgent.Infrastructure.Http;
 using Xunit;
 
@@ -329,6 +330,103 @@ namespace OfficeAgent.Infrastructure.Tests
             Assert.Equal(string.Empty, handler.LastBody);
         }
 
+        [Fact]
+        public void GetBusinessExportTemplatesCallsTemplatesEndpoint()
+        {
+            var handler = new BusinessExportTemplateHandler();
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+            var templateConnector = CastTemplateConnector(connector);
+
+            var templates = templateConnector.GetBusinessExportTemplates("performance");
+
+            var request = Assert.Single(handler.Requests);
+            Assert.Equal("/templates", request.Path);
+            Assert.Contains("\"projectId\":\"performance\"", request.Body);
+            Assert.Collection(
+                templates,
+                template =>
+                {
+                    Assert.Equal("standard", template.TemplateId);
+                    Assert.Equal("Standard Template", template.TemplateName);
+                },
+                template =>
+                {
+                    Assert.Equal("fallback-name", template.TemplateId);
+                    Assert.Equal("fallback-name", template.TemplateName);
+                });
+        }
+
+        [Fact]
+        public async Task ExportBusinessWorkbookAsyncDownloadsXlsxBytes()
+        {
+            var content = new byte[] { 0x50, 0x4B, 0x03, 0x04 };
+            var handler = new BusinessExportWorkbookHandler(content);
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+            var templateConnector = CastTemplateConnector(connector);
+
+            var workbook = await templateConnector.ExportBusinessWorkbookAsync(
+                "performance",
+                "standard",
+                CancellationToken.None);
+
+            var request = Assert.Single(handler.Requests);
+            Assert.Equal("/export", request.Path);
+            Assert.Contains("\"projectId\":\"performance\"", request.Body);
+            Assert.Contains("\"templateId\":\"standard\"", request.Body);
+            Assert.Equal("business-export.xlsx", workbook.FileName);
+            Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", workbook.ContentType);
+            Assert.Equal(content, workbook.Content);
+        }
+
+        [Theory]
+        [InlineData(HttpStatusCode.Unauthorized)]
+        [InlineData(HttpStatusCode.Forbidden)]
+        public async Task ExportBusinessWorkbookAsyncPromptsLoginForAuthenticationFailures(HttpStatusCode statusCode)
+        {
+            var handler = new BusinessExportWorkbookHandler(Array.Empty<byte>(), statusCode);
+            var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+            var templateConnector = CastTemplateConnector(connector);
+
+            var error = await Assert.ThrowsAsync<AuthenticationRequiredException>(() =>
+                templateConnector.ExportBusinessWorkbookAsync(
+                    "performance",
+                    "standard",
+                    CancellationToken.None));
+
+            Assert.Equal("当前未登录，请先登录", error.Message);
+            var request = Assert.Single(handler.Requests);
+            Assert.Equal("/export", request.Path);
+        }
+
+        [Fact]
+        public async Task ExportBusinessWorkbookAsyncPropagatesCancellation()
+        {
+            using (var cancellationSource = new CancellationTokenSource())
+            {
+                var handler = new CancellableBusinessExportWorkbookHandler();
+                var connector = CurrentBusinessSystemConnector.ForTests("https://api.internal.example", handler);
+                var templateConnector = CastTemplateConnector(connector);
+
+                var exportTask = templateConnector.ExportBusinessWorkbookAsync(
+                    "performance",
+                    "standard",
+                    cancellationSource.Token);
+
+                Assert.True(handler.RequestStarted.Wait(TimeSpan.FromSeconds(5)));
+                cancellationSource.Cancel();
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => exportTask);
+                var request = Assert.Single(handler.Requests);
+                Assert.Equal("/export", request.Path);
+                Assert.True(handler.CancellationObserved);
+            }
+        }
+
+        private static IBusinessExportTemplateConnector CastTemplateConnector(CurrentBusinessSystemConnector connector)
+        {
+            return (IBusinessExportTemplateConnector)(object)connector;
+        }
+
         private sealed class RecordingAnalyticsService : IAnalyticsService
         {
             public List<AnalyticsEvent> Events { get; } = new List<AnalyticsEvent>();
@@ -529,6 +627,93 @@ namespace OfficeAgent.Infrastructure.Tests
                 {
                     Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
                 });
+            }
+        }
+
+        private sealed class BusinessExportTemplateHandler : HttpMessageHandler
+        {
+            public List<(string Path, string Body)> Requests { get; } = new List<(string Path, string Body)>();
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+                Requests.Add((request.RequestUri?.AbsolutePath ?? string.Empty, body));
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "["
+                        + "{\"templateId\":\"standard\",\"templateName\":\"Standard Template\"},"
+                        + "{\"templateId\":\"fallback-name\",\"templateName\":\" \"},"
+                        + "{\"templateId\":\" \",\"templateName\":\"Ignored\"},"
+                        + "null"
+                        + "]",
+                        Encoding.UTF8,
+                        "application/json"),
+                });
+            }
+        }
+
+        private sealed class BusinessExportWorkbookHandler : HttpMessageHandler
+        {
+            private readonly byte[] content;
+            private readonly string contentType;
+            private readonly HttpStatusCode statusCode;
+
+            public BusinessExportWorkbookHandler(
+                byte[] content,
+                HttpStatusCode statusCode = HttpStatusCode.OK,
+                string contentType = null)
+            {
+                this.content = content ?? Array.Empty<byte>();
+                this.statusCode = statusCode;
+                this.contentType = contentType;
+            }
+
+            public List<(string Path, string Body)> Requests { get; } = new List<(string Path, string Body)>();
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+                Requests.Add((request.RequestUri?.AbsolutePath ?? string.Empty, body));
+
+                var response = new HttpResponseMessage(statusCode)
+                {
+                    Content = new ByteArrayContent(content),
+                };
+                if (!string.IsNullOrWhiteSpace(contentType))
+                {
+                    response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+                }
+
+                return Task.FromResult(response);
+            }
+        }
+
+        private sealed class CancellableBusinessExportWorkbookHandler : HttpMessageHandler
+        {
+            public ManualResetEventSlim RequestStarted { get; } = new ManualResetEventSlim();
+
+            public List<(string Path, string Body)> Requests { get; } = new List<(string Path, string Body)>();
+
+            public bool CancellationObserved { get; private set; }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+                Requests.Add((request.RequestUri?.AbsolutePath ?? string.Empty, body));
+                RequestStarted.Set();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    CancellationObserved = true;
+                    throw;
+                }
+
+                throw new InvalidOperationException("The export request should be canceled.");
             }
         }
 

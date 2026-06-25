@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
 using System.Threading;
@@ -13,6 +14,8 @@ using OfficeAgent.Core.Diagnostics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
 using OfficeAgent.Core.Sync;
+using OfficeAgent.ExcelAddIn.Dialogs;
+using OfficeAgent.ExcelAddIn.Excel;
 using Xunit;
 
 namespace OfficeAgent.ExcelAddIn.Tests
@@ -409,7 +412,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal(5, metadataStore.LastSavedBinding.HeaderStartRow);
             Assert.Equal(2, metadataStore.LastSavedBinding.HeaderRowCount);
             Assert.Equal(9, metadataStore.LastSavedBinding.DataStartRow);
-            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("Initialize sheet completed.", StringComparison.Ordinal) >= 0);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("current sheet content was not changed", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         [Fact]
@@ -436,6 +439,342 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 Equals(analyticsEvent.Properties["projectId"], "performance") &&
                 Equals(analyticsEvent.Properties["projectName"], "绩效项目") &&
                 Equals(analyticsEvent.Properties["sheetName"], "Sheet1"));
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetConfigOnlyShowsDialogAndDoesNotModifyBusinessCells()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.ConfigOnly,
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 5,
+                HeaderRowCount = 2,
+                DataStartRow = 9,
+            };
+
+            var (controller, grid) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null);
+            grid.SetCell("Sheet1", 1, 1, "keep me");
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            var request = Assert.Single(dialogService.InitializeSheetRequests);
+            Assert.Equal("绩效项目", request.ProjectDisplayName);
+            Assert.True(request.IsBlankSheet);
+            Assert.True(request.SupportsTemplateImport);
+            Assert.Single(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Equal("standard", dialogService.InitializeSheetTemplateLoadResults[0].Templates[0].TemplateId);
+            Assert.Equal("keep me", grid.GetCell("Sheet1", 1, 1));
+            Assert.Equal(0, grid.ClearRangeCallCount);
+            Assert.Equal(0, grid.WriteRangeValuesCallCount);
+            Assert.Equal("performance", connector.LastBuildFieldMappingSeedProjectId);
+            Assert.Equal(5, metadataStore.LastSavedBinding.HeaderStartRow);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("current sheet content was not changed", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.DoesNotContain(dialogService.InfoMessages, message => message.IndexOf("template", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTemplateImportRunsProgressAndShowsTemplateSuccess()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.TemplateImport,
+                    SelectedTemplate = new BusinessExportTemplateOption
+                    {
+                        TemplateId = "standard",
+                        TemplateName = "标准作业表",
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+
+            var (controller, _) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Equal(1, dialogService.InitializeTemplateImportProgressRunCount);
+            Assert.Contains("downloading", dialogService.InitializeTemplateImportProgressCalls);
+            Assert.Contains("importing", dialogService.InitializeTemplateImportProgressCalls);
+            Assert.Contains("writingConfiguration", dialogService.InitializeTemplateImportProgressCalls);
+            Assert.Equal("performance", connector.LastExportProjectId);
+            Assert.Equal("standard", connector.LastExportTemplateId);
+            Assert.Contains(dialogService.InfoMessages, message => message.IndexOf("created from the template", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Theory]
+        [InlineData("xISDP_Setting")]
+        [InlineData("xISDP_Log")]
+        [InlineData("xisdp_log")]
+        public void ExecuteInitializeCurrentSheetBlocksManagedSheetsBeforeDialog(string sheetName)
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.ConfigOnly,
+                },
+            };
+            metadataStore.Bindings[sheetName] = new SheetBinding
+            {
+                SheetName = sheetName,
+                SystemKey = connector.SystemKey,
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 2,
+                DataStartRow = 3,
+            };
+            var controller = CreateController(connector, metadataStore, dialogService, () => sheetName);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Empty(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Empty(dialogService.InfoMessages);
+            var warning = Assert.Single(dialogService.WarningMessages);
+            Assert.Contains("xISDP_Setting", warning, StringComparison.Ordinal);
+            Assert.Contains("xISDP_Log", warning, StringComparison.Ordinal);
+            Assert.Null(metadataStore.LastSavedBinding);
+            Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
+        }
+
+        [Theory]
+        [InlineData("xISDP_Setting")]
+        [InlineData("xISDP_Log")]
+        public void ExecuteInitializeCurrentSheetBlocksManagedSheetsBeforeProjectSelectionWarning(string sheetName)
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            var controller = CreateController(connector, metadataStore, dialogService, () => sheetName);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Empty(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Empty(dialogService.InfoMessages);
+            var warning = Assert.Single(dialogService.WarningMessages);
+            Assert.Contains("xISDP_Setting", warning, StringComparison.Ordinal);
+            Assert.Contains("xISDP_Log", warning, StringComparison.Ordinal);
+            Assert.DoesNotContain("Select a project first.", dialogService.WarningMessages);
+            Assert.Null(metadataStore.LastSavedBinding);
+            Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTemplateProgressCancellationIsQuiet()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                CancelInitializeTemplateImportProgress = true,
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.TemplateImport,
+                    SelectedTemplate = new BusinessExportTemplateOption
+                    {
+                        TemplateId = "standard",
+                        TemplateName = "标准作业表",
+                    },
+                },
+            };
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+
+            var (controller, _) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Equal(1, dialogService.InitializeTemplateImportProgressRunCount);
+            Assert.Empty(dialogService.ErrorMessages);
+            Assert.Empty(dialogService.InfoMessages);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetCanceledDialogTracksCanceledAndShowsNoMessages()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService();
+            var analytics = new RecordingAnalyticsService();
+            dialogService.CancelInitializeSheetDialog = true;
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+            var controller = CreateController(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                authenticationLoginAction: null,
+                analyticsService: analytics);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Single(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InfoMessages);
+            Assert.Empty(dialogService.ErrorMessages);
+            Assert.Contains(analytics.Events, analyticsEvent =>
+                analyticsEvent.EventName == "ribbon.initialize.canceled" &&
+                Equals(analyticsEvent.Properties["projectId"], "performance") &&
+                Equals(analyticsEvent.Properties["sheetName"], "Sheet1"));
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTracksTemplateImportAnalytics()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.TemplateImport,
+                    SelectedTemplate = new BusinessExportTemplateOption
+                    {
+                        TemplateId = "standard",
+                        TemplateName = "标准作业表",
+                    },
+                },
+            };
+            var analytics = new RecordingAnalyticsService();
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+            var (controller, _) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null,
+                selectionReader: null,
+                analyticsService: analytics);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            var started = Assert.Single(analytics.Events, analyticsEvent => analyticsEvent.EventName == "ribbon.initialize_template_import.started");
+            AssertTemplateImportProperties(started, templateId: "standard", templateName: "标准作业表", isBlankSheet: true);
+            Assert.True(Convert.ToInt64(started.Properties["durationMs"]) >= 0);
+
+            var completed = Assert.Single(analytics.Events, analyticsEvent => analyticsEvent.EventName == "ribbon.initialize_template_import.completed");
+            AssertTemplateImportProperties(completed, templateId: "standard", templateName: "标准作业表", isBlankSheet: true);
+            Assert.True(Convert.ToInt64(completed.Properties["durationMs"]) >= 0);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTracksTemplateImportCanceledAnalytics()
+        {
+            var connector = new FakeBusinessTemplateConnector();
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                CancelInitializeTemplateImportProgress = true,
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.TemplateImport,
+                    SelectedTemplate = new BusinessExportTemplateOption
+                    {
+                        TemplateId = "standard",
+                        TemplateName = "标准作业表",
+                    },
+                },
+            };
+            var analytics = new RecordingAnalyticsService();
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+            var (controller, _) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null,
+                selectionReader: null,
+                analyticsService: analytics);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            var canceled = Assert.Single(analytics.Events, analyticsEvent => analyticsEvent.EventName == "ribbon.initialize_template_import.canceled");
+            AssertTemplateImportProperties(canceled, templateId: "standard", templateName: "标准作业表", isBlankSheet: true);
+            Assert.True(Convert.ToInt64(canceled.Properties["durationMs"]) >= 0);
+            Assert.DoesNotContain(analytics.Events, analyticsEvent => analyticsEvent.EventName == "ribbon.initialize_template_import.completed");
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetTracksTemplateImportFailedAnalyticsWithStageAndExceptionType()
+        {
+            var connector = new FakeBusinessTemplateConnector
+            {
+                ExportException = new InvalidOperationException("download failed"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                NextInitializeSheetResult = new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.TemplateImport,
+                    SelectedTemplate = new BusinessExportTemplateOption
+                    {
+                        TemplateId = "standard",
+                        TemplateName = "标准作业表",
+                    },
+                },
+            };
+            var analytics = new RecordingAnalyticsService();
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+            var (controller, _) = CreateControllerWithGrid(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                aiClient: null,
+                selectionReader: null,
+                analyticsService: analytics);
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            var failed = Assert.Single(analytics.Events, analyticsEvent => analyticsEvent.EventName == "ribbon.initialize_template_import.failed");
+            AssertTemplateImportProperties(failed, templateId: "standard", templateName: "标准作业表", isBlankSheet: true);
+            Assert.Equal("initialize_template_import", failed.Properties["failedStage"]);
+            Assert.Equal("InvalidOperationException", failed.Properties["exceptionType"]);
+            Assert.True(Convert.ToInt64(failed.Properties["durationMs"]) >= 0);
+            Assert.NotNull(failed.Error);
+            Assert.Equal("InvalidOperationException", failed.Error.ExceptionType);
+            Assert.Single(dialogService.ErrorMessages);
         }
 
         [Fact]
@@ -524,6 +863,44 @@ namespace OfficeAgent.ExcelAddIn.Tests
             Assert.Equal("You're not signed in. Sign in first.", dialogService.AuthenticationRequiredMessages[0]);
             Assert.True(loginTriggered);
             Assert.Empty(dialogService.ErrorMessages);
+        }
+
+        [Fact]
+        public void ExecuteInitializeCurrentSheetShowsLoginPromptWhenTemplateListRequiresAuthentication()
+        {
+            var connector = new FakeBusinessTemplateConnector
+            {
+                GetBusinessExportTemplatesException = new AuthenticationRequiredException("当前未登录，请先登录"),
+            };
+            var metadataStore = new FakeWorksheetMetadataStore();
+            var dialogService = new FakeDialogService
+            {
+                AuthenticationRequiredResult = true,
+            };
+            var loginTriggered = false;
+            metadataStore.Bindings["Sheet1"] = CreateInitializedBinding(connector.SystemKey);
+
+            var controller = CreateController(
+                connector,
+                metadataStore,
+                dialogService,
+                () => "Sheet1",
+                () =>
+                {
+                    loginTriggered = true;
+                });
+            InvokeRefresh(controller);
+
+            InvokeExecuteInitializeCurrentSheet(controller);
+
+            Assert.Single(dialogService.InitializeSheetRequests);
+            Assert.Empty(dialogService.InitializeSheetTemplateLoadResults);
+            Assert.Single(dialogService.AuthenticationRequiredMessages);
+            Assert.Equal("You're not signed in. Sign in first.", dialogService.AuthenticationRequiredMessages[0]);
+            Assert.True(loginTriggered);
+            Assert.Empty(dialogService.ErrorMessages);
+            Assert.Empty(dialogService.InfoMessages);
+            Assert.Null(connector.LastBuildFieldMappingSeedProjectId);
         }
 
         [Fact]
@@ -1287,7 +1664,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             FakeDialogService dialogService,
             Func<string> sheetNameProvider,
             IAiColumnMappingClient aiClient,
-            FakeWorksheetSelectionReader selectionReader = null)
+            FakeWorksheetSelectionReader selectionReader = null,
+            IAnalyticsService analyticsService = null)
         {
             var addInAssembly = Assembly.LoadFrom(ResolveAddInAssemblyPath());
             var controllerType = addInAssembly.GetType("OfficeAgent.ExcelAddIn.RibbonSyncController", throwOnError: true);
@@ -1298,17 +1676,30 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
-            var ctor = controllerType.GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
+            var ctorTypes = analyticsService == null
+                ? new[]
                 {
                     typeof(IWorksheetMetadataStore),
                     typeof(WorksheetSyncService),
                     typeof(Func<string>),
                     executionService.GetType(),
                     dialogInterface,
-                },
+                }
+                : new[]
+                {
+                    typeof(IWorksheetMetadataStore),
+                    typeof(WorksheetSyncService),
+                    typeof(Func<string>),
+                    executionService.GetType(),
+                    dialogInterface,
+                    typeof(Action),
+                    typeof(Action),
+                    typeof(IAnalyticsService),
+                };
+            var ctor = controllerType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: ctorTypes,
                 modifiers: null);
 
             if (ctor == null)
@@ -1316,7 +1707,11 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 throw new InvalidOperationException("RibbonSyncController constructor with execution service was not found.");
             }
 
-            return (ctor.Invoke(new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() }), grid);
+            var args = analyticsService == null
+                ? new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy() }
+                : new object[] { metadataStore, syncService, sheetNameProvider, executionService, dialogService.GetTransparentProxy(), null, null, analyticsService };
+
+            return (ctor.Invoke(args), grid);
         }
 
         private static (object Service, FakeWorksheetGridAdapter Grid) CreateExecutionService(
@@ -1334,6 +1729,42 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 metadataStore,
                 new WorksheetChangeTracker(),
                 new SyncOperationPreviewFactory());
+
+            if (connector is IBusinessExportTemplateConnector)
+            {
+                var fullCtor = FindConstructor(
+                    serviceType,
+                    typeof(WorksheetSyncService),
+                    typeof(IWorksheetMetadataStore),
+                    typeof(IWorksheetSelectionReader),
+                    gridInterface,
+                    typeof(SyncOperationPreviewFactory),
+                    "OfficeAgent.ExcelAddIn.Excel.IWorksheetChangeLogStore",
+                    "OfficeAgent.ExcelAddIn.Excel.WorksheetPendingEditTracker",
+                    typeof(IAiColumnMappingClient),
+                    "OfficeAgent.ExcelAddIn.Excel.IBusinessWorkbookImporter");
+
+                if (fullCtor == null)
+                {
+                    throw new InvalidOperationException("WorksheetSyncExecutionService template import constructor was not found.");
+                }
+
+                var businessWorkbookImporter = new FakeBusinessWorkbookImporter(
+                    addInAssembly.GetType("OfficeAgent.ExcelAddIn.Excel.IBusinessWorkbookImporter", throwOnError: true));
+
+                return (fullCtor.Invoke(new object[]
+                {
+                    syncService,
+                    metadataStore,
+                    selectionReader ?? new FakeWorksheetSelectionReader(),
+                    grid.GetTransparentProxy(),
+                    new SyncOperationPreviewFactory(),
+                    null,
+                    null,
+                    aiClient ?? new FakeAiColumnMappingClient(),
+                    businessWorkbookImporter.GetTransparentProxy(),
+                }), grid);
+            }
 
             var ctorTypes = aiClient == null
                 ? new[]
@@ -1384,6 +1815,42 @@ namespace OfficeAgent.ExcelAddIn.Tests
                 };
 
             return (ctor.Invoke(args), grid);
+        }
+
+        private static ConstructorInfo FindConstructor(Type type, params object[] expectedTypes)
+        {
+            return type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(constructor =>
+                {
+                    var parameters = constructor.GetParameters();
+                    if (parameters.Length != expectedTypes.Length)
+                    {
+                        return false;
+                    }
+
+                    for (var index = 0; index < expectedTypes.Length; index++)
+                    {
+                        var parameterType = parameters[index].ParameterType;
+                        if (expectedTypes[index] is Type expectedType)
+                        {
+                            if (!parameterType.IsAssignableFrom(expectedType) &&
+                                !expectedType.IsAssignableFrom(parameterType) &&
+                                !string.Equals(parameterType.FullName, expectedType.FullName, StringComparison.Ordinal))
+                            {
+                                return false;
+                            }
+
+                            continue;
+                        }
+
+                        if (!string.Equals(parameterType.FullName, Convert.ToString(expectedTypes[index]), StringComparison.Ordinal))
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                });
         }
 
         private static void InvokeSelectProject(object controller, ProjectOption option)
@@ -1627,6 +2094,35 @@ namespace OfficeAgent.ExcelAddIn.Tests
             };
         }
 
+        private static SheetBinding CreateInitializedBinding(string systemKey)
+        {
+            return new SheetBinding
+            {
+                SheetName = "Sheet1",
+                SystemKey = systemKey,
+                ProjectId = "performance",
+                ProjectName = "绩效项目",
+                HeaderStartRow = 1,
+                HeaderRowCount = 2,
+                DataStartRow = 3,
+            };
+        }
+
+        private static void AssertTemplateImportProperties(
+            AnalyticsEvent analyticsEvent,
+            string templateId,
+            string templateName,
+            bool isBlankSheet)
+        {
+            Assert.Equal("performance", analyticsEvent.Properties["projectId"]);
+            Assert.Equal("绩效项目", analyticsEvent.Properties["projectName"]);
+            Assert.Equal("Sheet1", analyticsEvent.Properties["sheetName"]);
+            Assert.Equal(templateId, analyticsEvent.Properties["templateId"]);
+            Assert.Equal(templateName, analyticsEvent.Properties["templateName"]);
+            Assert.Equal(isBlankSheet, analyticsEvent.Properties["isBlankSheet"]);
+            Assert.True(analyticsEvent.Properties.ContainsKey("durationMs"));
+        }
+
         private static FieldMappingTableDefinition BuildAiMappingDefinition()
         {
             return new FieldMappingTableDefinition
@@ -1680,7 +2176,7 @@ namespace OfficeAgent.ExcelAddIn.Tests
             };
         }
 
-        private sealed class FakeSystemConnector : ISystemConnector
+        private class FakeSystemConnector : ISystemConnector
         {
             public FakeSystemConnector()
             {
@@ -1789,6 +2285,100 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public void BatchSave(string projectId, IReadOnlyList<CellChange> changes)
             {
                 throw new NotSupportedException();
+            }
+        }
+
+        private sealed class FakeBusinessTemplateConnector : FakeSystemConnector, IBusinessExportTemplateConnector
+        {
+            public IReadOnlyList<BusinessExportTemplateOption> TemplateOptions { get; set; } = new[]
+            {
+                new BusinessExportTemplateOption
+                {
+                    TemplateId = "standard",
+                    TemplateName = "标准作业表",
+                },
+            };
+
+            public Exception ExportException { get; set; }
+
+            public Exception GetBusinessExportTemplatesException { get; set; }
+
+            public string LastGetBusinessExportTemplatesProjectId { get; private set; }
+
+            public string LastExportProjectId { get; private set; }
+
+            public string LastExportTemplateId { get; private set; }
+
+            public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId)
+            {
+                LastGetBusinessExportTemplatesProjectId = projectId;
+                if (GetBusinessExportTemplatesException != null)
+                {
+                    throw GetBusinessExportTemplatesException;
+                }
+
+                return TemplateOptions;
+            }
+
+            public Task<BusinessExportWorkbook> ExportBusinessWorkbookAsync(
+                string projectId,
+                string templateId,
+                CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (ExportException != null)
+                {
+                    throw ExportException;
+                }
+
+                LastExportProjectId = projectId;
+                LastExportTemplateId = templateId;
+                return Task.FromResult(new BusinessExportWorkbook
+                {
+                    Content = new byte[] { 0x50, 0x4B, 0x03, 0x04 },
+                });
+            }
+        }
+
+        private sealed class FakeBusinessWorkbookImporter : RealProxy
+        {
+            public FakeBusinessWorkbookImporter(Type interfaceType)
+                : base(interfaceType)
+            {
+            }
+
+            public bool IsBlank { get; set; } = true;
+
+            public int IsBlankCallCount { get; private set; }
+
+            public int ImportCallCount { get; private set; }
+
+            public string ImportedTargetSheetName { get; private set; }
+
+            public override IMessage Invoke(IMessage msg)
+            {
+                var call = (IMethodCallMessage)msg;
+                switch (call.MethodName)
+                {
+                    case "IsWorkSheetContentBlank":
+                        IsBlankCallCount++;
+                        return new ReturnMessage(IsBlank, null, 0, call.LogicalCallContext, call);
+                    case "EnsureCanWriteToWorkSheet":
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ImportBusinessDataSheet":
+                        ImportCallCount++;
+                        ImportedTargetSheetName = (string)call.InArgs[1];
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "ActivateWorkSheetAtA1":
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    default:
+                        throw new NotSupportedException(call.MethodName);
+                }
+            }
+
+            public new object GetTransparentProxy()
+            {
+                return base.GetTransparentProxy();
             }
         }
 
@@ -1940,13 +2530,25 @@ namespace OfficeAgent.ExcelAddIn.Tests
 
             public List<AiColumnMappingPreview> AiColumnMappingPreviews { get; } = new List<AiColumnMappingPreview>();
 
+            public List<InitializeSheetDialogRequest> InitializeSheetRequests { get; } = new List<InitializeSheetDialogRequest>();
+
+            public List<InitializeSheetTemplateLoadResult> InitializeSheetTemplateLoadResults { get; } = new List<InitializeSheetTemplateLoadResult>();
+
+            public List<string> InitializeTemplateImportProgressCalls { get; } = new List<string>();
+
             public int ConfirmDownloadCallCount { get; private set; }
 
             public int AiColumnMappingProgressRunCount { get; private set; }
 
+            public int InitializeTemplateImportProgressRunCount { get; private set; }
+
             public CancellationToken LastProgressCancellationToken { get; private set; }
 
             public SheetBinding NextProjectLayoutBinding { get; set; }
+
+            public InitializeSheetDialogResult NextInitializeSheetResult { get; set; }
+
+            public bool CancelInitializeSheetDialog { get; set; }
 
             public bool ConfirmProjectLayoutWithSuggestedBinding { get; set; }
 
@@ -1955,6 +2557,8 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public bool AiColumnMappingConfirmResult { get; set; }
 
             public bool CancelAiColumnMappingProgress { get; set; }
+
+            public bool CancelInitializeTemplateImportProgress { get; set; }
 
             public Action<AiColumnMappingPreview> OnConfirmAiColumnMapping { get; set; }
 
@@ -1999,6 +2603,19 @@ namespace OfficeAgent.ExcelAddIn.Tests
                             ? (SheetBinding)call.InArgs[0]
                             : NextProjectLayoutBinding;
                         return new ReturnMessage(CloneBinding(layoutBinding), null, 0, call.LogicalCallContext, call);
+                    case "ShowInitializeSheetDialog":
+                        InitializeSheetRequests.Add(CloneInitializeSheetRequest(call.InArgs[0]));
+                        InitializeSheetTemplateLoadResults.Add(InvokeLoadTemplates(call.InArgs[1]));
+                        return new ReturnMessage(
+                            CancelInitializeSheetDialog
+                                ? null
+                                : CreateInitializeSheetResult(call.MethodBase, NextInitializeSheetResult),
+                            null,
+                            0,
+                            call.LogicalCallContext,
+                            call);
+                    case "RunInitializeSheetTemplateImportWithProgress":
+                        return RunInitializeSheetTemplateImportWithProgress(call);
                     case "ShowInfo":
                         InfoMessages.Add((string)call.InArgs[0]);
                         return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
@@ -2019,6 +2636,55 @@ namespace OfficeAgent.ExcelAddIn.Tests
             public new object GetTransparentProxy()
             {
                 return base.GetTransparentProxy();
+            }
+
+            private IMessage RunInitializeSheetTemplateImportWithProgress(IMethodCallMessage call)
+            {
+                InitializeTemplateImportProgressRunCount++;
+                var operation = call.InArgs[0];
+                using (var cancellationTokenSource = new CancellationTokenSource())
+                {
+                    if (CancelInitializeTemplateImportProgress)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+
+                    LastProgressCancellationToken = cancellationTokenSource.Token;
+                    try
+                    {
+                        var progressInterface = call.MethodBase
+                            .GetParameters()[0]
+                            .ParameterType
+                            .GetGenericArguments()[0];
+                        var progress = new FakeInitializeSheetImportProgress(
+                            progressInterface,
+                            InitializeTemplateImportProgressCalls).GetTransparentProxy();
+                        var task = (Task)operation.GetType()
+                            .GetMethod("Invoke")
+                            .Invoke(operation, new[] { progress, cancellationTokenSource.Token });
+                        task.GetAwaiter().GetResult();
+                        return new ReturnMessage(!cancellationTokenSource.IsCancellationRequested, null, 0, call.LogicalCallContext, call);
+                    }
+                    catch (TargetInvocationException ex) when (ex.InnerException != null)
+                    {
+                        if (ex.InnerException is OperationCanceledException && cancellationTokenSource.IsCancellationRequested)
+                        {
+                            return new ReturnMessage(false, null, 0, call.LogicalCallContext, call);
+                        }
+
+                        ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (cancellationTokenSource.IsCancellationRequested)
+                        {
+                            return new ReturnMessage(false, null, 0, call.LogicalCallContext, call);
+                        }
+
+                        throw;
+                    }
+                }
             }
 
             private static Type LoadDialogInterfaceType()
@@ -2044,6 +2710,135 @@ namespace OfficeAgent.ExcelAddIn.Tests
                     HeaderRowCount = binding.HeaderRowCount,
                     DataStartRow = binding.DataStartRow,
                 };
+            }
+
+            private static InitializeSheetDialogRequest CloneInitializeSheetRequest(object request)
+            {
+                if (request == null)
+                {
+                    return null;
+                }
+
+                return new InitializeSheetDialogRequest
+                {
+                    ProjectDisplayName = ReadProperty<string>(request, "ProjectDisplayName"),
+                    IsBlankSheet = ReadProperty<bool>(request, "IsBlankSheet"),
+                    SupportsTemplateImport = ReadProperty<bool>(request, "SupportsTemplateImport"),
+                };
+            }
+
+            private static InitializeSheetTemplateLoadResult InvokeLoadTemplates(object loadTemplates)
+            {
+                object loadResult;
+                try
+                {
+                    loadResult = loadTemplates.GetType()
+                        .GetMethod("Invoke")
+                        .Invoke(loadTemplates, null);
+                }
+                catch (TargetInvocationException ex) when (ex.InnerException != null)
+                {
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                    throw;
+                }
+
+                return InitializeSheetTemplateLoadResult.Success(
+                    ((IEnumerable<BusinessExportTemplateOption>)ReadProperty<object>(loadResult, "Templates"))
+                    .Select(CloneTemplate));
+            }
+
+            private static object CreateInitializeSheetResult(MethodBase method, InitializeSheetDialogResult result)
+            {
+                var resultType = ((MethodInfo)method).ReturnType;
+                var modeType = resultType.GetProperty("Mode").PropertyType;
+                var templateType = resultType.GetProperty("SelectedTemplate").PropertyType;
+                var target = Activator.CreateInstance(resultType);
+                var selected = result ?? new InitializeSheetDialogResult
+                {
+                    Mode = InitializeSheetMode.ConfigOnly,
+                };
+
+                resultType.GetProperty("Mode").SetValue(
+                    target,
+                    Enum.Parse(modeType, selected.Mode.ToString()));
+                resultType.GetProperty("SelectedTemplate").SetValue(
+                    target,
+                    CloneTemplate(templateType, selected.SelectedTemplate));
+
+                return target;
+            }
+
+            private static T ReadProperty<T>(object target, string propertyName)
+            {
+                var value = target.GetType().GetProperty(propertyName).GetValue(target);
+                if (value == null)
+                {
+                    return default(T);
+                }
+
+                return (T)value;
+            }
+
+            private static object CloneTemplate(Type templateType, BusinessExportTemplateOption template)
+            {
+                if (template == null)
+                {
+                    return null;
+                }
+
+                var target = Activator.CreateInstance(templateType);
+                templateType.GetProperty("TemplateId").SetValue(target, template.TemplateId);
+                templateType.GetProperty("TemplateName").SetValue(target, template.TemplateName);
+                return target;
+            }
+
+            private static BusinessExportTemplateOption CloneTemplate(BusinessExportTemplateOption template)
+            {
+                if (template == null)
+                {
+                    return null;
+                }
+
+                return new BusinessExportTemplateOption
+                {
+                    TemplateId = template.TemplateId,
+                    TemplateName = template.TemplateName,
+                };
+            }
+        }
+
+        private sealed class FakeInitializeSheetImportProgress : RealProxy
+        {
+            private readonly List<string> calls;
+
+            public FakeInitializeSheetImportProgress(Type interfaceType, List<string> calls)
+                : base(interfaceType)
+            {
+                this.calls = calls ?? throw new ArgumentNullException(nameof(calls));
+            }
+
+            public override IMessage Invoke(IMessage msg)
+            {
+                var call = (IMethodCallMessage)msg;
+                switch (call.MethodName)
+                {
+                    case "SetDownloading":
+                        calls.Add("downloading");
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "SetImporting":
+                        calls.Add("importing");
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    case "SetWritingConfiguration":
+                        calls.Add("writingConfiguration");
+                        return new ReturnMessage(null, null, 0, call.LogicalCallContext, call);
+                    default:
+                        throw new NotSupportedException(call.MethodName);
+                }
+            }
+
+            public new object GetTransparentProxy()
+            {
+                return base.GetTransparentProxy();
             }
         }
 

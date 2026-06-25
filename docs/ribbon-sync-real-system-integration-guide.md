@@ -17,6 +17,7 @@
 - `SheetFieldMappings` 记录字段映射和当前 Excel 显示名
 - 上传 / 下载时总是按当前表头文本重新识别列
 - `AI映射列` / `AI map columns` 可以扫描当前 sheet 的完整配置表头区域，把实际 Excel 表头推荐映射到 `SheetFieldMappings.Excel L1 / Excel L2`
+- `初始化当前表` / `Initialize sheet` 会先打开初始化对话框；支持业务导出模板的连接器可以让空白 sheet 从业务系统导出的 `.xlsx` 创建作业表，不支持该扩展的连接器仍走仅初始化配置
 - 本机模板资产保存在 `%LocalAppData%\OfficeAgent\templates\...`，不直接替代运行时 metadata
 - 当前 Ribbon 入口只做部分下载、部分上传
 - `全量下载` 和 `全量上传` 的执行路径仍保留在代码中，但当前按钮已隐藏
@@ -90,6 +91,22 @@ public interface ISystemConnector
 - `BatchSave`
 
 `GetSchema` 目前更多保留给连接器测试和辅助逻辑，不是当前 Excel 主执行链路的核心入口。
+
+业务导出模板不是 `ISystemConnector` 主接口的一部分。它通过可选扩展接口接入：
+
+```csharp
+public interface IBusinessExportTemplateConnector
+{
+    IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string projectId);
+
+    Task<BusinessExportWorkbook> ExportBusinessWorkbookAsync(
+        string projectId,
+        string templateId,
+        CancellationToken cancellationToken);
+}
+```
+
+连接器不实现该扩展时，初始化对话框会禁用 `从模板创建作业表`，但仍支持 `仅初始化配置`。也就是说，业务导出模板扩展只增强首表创建体验，不改变下载 / 上传主合同，也不要求所有系统同步支持。
 
 ## 3. Excel 侧现在如何工作
 
@@ -230,7 +247,47 @@ Ribbon 点击链路：
 4. 从平铺字段里识别活动属性列
 5. 生成 `SheetFieldMappings`
 
-### 4.5 AI 自动映射列
+业务导出模板导入不会替代这一步。即使当前 sheet 内容来自业务系统导出的 Excel，`SheetBindings + SheetFieldMappings` 仍然由 `CreateBindingSeed`、`GetFieldMappingDefinition` 和 `BuildFieldMappingSeed` 生成并写入 `xISDP_Setting`。
+
+### 4.5 业务导出模板扩展
+
+如果真实业务系统可以按项目导出标准作业表，建议让连接器额外实现 `IBusinessExportTemplateConnector`。这样用户点击 `初始化当前表` 时，可以选择从业务系统模板创建当前 sheet。
+
+接口合同：
+
+- `GetBusinessExportTemplates(projectId)` 返回当前项目可用模板列表。
+- 每个模板最少包含稳定 `templateId` 和展示用 `templateName`。
+- `templateId` 是后续导出调用的稳定标识，不要用展示名临时代替。
+- `ExportBusinessWorkbookAsync(projectId, templateId, cancellationToken)` 返回标准 `.xlsx` 二进制。
+- 导出的 workbook 必须包含名称精确等于 `Business Data` 的 worksheet。
+- 第一版不支持 `.xls`、`.csv`、加密 workbook 或宏工作簿作为导入格式。
+- 插件不要求模板导出接口额外返回字段映射 metadata；字段映射仍由第 4.4 节的初始化种子链路生成。
+- 模板下载阶段会传入 `CancellationToken`；真实连接器应把它传给底层 HTTP 请求，让用户取消下载时能尽快停止 I/O。
+- `401/403` 仍应转换成 `AuthenticationRequiredException`，这样初始化模板导入会走统一登录引导。
+
+Excel 导入语义：
+
+- 插件只复制导出 workbook 中的 `Business Data` sheet 到当前业务 sheet。
+- 当前业务 sheet 名称保持不变。
+- 空白业务 sheet 且模板可用时，初始化对话框默认选择从模板创建作业表。
+- 非空业务 sheet 默认仅初始化配置；用户手动选择模板导入时，会看到覆盖风险提示。
+- 下载取消后不写 Setting、不改当前 sheet、不显示错误。
+- COM 复制开始后第一版不支持安全中止。
+
+插件只校验并导入名为 `Business Data` 的 sheet；不会校验业务表头语义、跨 sheet 依赖或模板字段完整性。为了让导入后的作业表可直接同步，真实系统需要让 `Business Data` 自包含，并让其表头布局与连接器后续写入的 `SheetFieldMappings` 一致。导出 workbook 里可以包含格式、合并单元格、列宽、行高、冻结窗格等用户体验信息；不要依赖插件导入其他 sheet、工作簿级名称、外部连接、宏或跨 sheet 公式。
+
+当前 mock / 示例系统对应 HTTP 约定是：
+
+- `POST /templates`
+  - 请求：`{ "projectId": "performance" }`
+  - 响应：`[{ "templateId": "standard", "templateName": "标准作业表" }]`
+- `POST /export`
+  - 请求：`{ "projectId": "performance", "templateId": "standard" }`
+  - 响应：`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 的 `.xlsx` 字节
+
+如果真实系统没有业务模板导出能力，不需要为了通过初始化而伪造空模板接口。连接器只要不实现 `IBusinessExportTemplateConnector`，用户仍可使用 `仅初始化配置` 完成旧语义初始化。
+
+### 4.6 AI 自动映射列
 
 真实系统接入后，如果用户已有的 Excel 表头和初始化种子里的 `ISDP L1 / ISDP L2` 不完全一致，可以使用 Ribbon 项目组里的 `AI映射列` / `AI map columns` 辅助维护 `SheetFieldMappings.Excel L1 / Excel L2`。
 
@@ -255,7 +312,7 @@ Ribbon 点击链路：
 
 这意味着真实系统不应把 AI 映射当成字段定义来源。字段定义仍然来自连接器和业务接口；AI 只帮助把用户 Excel 中的实际显示名填回当前显示文本列。
 
-### 4.6 查询接口
+### 4.7 查询接口
 
 插件对 `Find` 的要求是：
 
@@ -276,13 +333,13 @@ Ribbon 点击链路：
 ]
 ```
 
-### 4.7 更新接口
+### 4.8 更新接口
 
 当前上传不是按整行提交，而是按单元格提交 `CellChange`。
 
 也就是说，真实系统如果只有“整行更新”接口，需要在连接器内部把这些单元格改动聚合成目标系统所需 payload，不要把这个复杂度上推到 Excel 层。
 
-### 4.8 上传过滤
+### 4.9 上传过滤
 
 如果真实业务系统需要按业务规则跳过部分单元格，不要只在 `BatchSave()` 里静默过滤。当前推荐做法是让真实连接器额外实现 `IUploadChangeFilter`：
 
@@ -414,7 +471,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 - 上传成功后的完成提示会显示实际上传数量；如果存在跳过项，会额外显示跳过数量
 - 上传日志只记录实际提交且 `BatchSave()` 成功的单元格，不记录被过滤跳过的单元格
 
-### 4.9 认证失败异常约定
+### 4.10 认证失败异常约定
 
 当前 Ribbon Sync 的登录引导是“异常类型驱动”的，而不是“HTTP 状态码驱动”的。
 
@@ -422,6 +479,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 
 - `GetProjects()` 里的 `401/403` 要转换成 `AuthenticationRequiredException("当前未登录，请先登录")`
 - `BuildFieldMappingSeed()` 里的 `401/403` 也要转换成同样的异常；这样 `初始化当前表` 才会弹登录提示，而不是普通错误
+- `GetBusinessExportTemplates()` 和 `ExportBusinessWorkbookAsync()` 里的 `401/403` 也要转换成同样的异常；这样模板列表加载和模板下载失败也会进入统一登录引导
 - `Find()` 和 `BatchSave()` 里的 `401/403` 也要转换成同样的异常；这样 `部分下载`、`部分上传` 才会走统一的登录引导
 - 异常消息不会直接作为最终用户文案展示；中文 / 英文提示由宿主 UI 语言决定
 - 登录成功后，项目列表场景会自动重载项目；初始化、下载、上传不会自动重试，用户需要重新触发一次
@@ -430,7 +488,7 @@ public sealed class RealBusinessSystemConnector : ISystemConnector, IUploadChang
 
 - [src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs](../src/OfficeAgent.Infrastructure/Http/CurrentBusinessSystemConnector.cs)
 
-### 4.10 账号按钮服务端登录态同步
+### 4.11 账号按钮服务端登录态同步
 
 账号组的 `登录` / `Login`、`退出` / `Logout` 按钮状态以服务端会话状态为准，不再根据本地 Cookie 数量判断。Cookie 仍然是请求凭据，但不能作为“已登录”的事实来源。
 
@@ -501,7 +559,7 @@ public bool HasAuthenticatedSession()
 3. 在 `ThisAddIn` 里把该连接器注册到 `SystemConnectorRegistry`
 4. 在 `ThisAddIn` 里把该连接器的服务端登录态探测注册到 `AccountSessionService.ConfigureServerAuthenticationProbe(...)`
 5. 如果要替换当前系统，就只注册新的连接器
-6. 如果要并存多个系统，就同时注册多个连接器，并按第 4.10 节明确全局账号按钮如何判断多系统登录态
+6. 如果要并存多个系统，就同时注册多个连接器，并按第 4.11 节明确全局账号按钮如何判断多系统登录态
 
 建议新增：
 

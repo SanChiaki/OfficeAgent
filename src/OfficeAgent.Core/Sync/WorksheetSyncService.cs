@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using OfficeAgent.Core.Analytics;
 using OfficeAgent.Core.Models;
 using OfficeAgent.Core.Services;
@@ -55,26 +57,10 @@ namespace OfficeAgent.Core.Sync
             var properties = BuildConnectorProperties(project?.SystemKey, project?.ProjectId);
             try
             {
-                if (string.IsNullOrWhiteSpace(sheetName))
-                {
-                    throw new ArgumentException("Sheet name is required.", nameof(sheetName));
-                }
-
-                if (project == null)
-                {
-                    throw new ArgumentNullException(nameof(project));
-                }
-
-                var connector = GetRequiredConnector(project.SystemKey);
-                var bindingSeed = connector.CreateBindingSeed(sheetName, project);
-                var binding = MergeExistingLayout(bindingSeed);
-                var definition = connector.GetFieldMappingDefinition(project.ProjectId);
-                var seedRows = connector.BuildFieldMappingSeed(sheetName, project.ProjectId);
-
-                metadataStore.SaveBinding(binding);
-                metadataStore.SaveFieldMappings(sheetName, definition, seedRows);
-                properties["fieldMappingColumnCount"] = definition?.Columns?.Length ?? 0;
-                properties["fieldMappingRowCount"] = seedRows?.Count ?? 0;
+                var plan = PrepareSheetInitialization(sheetName, project);
+                SaveSheetInitialization(plan);
+                properties["fieldMappingColumnCount"] = plan.FieldMappingDefinition?.Columns?.Length ?? 0;
+                properties["fieldMappingRowCount"] = plan.FieldMappings?.Count ?? 0;
                 TrackConnectorEvent("connector.initialize_sheet.completed", properties, stopwatch);
             }
             catch (Exception ex)
@@ -82,6 +68,61 @@ namespace OfficeAgent.Core.Sync
                 TrackConnectorEvent("connector.initialize_sheet.failed", properties, stopwatch, ToAnalyticsError(ex));
                 throw;
             }
+        }
+
+        public SheetInitializationPlan PrepareSheetInitialization(string sheetName, ProjectOption project)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(sheetName));
+            }
+
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            var connector = GetRequiredConnector(project.SystemKey);
+            var bindingSeed = connector.CreateBindingSeed(sheetName, project);
+            var binding = MergeExistingLayout(bindingSeed);
+            var definition = connector.GetFieldMappingDefinition(project.ProjectId);
+            var seedRows = connector.BuildFieldMappingSeed(sheetName, project.ProjectId);
+
+            return new SheetInitializationPlan
+            {
+                Binding = binding,
+                FieldMappingDefinition = definition,
+                FieldMappings = seedRows ?? Array.Empty<SheetFieldMappingRow>(),
+            };
+        }
+
+        public void SaveSheetInitialization(SheetInitializationPlan plan)
+        {
+            if (plan == null)
+            {
+                throw new ArgumentNullException(nameof(plan));
+            }
+
+            if (plan.Binding == null)
+            {
+                throw new ArgumentException("Sheet initialization binding is required.", nameof(plan));
+            }
+
+            if (string.IsNullOrWhiteSpace(plan.Binding.SheetName))
+            {
+                throw new ArgumentException("Sheet name is required.", nameof(plan));
+            }
+
+            if (plan.FieldMappingDefinition == null)
+            {
+                throw new ArgumentException("Field mapping definition is required.", nameof(plan));
+            }
+
+            metadataStore.SaveBinding(plan.Binding);
+            metadataStore.SaveFieldMappings(
+                plan.Binding.SheetName,
+                plan.FieldMappingDefinition,
+                plan.FieldMappings ?? Array.Empty<SheetFieldMappingRow>());
         }
 
         public SheetBinding CreateBindingSeed(string sheetName, ProjectOption project)
@@ -235,6 +276,55 @@ namespace OfficeAgent.Core.Sync
                 TrackConnectorEvent("connector.upload_filter.failed", properties, stopwatch, ToAnalyticsError(ex));
                 throw;
             }
+        }
+
+        public bool SupportsBusinessExportTemplates(string systemKey)
+        {
+            return GetRequiredConnector(systemKey) is IBusinessExportTemplateConnector;
+        }
+
+        public IReadOnlyList<BusinessExportTemplateOption> GetBusinessExportTemplates(string systemKey, string projectId)
+        {
+            if (!(GetRequiredConnector(systemKey) is IBusinessExportTemplateConnector connector))
+            {
+                return Array.Empty<BusinessExportTemplateOption>();
+            }
+
+            return (connector.GetBusinessExportTemplates(projectId) ?? Array.Empty<BusinessExportTemplateOption>())
+                .Where(option => option != null && !string.IsNullOrWhiteSpace(option.TemplateId))
+                .Select(option =>
+                {
+                    var templateId = option.TemplateId.Trim();
+                    var templateName = string.IsNullOrWhiteSpace(option.TemplateName)
+                        ? templateId
+                        : option.TemplateName.Trim();
+
+                    return new BusinessExportTemplateOption
+                    {
+                        TemplateId = templateId,
+                        TemplateName = templateName,
+                    };
+                })
+                .ToArray();
+        }
+
+        public Task<BusinessExportWorkbook> ExportBusinessWorkbookAsync(
+            string systemKey,
+            string projectId,
+            string templateId,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(templateId))
+            {
+                throw new ArgumentException("Template id is required.", nameof(templateId));
+            }
+
+            if (!(GetRequiredConnector(systemKey) is IBusinessExportTemplateConnector connector))
+            {
+                throw new NotSupportedException("The connector does not support business export templates.");
+            }
+
+            return connector.ExportBusinessWorkbookAsync(projectId, templateId.Trim(), cancellationToken);
         }
 
         private ISystemConnector GetRequiredConnector(string systemKey)
